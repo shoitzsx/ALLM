@@ -4,6 +4,10 @@ MVP responsivo para registrar, acompanhar e consultar recebimentos de materiais 
 
 Este projeto foi criado a partir do levantamento do Projeto ALM e da versao 2 do prompt funcional.
 
+## Especificacao da Versao Corporativa
+
+A arquitetura implementavel aprovada para a proxima etapa esta em [`ARQUITETURA_TECNICA_ALM.md`](ARQUITETURA_TECNICA_ALM.md). O documento detalha PostgreSQL, indices e busca, Google Shared Drive, upload seguro, API, permissoes, migracao, backup, OCR futuro, riscos e ordem de implementacao. O frontend atual continua sendo um prototipo local ate que backend, login, banco e storage real sejam implementados.
+
 ## Status Atual
 
 O MVP esta pronto para validacao funcional em navegador. Ele roda localmente, sem servidor corporativo, banco de dados externo ou login real.
