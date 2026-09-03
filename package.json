@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/copy-vendor-assets.mjs",
+    "test": "node --test src/features/nfeReader/*.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "api": "node backend/server.mjs",
     "api:dev": "node --watch backend/server.mjs",
@@ -11,9 +13,13 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "vite": "^6.0.5"

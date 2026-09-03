@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -37,6 +37,7 @@ import {
   Paperclip,
   Plus,
   RefreshCw,
+  ScanBarcode,
   Search,
   ShieldCheck,
   Trash2,
@@ -75,11 +76,16 @@ import {
   getStatusMeta,
 } from './ui.jsx'
 
+// Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
+// a quem abrir esta tela experimental.
+const NfeReaderPage = lazy(() => import('./features/nfeReader/NfeReaderPage.jsx'))
+
 const ROUTES = {
   dashboard: '/',
   receipts: '/recebimentos',
   newReceipt: '/novo',
   pending: '/pendencias',
+  nfeReader: '/leitura-automatica',
 }
 
 const NAV_ITEMS = [
@@ -87,6 +93,7 @@ const NAV_ITEMS = [
   { path: ROUTES.receipts, label: 'Recebimentos', icon: ClipboardList },
   { path: ROUTES.newReceipt, label: 'Novo recebimento', icon: Plus },
   { path: ROUTES.pending, label: 'Pendências', icon: AlertTriangle, count: true },
+  { path: ROUTES.nfeReader, label: 'Leitura automática (beta)', icon: ScanBarcode },
 ]
 
 const WIZARD_STEPS = [
@@ -370,7 +377,13 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
               onClick={() => navigate(item.path)}
             >
               <Icon size={20} />
-              <span>{item.path === ROUTES.newReceipt ? 'Novo' : item.label.replace('Visão geral', 'Início')}</span>
+              <span>
+                {item.path === ROUTES.newReceipt
+                  ? 'Novo'
+                  : item.path === ROUTES.nfeReader
+                    ? 'Leitura NF-e'
+                    : item.label.replace('Visão geral', 'Início')}
+              </span>
               {item.count && pendingCount ? <span className="nav-count">{pendingCount}</span> : null}
             </button>
           )
@@ -1398,6 +1411,12 @@ export default function App() {
     content = <NewReceiptPage store={store} pushToast={pushToast} />
   } else if (route.path === ROUTES.pending) {
     content = <PendingPage receipts={store.receipts} />
+  } else if (route.path === ROUTES.nfeReader) {
+    content = (
+      <Suspense fallback={<div className="page"><EmptyState icon={ScanBarcode} title="Carregando módulo" description="Preparando a leitura automática de NF-e…" /></div>}>
+        <NfeReaderPage pushToast={pushToast} />
+      </Suspense>
+    )
   } else if (route.path.startsWith('/recebimentos/')) {
     const receiptId = decodeURIComponent(route.path.split('/').filter(Boolean)[1] || '')
     content = <DetailPage store={store} receiptId={receiptId} pushToast={pushToast} />

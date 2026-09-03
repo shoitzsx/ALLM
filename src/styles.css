@@ -2722,7 +2722,7 @@ button {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     min-height: 66px;
     padding: 6px max(7px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
     border-top: 1px solid var(--ink-200);
@@ -3082,4 +3082,104 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Leitura automática de NF-e (beta) — módulo isolado, reaproveita os tokens acima. */
+
+.nfe-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.nfe-section-title {
+  margin: 26px 0 4px;
+  color: var(--ink-800);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.nfe-section-title:first-child {
+  margin-top: 0;
+}
+
+.nfe-warning-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.nfe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nfe-badge-alta {
+  color: var(--brand-700);
+  background: var(--brand-50);
+}
+
+.nfe-badge-conferir {
+  color: var(--amber-700);
+  background: var(--amber-50);
+}
+
+.nfe-badge-baixa {
+  color: var(--red-700);
+  background: var(--red-50);
+}
+
+.nfe-badge-vazio {
+  color: var(--ink-500);
+  background: var(--ink-100);
+}
+
+.nfe-corrected {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: var(--brand-700);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.nfe-json-block {
+  margin-top: 18px;
+  border: 1px solid var(--ink-200);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.nfe-json-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ink-200);
+  background: var(--ink-50);
+  color: var(--ink-600);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nfe-json-pre {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 420px;
+  overflow: auto;
+  color: var(--ink-900);
+  background: #fff;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
