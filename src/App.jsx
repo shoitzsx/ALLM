@@ -269,7 +269,7 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
     <div className="app-shell">
       <aside className="sidebar" aria-label="Navegação principal">
         <button className="brand" type="button" onClick={() => navigate('/')} aria-label="Ir para visão geral">
-          <span className="brand-mark">ALM</span>
+          <img className="brand-mark" src="/brand/logo-mark.png" alt="Águia Sistemas" />
           <span className="brand-copy">
             <strong>Recebimentos</strong>
             <span>Almoxarifado</span>
@@ -343,14 +343,14 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
                 <strong>{currentUser?.nome || currentUser?.name}</strong>
                 <span>{currentUser?.perfil || currentUser?.role}</span>
               </span>
-              <ChevronDown size={14} color="#70848a" />
+              <ChevronDown size={14} color="#6e7ba0" />
             </button>
           </div>
         </header>
 
         <header className="mobile-topbar">
           <button className="mobile-brand" type="button" onClick={() => navigate('/')}>
-            <span className="brand-mark">ALM</span>
+            <img className="brand-mark" src="/brand/logo-mark.png" alt="Águia Sistemas" />
             <strong>Recebimentos</strong>
           </button>
           <div className="mobile-top-actions">
@@ -509,7 +509,7 @@ function DashboardPage({ store }) {
                       <td><div className="table-main"><strong>{receipt.fornecedor}</strong><span>{formatDate(receipt.dataRecebimento)}</span></div></td>
                       <td>{receipt.pedido || '—'}</td>
                       <td><StatusBadge status={receipt.status} compact /></td>
-                      <td><ChevronRight size={15} color="#70848a" /></td>
+                      <td><ChevronRight size={15} color="#6e7ba0" /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -553,7 +553,7 @@ function DashboardPage({ store }) {
                         <strong>{receipt.fornecedor}</strong>
                         <span>{divergence ? 'Divergência aguardando tratamento' : 'Nota Fiscal pendente'} · {receipt.protocolo}</span>
                       </span>
-                      <ChevronRight size={15} color="#70848a" />
+                      <ChevronRight size={15} color="#6e7ba0" />
                     </button>
                   )
                 })}
@@ -731,7 +731,7 @@ function ReceiptsPage({ store, initialQuery }) {
                       <td>{receipt.tipo}</td>
                       <td><div className="table-main"><strong>{displayResponsible(receipt)}</strong><span>Almoxarifado</span></div></td>
                       <td><StatusBadge status={receipt.status} compact /></td>
-                      <td><ChevronRight size={15} color="#70848a" /></td>
+                      <td><ChevronRight size={15} color="#6e7ba0" /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -949,7 +949,7 @@ function NewReceiptPage({ store, pushToast }) {
                   <div className="responsible-preview">
                     <Avatar name={store.currentUser.nome || store.currentUser.name} />
                     <div><strong>{store.currentUser.nome || store.currentUser.name}</strong><span>{store.currentUser.perfil || store.currentUser.role} · identificado automaticamente</span></div>
-                    <ShieldCheck size={16} color="#087c64" style={{ marginLeft: 'auto' }} />
+                    <ShieldCheck size={16} color="#2748c7" style={{ marginLeft: 'auto' }} />
                   </div>
                 </div>
                 <div className="field field-full">
@@ -1190,7 +1190,7 @@ function DetailPage({ store, receiptId, pushToast }) {
       <section className="detail-layout detail-layout-spaced">
         <div className="detail-main">
           <article className="panel">
-            <header className="panel-header"><div><h2>Dados gerais</h2><p>Informações que identificam o recebimento</p></div><MoreHorizontal size={18} color="#70848a" /></header>
+            <header className="panel-header"><div><h2>Dados gerais</h2><p>Informações que identificam o recebimento</p></div><MoreHorizontal size={18} color="#6e7ba0" /></header>
             <div className="detail-section-body definition-grid">
               <div className="definition-item"><span>Pedido de Compra</span><strong>{receipt.pedido || 'Não informado'}</strong></div>
               <div className="definition-item"><span>Nota Fiscal</span><strong>{receipt.numeroNf ? `${receipt.numeroNf}${receipt.serieNf ? ` · Série ${receipt.serieNf}` : ''}` : 'Pendente'}</strong></div>
@@ -1213,7 +1213,7 @@ function DetailPage({ store, receiptId, pushToast }) {
                     <div className="detail-item-description"><strong>{item.descricao}</strong><span>Linha {item.numero || '—'} · Código {item.codigo || 'não informado'}</span></div>
                     <div className="item-quantity ordered-quantity"><span>Solicitada</span><strong>{item.quantidadeSolicitada ?? '—'} {item.unidade}</strong></div>
                     <div className="item-quantity"><span>Recebida</span><strong className={mismatch ? 'quantity-alert' : ''}>{item.quantidadeRecebida} {item.unidade}</strong></div>
-                    <span>{mismatch ? <AlertTriangle size={16} color="#a63a38" /> : <CheckCircle2 size={16} color="#087c64" />}</span>
+                    <span>{mismatch ? <AlertTriangle size={16} color="#a63a38" /> : <CheckCircle2 size={16} color="#2748c7" />}</span>
                   </div>
                 )
               })}
@@ -1271,7 +1271,7 @@ function DetailPage({ store, receiptId, pushToast }) {
           </article>
 
           <article className="panel">
-            <header className="panel-header"><div><h2>Histórico</h2><p>Rastreabilidade do registro</p></div><History size={17} color="#70848a" /></header>
+            <header className="panel-header"><div><h2>Histórico</h2><p>Rastreabilidade do registro</p></div><History size={17} color="#6e7ba0" /></header>
             <div className="timeline">
               {history.slice(0, 10).map((entry, index) => {
                 const isStatus = entry.kind === 'status'
@@ -1313,7 +1313,7 @@ function DetailPage({ store, receiptId, pushToast }) {
           <div className="field field-full">
             <div className="field-label">Arquivo</div>
             <label className="upload-zone"><Upload size={20} /><strong>Selecionar do dispositivo</strong><span>PDF ou imagem, até 10 MB por arquivo</span><input type="file" multiple={documentForm.category === 'Foto' || documentForm.category === 'Outro'} accept={documentForm.category === 'Foto' ? 'image/*' : 'application/pdf,image/*'} capture={documentForm.category === 'Foto' ? 'environment' : undefined} onChange={(event) => setDocumentForm((current) => ({ ...current, files: Array.from(event.target.files || []) }))} /></label>
-            {documentForm.files.length ? <div className="file-list">{documentForm.files.map((file) => <div className="file-row" key={file.name}><span className="file-row-icon"><FileText size={14} /></span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><CheckCircle2 size={15} color="#087c64" /></div>)}</div> : null}
+            {documentForm.files.length ? <div className="file-list">{documentForm.files.map((file) => <div className="file-row" key={file.name}><span className="file-row-icon"><FileText size={14} /></span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><CheckCircle2 size={15} color="#2748c7" /></div>)}</div> : null}
           </div>
         </div>
       </Modal>

@@ -309,6 +309,8 @@ Este projeto ainda e uma prova funcional. Ele serve para demonstrar o fluxo, val
 
 Tela isolada em `Leitura automática (beta)` no menu lateral (`src/features/nfeReader/`), separada do fluxo de `Novo recebimento`. Objetivo: validar se dá para extrair dados de Notas Fiscais reais da empresa antes de mexer no cadastro que já está em uso. Ninguém é obrigado a usar — quem continuar cadastrando manualmente não é afetado.
 
+Documentação técnica completa do pipeline (diagrama, o que cada arquivo faz, algoritmo da chave, por que o ZXing roda sem `TRY_HARDER`, assets self-hosted, limitações conhecidas): [`src/features/nfeReader/README.md`](src/features/nfeReader/README.md).
+
 O que ela faz, 100% no navegador, em ordem de custo (cada etapa só entra em cena se a anterior não achou uma chave válida):
 
 1. Upload de um PDF (DANFE) ou foto (JPG/PNG) da NF, com um botão explícito **Analisar nota** — nada roda automaticamente ao selecionar o arquivo.

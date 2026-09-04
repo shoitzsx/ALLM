@@ -1,24 +1,24 @@
 :root {
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #1b2930;
-  background: #f3f6f4;
+  color: #14224d;
+  background: #f3f5fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink-950: #0a2029;
-  --ink-900: #102b36;
-  --ink-800: #173d48;
-  --ink-700: #31545d;
-  --ink-600: #526d74;
-  --ink-500: #70848a;
-  --ink-300: #b6c3c5;
-  --ink-200: #d8e0df;
-  --ink-100: #e9eeec;
-  --ink-50: #f5f8f6;
-  --brand-700: #086652;
-  --brand-600: #087c64;
-  --brand-500: #0a9477;
-  --brand-100: #d6eee7;
-  --brand-50: #ebf7f3;
+  --ink-950: #0c1638;
+  --ink-900: #14224d;
+  --ink-800: #1c2f63;
+  --ink-700: #34467c;
+  --ink-600: #4f5f8a;
+  --ink-500: #6e7ba0;
+  --ink-300: #b3bcd6;
+  --ink-200: #d7dcec;
+  --ink-100: #e8ebf5;
+  --ink-50: #f5f6fb;
+  --brand-700: #1d3fae;
+  --brand-600: #2748c7;
+  --brand-500: #3161e0;
+  --brand-100: #dbe6fb;
+  --brand-50: #eef3fd;
   --amber-700: #8c5d0a;
   --amber-500: #d49b26;
   --amber-100: #f8e9bc;
@@ -30,8 +30,8 @@
   --blue-100: #dae8f7;
   --blue-50: #f1f7fc;
   --white: #ffffff;
-  --shadow-sm: 0 1px 2px rgba(12, 32, 39, 0.04), 0 5px 16px rgba(12, 32, 39, 0.035);
-  --shadow-md: 0 16px 42px rgba(10, 32, 41, 0.13);
+  --shadow-sm: 0 1px 2px rgba(12, 22, 56, 0.04), 0 5px 16px rgba(12, 22, 56, 0.035);
+  --shadow-md: 0 16px 42px rgba(12, 22, 56, 0.13);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -44,14 +44,14 @@
 html {
   min-width: 320px;
   min-height: 100%;
-  background: #f3f6f4;
+  background: #f3f5fb;
 }
 
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #f3f6f4;
+  background: #f3f5fb;
 }
 
 body.modal-open {
@@ -79,7 +79,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid rgba(10, 148, 119, 0.2);
+  outline: 3px solid rgba(49, 97, 224, 0.2);
   outline-offset: 2px;
 }
 
@@ -128,17 +128,13 @@ button {
 }
 
 .brand-mark {
-  position: relative;
-  display: grid;
-  place-items: center;
+  display: block;
+  flex: 0 0 auto;
   width: 38px;
   height: 38px;
   border-radius: 11px 11px 11px 4px;
-  color: var(--ink-950);
-  background: #e8bd54;
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  box-shadow: inset 0 -3px 0 rgba(10, 32, 41, 0.12);
+  object-fit: cover;
+  box-shadow: inset 0 -3px 0 rgba(12, 22, 56, 0.12);
 }
 
 .brand-copy strong {
@@ -194,8 +190,8 @@ button {
 
 .nav-item.active {
   color: #fff;
-  background: rgba(38, 158, 130, 0.18);
-  box-shadow: inset 3px 0 0 #45bd9c;
+  background: rgba(49, 97, 224, 0.2);
+  box-shadow: inset 3px 0 0 #5b8dff;
 }
 
 .nav-item svg {
@@ -328,9 +324,9 @@ button {
 }
 
 .top-search input:focus {
-  border-color: #79b8a8;
+  border-color: #7ea6e8;
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(10, 148, 119, 0.09);
+  box-shadow: 0 0 0 3px rgba(49, 97, 224, 0.09);
   outline: 0;
 }
 
@@ -433,7 +429,7 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 50%;
   color: #fff;
-  background: #287565;
+  background: #24408f;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -546,12 +542,12 @@ button {
 .btn-primary {
   color: #fff;
   background: var(--brand-700);
-  box-shadow: 0 5px 13px rgba(8, 102, 82, 0.18);
+  box-shadow: 0 5px 13px rgba(29, 63, 174, 0.18);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #075b49;
-  box-shadow: 0 8px 18px rgba(8, 102, 82, 0.22);
+  background: #162f82;
+  box-shadow: 0 8px 18px rgba(29, 63, 174, 0.22);
 }
 
 .btn-secondary {
@@ -671,7 +667,7 @@ button {
   bottom: -48px;
   width: 110px;
   height: 110px;
-  border: 18px solid rgba(10, 148, 119, 0.035);
+  border: 18px solid rgba(49, 97, 224, 0.035);
   border-radius: 50%;
   content: "";
 }
@@ -980,8 +976,8 @@ button {
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  border-color: #72ad9f;
-  box-shadow: 0 0 0 3px rgba(10, 148, 119, 0.08);
+  border-color: #7ea6e8;
+  box-shadow: 0 0 0 3px rgba(49, 97, 224, 0.08);
   outline: 0;
 }
 
@@ -1199,9 +1195,9 @@ button {
 }
 
 .status-draft {
-  border-color: #d8e0df;
-  color: #53676c;
-  background: #f2f5f4;
+  border-color: #d7dcec;
+  color: #4f5f8a;
+  background: #f2f4fa;
 }
 
 .status-docs {
@@ -1635,10 +1631,10 @@ button {
 .add-item-button {
   width: 100%;
   min-height: 48px;
-  border: 1px dashed #a9c3bb;
+  border: 1px dashed #a9bfe6;
   border-radius: 11px;
   color: var(--brand-700);
-  background: #f6fbf9;
+  background: #f2f6fd;
   font-size: 11px;
   font-weight: 750;
 }
@@ -1716,10 +1712,10 @@ button {
   place-items: center;
   min-height: 90px;
   padding: 14px;
-  border: 1px dashed #a8c1ba;
+  border: 1px dashed #a9bfe6;
   border-radius: 10px;
   color: var(--ink-600);
-  background: #f7faf8;
+  background: #f2f6fd;
   text-align: center;
 }
 
@@ -2174,7 +2170,7 @@ button {
   padding: 5px 6px;
   border-radius: 6px;
   color: #fff;
-  background: rgba(10, 32, 41, 0.72);
+  background: rgba(12, 22, 56, 0.72);
   font-size: 7px;
   font-weight: 650;
   overflow: hidden;
@@ -2378,7 +2374,7 @@ button {
 }
 
 .pending-card:hover {
-  border-color: #a7c0b9;
+  border-color: #a9bfe6;
   transform: translateY(-1px);
 }
 
@@ -2541,11 +2537,11 @@ button {
   align-items: flex-start;
   gap: 10px;
   padding: 13px;
-  border: 1px solid #bbddcf;
+  border: 1px solid #c3d3f5;
   border-radius: 11px;
   color: var(--ink-800);
-  background: #f4fbf8;
-  box-shadow: 0 12px 34px rgba(10, 32, 41, 0.15);
+  background: #f2f6fd;
+  box-shadow: 0 12px 34px rgba(12, 22, 56, 0.15);
   animation: slide-in 180ms ease;
 }
 
@@ -2604,10 +2600,10 @@ button {
   gap: 8px;
   margin-bottom: 18px;
   padding: 10px 12px;
-  border: 1px solid #d7e5df;
+  border: 1px solid #d7e0f5;
   border-radius: 10px;
-  color: #46665e;
-  background: #f7fbf9;
+  color: #33507a;
+  background: #f2f6fd;
   font-size: 9px;
   line-height: 1.45;
 }
@@ -2727,7 +2723,7 @@ button {
     padding: 6px max(7px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
     border-top: 1px solid var(--ink-200);
     background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 -7px 24px rgba(10, 32, 41, 0.08);
+    box-shadow: 0 -7px 24px rgba(12, 22, 56, 0.08);
     backdrop-filter: blur(13px);
     z-index: 40;
   }
@@ -2758,7 +2754,7 @@ button {
     border-radius: 11px;
     color: #fff;
     background: var(--brand-700);
-    box-shadow: 0 6px 13px rgba(8, 102, 82, 0.22);
+    box-shadow: 0 6px 13px rgba(29, 63, 174, 0.22);
   }
 
   .page {
@@ -2853,7 +2849,7 @@ button {
     display: grid;
     gap: 10px;
     padding: 12px;
-    background: #f3f6f4;
+    background: #f3f5fb;
   }
 
   .mobile-record-top {
@@ -3006,7 +3002,7 @@ button {
     position: sticky;
     bottom: 65px;
     padding: 12px 15px;
-    box-shadow: 0 -8px 24px rgba(10, 32, 41, 0.07);
+    box-shadow: 0 -8px 24px rgba(12, 22, 56, 0.07);
     z-index: 10;
   }
 
