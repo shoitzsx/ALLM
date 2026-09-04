@@ -73,7 +73,16 @@ export const RECEIPT_TYPE_OPTIONS = Object.freeze([
   { value: 'Outro', label: 'Outro' },
 ])
 
-export const SUPPLIER_OPTIONS = Object.freeze([])
+export const SUPPLIER_OPTIONS = Object.freeze([
+  { value: 'Aço Forte Distribuidora Ltda', label: 'Aço Forte Distribuidora Ltda' },
+  { value: 'Ferramentas Industriais SA', label: 'Ferramentas Industriais SA' },
+  { value: 'EPI Total Equipamentos', label: 'EPI Total Equipamentos' },
+  { value: 'Elétrica Nordeste Cabos', label: 'Elétrica Nordeste Cabos' },
+  { value: 'Rolamentos & Cia', label: 'Rolamentos & Cia' },
+  { value: 'Tintas Proteção Industrial', label: 'Tintas Proteção Industrial' },
+  { value: 'Hidráulica Sul Componentes', label: 'Hidráulica Sul Componentes' },
+  { value: 'Embalagens Industriais Brasil', label: 'Embalagens Industriais Brasil' },
+])
 
 export const DOCUMENT_TYPE_OPTIONS = Object.freeze([
   { value: 'Nota Fiscal', label: 'Nota Fiscal', requiredForClosing: true },
@@ -102,13 +111,40 @@ export const USER_ROLE_OPTIONS = Object.freeze([
 
 export const DEMO_USERS = Object.freeze([
   {
-    id: 'USR-LOCAL',
-    nome: 'Usuário MVP',
-    name: 'Usuário MVP',
-    iniciais: 'UM',
-    email: 'usuario@alm.local',
+    id: 'USR-001',
+    nome: 'Marcos Teixeira',
+    name: 'Marcos Teixeira',
+    iniciais: 'MT',
+    email: 'marcos.teixeira@alm.local',
     perfil: 'Administrador',
     role: 'Administrador',
+  },
+  {
+    id: 'USR-002',
+    nome: 'Ana Ferreira',
+    name: 'Ana Ferreira',
+    iniciais: 'AF',
+    email: 'ana.ferreira@alm.local',
+    perfil: 'Almoxarifado',
+    role: 'Almoxarifado',
+  },
+  {
+    id: 'USR-003',
+    nome: 'Rafael Souza',
+    name: 'Rafael Souza',
+    iniciais: 'RS',
+    email: 'rafael.souza@alm.local',
+    perfil: 'Suprimentos',
+    role: 'Suprimentos',
+  },
+  {
+    id: 'USR-004',
+    nome: 'Carla Mendes',
+    name: 'Carla Mendes',
+    iniciais: 'CM',
+    email: 'carla.mendes@alm.local',
+    perfil: 'Consulta',
+    role: 'Consulta',
   },
 ])
 
@@ -223,12 +259,394 @@ function divergence(
 
 const [MARCOS, ANA, RAFAEL, CARLA] = DEMO_USERS
 
+function receipt(config) {
+  const { responsavel, ...rest } = config
+  return {
+    numeroNf: null,
+    serieNf: null,
+    observacoes: '',
+    anexos: [],
+    divergencias: [],
+    historicoStatus: [],
+    historicoAlteracoes: [],
+    arquivado: false,
+    ...rest,
+    responsavel: actor(responsavel),
+  }
+}
+
 /**
- * Massa rica e determinística para o protótipo. Há dois registros em cada um
- * dos cinco estados e exemplos de recebimento parcial, NF pendente, anexos e
- * divergências abertas/resolvidas.
+ * Massa rica e determinística para o protótipo. Cobre os cinco estados, com
+ * exemplos de NF pendente, anexos, divergência aberta e divergência resolvida.
  */
-export const seedRecebimentos = []
+export const seedRecebimentos = [
+  receipt({
+    id: 'REC-2026-0001',
+    protocolo: 'REC-2026-0001',
+    pedido: 'PC-88231',
+    numeroNf: '45210',
+    serieNf: '1',
+    dataRecebimento: '2026-07-06',
+    fornecedor: 'Aço Forte Distribuidora Ltda',
+    cnpjFornecedor: '12.345.678/0001-90',
+    tipo: 'Estoque',
+    responsavel: ANA,
+    status: RECEBIMENTO_STATUS.FINALIZADO,
+    observacoes: 'Material conferido sem ressalvas.',
+    criadoEm: '2026-07-06T08:40:00-03:00',
+    atualizadoEm: '2026-07-06T11:15:00-03:00',
+    itens: [
+      item('IT-0001-1', '10', 'PAR-3050', 'Parafuso sextavado M10x40 zincado', 500, 500, 'PÇ'),
+      item('IT-0001-2', '20', 'ARR-1020', 'Arruela lisa M10', 1000, 1000, 'PÇ'),
+    ],
+    anexos: [
+      attachment('ANX-0001-1', 'NF-45210.pdf', 'Nota Fiscal', '2026-07-06T08:45:00-03:00', ANA, 248000),
+      attachment('ANX-0001-2', 'foto-descarga-01.jpg', 'Foto', '2026-07-06T08:50:00-03:00', ANA, 1520000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0001-1', '2026-07-06T08:40:00-03:00', ANA, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0001-2', '2026-07-06T09:10:00-03:00', ANA, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.CONFERENCIA, 'Itens e NF conferidos.'),
+      statusChange('HST-0001-3', '2026-07-06T11:15:00-03:00', ANA, RECEBIMENTO_STATUS.CONFERENCIA, RECEBIMENTO_STATUS.FINALIZADO, 'Conferência concluída sem divergências.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0001-1', '2026-07-06T08:40:00-03:00', ANA, 'Recebimento criado', 'Protocolo REC-2026-0001.'),
+      change('AUD-0001-2', '2026-07-06T08:45:00-03:00', ANA, 'Arquivo incluído', 'NF-45210.pdf'),
+      change('AUD-0001-3', '2026-07-06T11:15:00-03:00', ANA, 'Status alterado', 'Em conferência → Conferido/Finalizado.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0002',
+    protocolo: 'REC-2026-0002',
+    pedido: 'PC-88250',
+    numeroNf: '12044',
+    serieNf: '2',
+    dataRecebimento: '2026-07-18',
+    fornecedor: 'Ferramentas Industriais SA',
+    cnpjFornecedor: '23.456.789/0001-01',
+    tipo: 'Débito Direto',
+    responsavel: MARCOS,
+    status: RECEBIMENTO_STATUS.FINALIZADO,
+    observacoes: 'Ferramentaria conferida e liberada para uso imediato.',
+    criadoEm: '2026-07-18T10:05:00-03:00',
+    atualizadoEm: '2026-07-18T13:40:00-03:00',
+    itens: [
+      item('IT-0002-1', '10', 'FER-1002', 'Furadeira de impacto 750W', 5, 5, 'UN'),
+      item('IT-0002-2', '20', 'BRC-1010', 'Broca aço rápido 10mm', 50, 50, 'PÇ'),
+    ],
+    anexos: [
+      attachment('ANX-0002-1', 'NF-12044.pdf', 'Nota Fiscal', '2026-07-18T10:10:00-03:00', MARCOS, 198000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0002-1', '2026-07-18T10:05:00-03:00', MARCOS, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0002-2', '2026-07-18T11:00:00-03:00', MARCOS, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.CONFERENCIA, 'Aguardando conferência técnica.'),
+      statusChange('HST-0002-3', '2026-07-18T13:40:00-03:00', MARCOS, RECEBIMENTO_STATUS.CONFERENCIA, RECEBIMENTO_STATUS.FINALIZADO, 'Conferido e liberado.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0002-1', '2026-07-18T10:05:00-03:00', MARCOS, 'Recebimento criado', 'Protocolo REC-2026-0002.'),
+      change('AUD-0002-2', '2026-07-18T13:40:00-03:00', MARCOS, 'Status alterado', 'Em conferência → Conferido/Finalizado.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0003',
+    protocolo: 'REC-2026-0003',
+    pedido: 'PC-88310',
+    numeroNf: '8891',
+    serieNf: '1',
+    dataRecebimento: '2026-08-02',
+    fornecedor: 'EPI Total Equipamentos',
+    cnpjFornecedor: '34.567.890/0001-12',
+    tipo: 'Estoque',
+    responsavel: ANA,
+    status: RECEBIMENTO_STATUS.FINALIZADO,
+    observacoes: 'Divergência de quantidade tratada com o fornecedor antes da finalização.',
+    criadoEm: '2026-08-02T09:00:00-03:00',
+    atualizadoEm: '2026-08-06T15:20:00-03:00',
+    itens: [
+      item('IT-0003-1', '10', 'LUV-2001', 'Luva de raspa cano longo', 200, 180, 'PAR'),
+      item('IT-0003-2', '20', 'CAP-2100', 'Capacete de segurança classe B', 100, 100, 'UN'),
+    ],
+    anexos: [
+      attachment('ANX-0003-1', 'NF-8891.pdf', 'Nota Fiscal', '2026-08-02T09:05:00-03:00', ANA, 176000),
+    ],
+    divergencias: [
+      divergence('DIV-0003-1', 'Quantidade incorreta', 'Recebidas 180 de 200 luvas solicitadas; fornecedor notificado.', '2026-08-02T09:30:00-03:00', ANA, {
+        itemId: 'IT-0003-1',
+        resolvida: true,
+        resolvidaEm: '2026-08-06T15:15:00-03:00',
+        resolvidaPor: ANA,
+        resolucao: 'Fornecedor enviou complemento de 20 unidades em nova remessa; divergência encerrada.',
+      }),
+    ],
+    historicoStatus: [
+      statusChange('HST-0003-1', '2026-08-02T09:00:00-03:00', ANA, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0003-2', '2026-08-02T09:30:00-03:00', ANA, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.DIVERGENCIA, 'Divergência de quantidade registrada.'),
+      statusChange('HST-0003-3', '2026-08-06T15:20:00-03:00', ANA, RECEBIMENTO_STATUS.DIVERGENCIA, RECEBIMENTO_STATUS.FINALIZADO, 'Divergência resolvida, recebimento finalizado.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0003-1', '2026-08-02T09:00:00-03:00', ANA, 'Recebimento criado', 'Protocolo REC-2026-0003.'),
+      change('AUD-0003-2', '2026-08-02T09:30:00-03:00', ANA, 'Divergência registrada', 'Quantidade incorreta: recebidas 180 de 200 luvas.'),
+      change('AUD-0003-3', '2026-08-06T15:15:00-03:00', ANA, 'Divergência resolvida', 'Fornecedor enviou complemento de 20 unidades.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0004',
+    protocolo: 'REC-2026-0004',
+    pedido: 'PC-88402',
+    dataRecebimento: '2026-09-04',
+    fornecedor: 'Aço Forte Distribuidora Ltda',
+    cnpjFornecedor: '12.345.678/0001-90',
+    tipo: 'Estoque',
+    responsavel: RAFAEL,
+    status: RECEBIMENTO_STATUS.DIGITACAO,
+    observacoes: 'Aguardando conferência de peso e romaneio antes de seguir.',
+    criadoEm: '2026-09-04T08:10:00-03:00',
+    atualizadoEm: '2026-09-04T08:10:00-03:00',
+    itens: [
+      item('IT-0004-1', '10', 'CHP-4020', 'Chapa de aço carbono 2mm 1,20x3,00m', 30, 30, 'UN'),
+    ],
+    historicoStatus: [
+      statusChange('HST-0004-1', '2026-09-04T08:10:00-03:00', RAFAEL, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0004-1', '2026-09-04T08:10:00-03:00', RAFAEL, 'Recebimento criado', 'Protocolo REC-2026-0004.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0005',
+    protocolo: 'REC-2026-0005',
+    pedido: 'PC-88415',
+    dataRecebimento: '2026-09-03',
+    fornecedor: 'Elétrica Nordeste Cabos',
+    cnpjFornecedor: '45.678.901/0001-23',
+    tipo: 'Estoque',
+    responsavel: ANA,
+    status: RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO,
+    observacoes: 'Material chegou antes da nota fiscal; fornecedor prometeu envio em 48h.',
+    criadoEm: '2026-09-03T14:00:00-03:00',
+    atualizadoEm: '2026-09-03T14:20:00-03:00',
+    itens: [
+      item('IT-0005-1', '10', 'CAB-5010', 'Cabo flexível 2,5mm² (rolo 100m)', 10, 10, 'RL'),
+      item('IT-0005-2', '20', 'DIS-5200', 'Disjuntor bipolar 32A', 40, 40, 'UN'),
+    ],
+    anexos: [
+      attachment('ANX-0005-1', 'foto-material-01.jpg', 'Foto', '2026-09-03T14:10:00-03:00', ANA, 1340000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0005-1', '2026-09-03T14:00:00-03:00', ANA, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0005-2', '2026-09-03T14:20:00-03:00', ANA, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO, 'NF ainda não enviada pelo fornecedor.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0005-1', '2026-09-03T14:00:00-03:00', ANA, 'Recebimento criado', 'Protocolo REC-2026-0005.'),
+      change('AUD-0005-2', '2026-09-03T14:20:00-03:00', ANA, 'Status alterado', 'Em digitação → Aguardando documentação.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0006',
+    protocolo: 'REC-2026-0006',
+    pedido: 'PC-88420',
+    numeroNf: '34210',
+    serieNf: '1',
+    dataRecebimento: '2026-09-04',
+    fornecedor: 'Rolamentos & Cia',
+    cnpjFornecedor: '56.789.012/0001-34',
+    tipo: 'Industrialização',
+    responsavel: MARCOS,
+    status: RECEBIMENTO_STATUS.CONFERENCIA,
+    observacoes: 'Em conferência técnica com a manutenção.',
+    criadoEm: '2026-09-04T09:30:00-03:00',
+    atualizadoEm: '2026-09-04T10:00:00-03:00',
+    itens: [
+      item('IT-0006-1', '10', 'ROL-6205', 'Rolamento rígido de esferas 6205', 60, 60, 'UN'),
+      item('IT-0006-2', '20', 'COR-6300', 'Correia dentada industrial', 15, 15, 'UN'),
+    ],
+    anexos: [
+      attachment('ANX-0006-1', 'NF-34210.pdf', 'Nota Fiscal', '2026-09-04T09:35:00-03:00', MARCOS, 152000),
+      attachment('ANX-0006-2', 'foto-recebimento-06.jpg', 'Foto', '2026-09-04T09:40:00-03:00', MARCOS, 1180000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0006-1', '2026-09-04T09:30:00-03:00', MARCOS, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0006-2', '2026-09-04T10:00:00-03:00', MARCOS, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.CONFERENCIA, 'Encaminhado para conferência técnica.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0006-1', '2026-09-04T09:30:00-03:00', MARCOS, 'Recebimento criado', 'Protocolo REC-2026-0006.'),
+      change('AUD-0006-2', '2026-09-04T09:35:00-03:00', MARCOS, 'Arquivo incluído', 'NF-34210.pdf'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0007',
+    protocolo: 'REC-2026-0007',
+    pedido: 'PC-88399',
+    numeroNf: '55892',
+    serieNf: '3',
+    dataRecebimento: '2026-08-28',
+    fornecedor: 'Tintas Proteção Industrial',
+    cnpjFornecedor: '67.890.123/0001-45',
+    tipo: 'Estoque',
+    responsavel: ANA,
+    status: RECEBIMENTO_STATUS.DIVERGENCIA,
+    observacoes: 'Parte do lote de solvente chegou avariada.',
+    criadoEm: '2026-08-28T11:00:00-03:00',
+    atualizadoEm: '2026-08-28T11:45:00-03:00',
+    itens: [
+      item('IT-0007-1', '10', 'TIN-7010', 'Tinta epóxi cinza 18L', 20, 20, 'UN'),
+      item('IT-0007-2', '20', 'SOL-7020', 'Solvente industrial 5L', 10, 8, 'UN'),
+    ],
+    anexos: [
+      attachment('ANX-0007-1', 'NF-55892.pdf', 'Nota Fiscal', '2026-08-28T11:05:00-03:00', ANA, 210000),
+      attachment('ANX-0007-2', 'foto-avaria-solvente.jpg', 'Foto', '2026-08-28T11:30:00-03:00', ANA, 1670000),
+    ],
+    divergencias: [
+      divergence('DIV-0007-1', 'Material avariado', '2 latas de solvente chegaram amassadas e vazando parcialmente.', '2026-08-28T11:45:00-03:00', ANA, {
+        itemId: 'IT-0007-2',
+      }),
+    ],
+    historicoStatus: [
+      statusChange('HST-0007-1', '2026-08-28T11:00:00-03:00', ANA, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0007-2', '2026-08-28T11:20:00-03:00', ANA, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.CONFERENCIA, 'Iniciada conferência do lote.'),
+      statusChange('HST-0007-3', '2026-08-28T11:45:00-03:00', ANA, RECEBIMENTO_STATUS.CONFERENCIA, RECEBIMENTO_STATUS.DIVERGENCIA, 'Avaria identificada em parte do lote de solvente.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0007-1', '2026-08-28T11:00:00-03:00', ANA, 'Recebimento criado', 'Protocolo REC-2026-0007.'),
+      change('AUD-0007-2', '2026-08-28T11:45:00-03:00', ANA, 'Divergência registrada', 'Material avariado: 2 latas de solvente amassadas.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0008',
+    protocolo: 'REC-2026-0008',
+    pedido: 'PC-88405',
+    dataRecebimento: '2026-08-30',
+    fornecedor: 'Ferramentas Industriais SA',
+    cnpjFornecedor: '23.456.789/0001-01',
+    tipo: 'Comodato',
+    responsavel: RAFAEL,
+    status: RECEBIMENTO_STATUS.DIVERGENCIA,
+    observacoes: 'Equipamento em comodato sem contrato assinado anexado.',
+    criadoEm: '2026-08-30T13:15:00-03:00',
+    atualizadoEm: '2026-08-30T16:00:00-03:00',
+    itens: [
+      item('IT-0008-1', '10', 'EMP-8001', 'Empilhadeira manual paleteira 2500kg', 1, 1, 'UN'),
+    ],
+    divergencias: [
+      divergence('DIV-0008-1', 'Falta de documentação', 'Contrato de comodato assinado não foi anexado pelo fornecedor.', '2026-08-30T16:00:00-03:00', RAFAEL, {}),
+    ],
+    historicoStatus: [
+      statusChange('HST-0008-1', '2026-08-30T13:15:00-03:00', RAFAEL, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0008-2', '2026-08-30T13:30:00-03:00', RAFAEL, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO, 'Aguardando contrato de comodato.'),
+      statusChange('HST-0008-3', '2026-08-30T16:00:00-03:00', RAFAEL, RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO, RECEBIMENTO_STATUS.DIVERGENCIA, 'Prazo vencido sem envio do contrato.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0008-1', '2026-08-30T13:15:00-03:00', RAFAEL, 'Recebimento criado', 'Protocolo REC-2026-0008.'),
+      change('AUD-0008-2', '2026-08-30T16:00:00-03:00', RAFAEL, 'Divergência registrada', 'Falta de documentação: contrato de comodato pendente.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0009',
+    protocolo: 'REC-2026-0009',
+    pedido: 'PC-88180',
+    numeroNf: '7765',
+    serieNf: '1',
+    dataRecebimento: '2026-06-15',
+    fornecedor: 'EPI Total Equipamentos',
+    cnpjFornecedor: '34.567.890/0001-12',
+    tipo: 'Estoque',
+    responsavel: MARCOS,
+    status: RECEBIMENTO_STATUS.FINALIZADO,
+    observacoes: 'Reposição trimestral de EPIs conferida e liberada.',
+    criadoEm: '2026-06-15T09:00:00-03:00',
+    atualizadoEm: '2026-06-15T12:30:00-03:00',
+    itens: [
+      item('IT-0009-1', '10', 'OCU-9001', 'Óculos de proteção antiembaçante', 150, 150, 'UN'),
+      item('IT-0009-2', '20', 'PRO-9002', 'Protetor auricular tipo plug', 300, 300, 'PAR'),
+    ],
+    anexos: [
+      attachment('ANX-0009-1', 'NF-7765.pdf', 'Nota Fiscal', '2026-06-15T09:05:00-03:00', MARCOS, 165000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0009-1', '2026-06-15T09:00:00-03:00', MARCOS, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0009-2', '2026-06-15T12:30:00-03:00', MARCOS, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.FINALIZADO, 'Conferido e liberado para estoque.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0009-1', '2026-06-15T09:00:00-03:00', MARCOS, 'Recebimento criado', 'Protocolo REC-2026-0009.'),
+      change('AUD-0009-2', '2026-06-15T12:30:00-03:00', MARCOS, 'Status alterado', 'Em digitação → Conferido/Finalizado.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0010',
+    protocolo: 'REC-2026-0010',
+    pedido: 'PC-88430',
+    dataRecebimento: '2026-09-04',
+    fornecedor: 'Rolamentos & Cia',
+    cnpjFornecedor: '56.789.012/0001-34',
+    tipo: 'Estoque',
+    responsavel: ANA,
+    status: RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO,
+    observacoes: 'NF eletrônica ainda não disponibilizada pelo fornecedor.',
+    criadoEm: '2026-09-04T11:00:00-03:00',
+    atualizadoEm: '2026-09-04T11:20:00-03:00',
+    itens: [
+      item('IT-0010-1', '10', 'ROL-6400', 'Rolamento autocompensador de rolos', 25, 25, 'UN'),
+    ],
+    historicoStatus: [
+      statusChange('HST-0010-1', '2026-09-04T11:00:00-03:00', ANA, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0010-2', '2026-09-04T11:20:00-03:00', ANA, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO, 'NF ainda não recebida.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0010-1', '2026-09-04T11:00:00-03:00', ANA, 'Recebimento criado', 'Protocolo REC-2026-0010.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0011',
+    protocolo: 'REC-2026-0011',
+    pedido: 'PC-88440',
+    numeroNf: '99021',
+    serieNf: '1',
+    dataRecebimento: '2026-08-20',
+    fornecedor: 'Aço Forte Distribuidora Ltda',
+    cnpjFornecedor: '12.345.678/0001-90',
+    tipo: 'Outro',
+    responsavel: RAFAEL,
+    status: RECEBIMENTO_STATUS.CONFERENCIA,
+    observacoes: 'Aguardando liberação da engenharia para uso em obra interna.',
+    criadoEm: '2026-08-20T10:30:00-03:00',
+    atualizadoEm: '2026-08-20T11:10:00-03:00',
+    itens: [
+      item('IT-0011-1', '10', 'VER-1150', 'Vergalhão CA-50 10mm 12m', 200, 200, 'UN'),
+    ],
+    anexos: [
+      attachment('ANX-0011-1', 'NF-99021.pdf', 'Nota Fiscal', '2026-08-20T10:35:00-03:00', RAFAEL, 132000),
+    ],
+    historicoStatus: [
+      statusChange('HST-0011-1', '2026-08-20T10:30:00-03:00', RAFAEL, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+      statusChange('HST-0011-2', '2026-08-20T11:10:00-03:00', RAFAEL, RECEBIMENTO_STATUS.DIGITACAO, RECEBIMENTO_STATUS.CONFERENCIA, 'Encaminhado para conferência da engenharia.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0011-1', '2026-08-20T10:30:00-03:00', RAFAEL, 'Recebimento criado', 'Protocolo REC-2026-0011.'),
+    ],
+  }),
+  receipt({
+    id: 'REC-2026-0012',
+    protocolo: 'REC-2026-0012',
+    pedido: 'PC-88450',
+    dataRecebimento: '2026-09-02',
+    fornecedor: 'Elétrica Nordeste Cabos',
+    cnpjFornecedor: '45.678.901/0001-23',
+    tipo: 'Estoque',
+    responsavel: MARCOS,
+    status: RECEBIMENTO_STATUS.DIGITACAO,
+    observacoes: '',
+    criadoEm: '2026-09-02T15:45:00-03:00',
+    atualizadoEm: '2026-09-02T15:45:00-03:00',
+    itens: [
+      item('IT-0012-1', '10', 'LED-1200', 'Lâmpada LED tubular 18W', 100, 100, 'UN'),
+    ],
+    historicoStatus: [
+      statusChange('HST-0012-1', '2026-09-02T15:45:00-03:00', MARCOS, null, RECEBIMENTO_STATUS.DIGITACAO, 'Registro criado.'),
+    ],
+    historicoAlteracoes: [
+      change('AUD-0012-1', '2026-09-02T15:45:00-03:00', MARCOS, 'Recebimento criado', 'Protocolo REC-2026-0012.'),
+    ],
+  }),
+]
 
 export const recebimentosIniciais = seedRecebimentos
 export const statusOptions = STATUS_OPTIONS
