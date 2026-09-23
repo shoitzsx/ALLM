@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,6 +8,18 @@
     <title>ALM · Recebimentos</title>
   </head>
   <body>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('alm-theme')
+          if (theme === 'dark') {
+            document.documentElement.dataset.theme = 'dark'
+            document.documentElement.style.colorScheme = 'dark'
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b1020')
+          }
+        } catch (_) {}
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
