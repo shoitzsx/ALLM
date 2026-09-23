@@ -1,4 +1,6 @@
 data.json
 data.json.tmp
+.env
+credentials.json
 uploads/*
 !uploads/.gitkeep

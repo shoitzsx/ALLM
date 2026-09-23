@@ -2,5 +2,12 @@
   "name": "alm-api",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.mjs", "dev": "node --watch server.mjs" }
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.3",
+    "googleapis": "^181.0.0"
+  }
 }

@@ -13,7 +13,6 @@ import {
   filterRecebimentos,
   getDashboardMetrics,
   paginateRecebimentos,
-  seedRecebimentos,
   sortRecebimentos,
   validateStatusTransition,
 } from './data.js'
@@ -33,7 +32,7 @@ const listeners = new Set()
 
 function makeDefaultState() {
   return {
-    recebimentos: cloneData(seedRecebimentos),
+    recebimentos: [],
     currentUser: cloneData(DEMO_CURRENT_USER),
     selectedRecebimentoId: null,
     lastUpdated: null,
@@ -879,6 +878,49 @@ const apiBackedActions = {
 
 export const storeActions = Object.freeze(apiBackedActions)
 
+let initialHydration = null
+
+export async function hydrateRecebimentosFromApi() {
+  if (initialHydration) return initialHydration
+  initialHydration = (async () => {
+    try {
+      const firstPage = await api.listRecebimentos({
+        includeArchived: 'true',
+        page: '1',
+        pageSize: '100',
+      })
+      const totalPages = Number(firstPage?.pagination?.totalPages || 1)
+      const remaining = await Promise.all(
+        Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+          api.listRecebimentos({
+            includeArchived: 'true',
+            page: String(index + 2),
+            pageSize: '100',
+          }),
+        ),
+      )
+      const recebimentos = [firstPage, ...remaining].flatMap((page) =>
+        Array.isArray(page?.data) ? page.data : [],
+      )
+      setState((current) => ({
+        ...current,
+        recebimentos,
+        selectedRecebimentoId: recebimentos.some(
+          (entry) => entry.id === current.selectedRecebimentoId,
+        )
+          ? current.selectedRecebimentoId
+          : null,
+      }))
+      return recebimentos
+    } catch (error) {
+      console.warn('ALM API: não foi possível carregar os recebimentos iniciais.', error)
+      setState((current) => ({ ...current, recebimentos: [], selectedRecebimentoId: null }))
+      return []
+    }
+  })()
+  return initialHydration
+}
+
 /**
  * Hook sem Provider: todos os componentes observam a mesma instância em memória.
  * Se filtros/paginação forem passados, o resultado derivado vem em `view`.
@@ -952,6 +994,5 @@ export const useReceiptStore = useRecebimentosStore
 export default useRecebimentosStore
 
 if (typeof window !== 'undefined') {
-  // Não hidrata dados da API ao carregar a página.
-  // O MVP é volátil: atualizar o navegador limpa a lista exibida.
+  void hydrateRecebimentosFromApi()
 }

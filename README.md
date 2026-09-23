@@ -20,7 +20,7 @@ Ja inclui:
 - Controle de status: Em digitacao, Aguardando documentacao, Em conferencia, Divergencia identificada e Conferido/Finalizado.
 - Tela de detalhes com dados gerais, itens, anexos, fotos, divergencias, historico e acoes.
 - Tela de pendencias operacionais.
-- Estado mantido em memoria no navegador durante a sessao (ver "MVP volatil" abaixo); `localStorage` e usado apenas para lembrar o usuario demonstrativo selecionado e, no modulo de leitura de NF-e, o catalogo de fornecedores.
+- Recebimentos carregados da API na abertura; `localStorage` é usado apenas para lembrar o usuário demonstrativo selecionado e, no módulo de leitura de NF-e, o catálogo de fornecedores.
 
 Fora do MVP:
 
@@ -63,9 +63,9 @@ Se a porta estiver ocupada, o Vite pode usar outra porta. Use sempre a URL que a
 
 `npm install` também roda automaticamente (`postinstall`) `scripts/copy-pdfjs-assets.mjs`, que copia os recursos do `pdfjs-dist` (wasm de JBIG2/OpenJPEG, cmaps, fontes padrão e perfis ICC) para `public/pdfjs/`. Esses arquivos são necessários para o módulo `Leitura automática (beta)` conseguir abrir PDFs digitalizados corretamente — se `public/pdfjs/` sumir por algum motivo, rode `node scripts/copy-pdfjs-assets.mjs` de novo.
 
-## Backend/API (implantação iniciada)
+## Backend/API (Google Sheets)
 
-A pasta `backend/` contém a primeira implementação do servidor real do MVP. Ela usa Node.js nativo para reduzir dependências e uma persistência JSON local como adaptador de desenvolvimento. A API foi desenhada para que esse adaptador possa ser trocado por PostgreSQL sem alterar o contrato HTTP.
+A pasta `backend/` persiste os dados estruturados em uma planilha do Google Sheets. As rotas HTTP continuam isoladas da integração: `server.mjs` chama o repository, o repository organiza as entidades e `integrations/googleSheets.mjs` executa apenas leituras e escritas de linhas. Isso mantém a troca futura para PostgreSQL localizada, sem alterar o frontend ou os contratos HTTP.
 
 Endpoints principais:
 
@@ -92,13 +92,23 @@ Para executar:
 npm run api
 ```
 
+Antes, crie `backend/.env` a partir de `.env.example` e informe somente credenciais de uma service account com acesso de edição à planilha:
+
+```dotenv
+GOOGLE_SHEETS_SPREADSHEET_ID=
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=
+```
+
+As abas `Recebimentos`, `Itens`, `Divergencias`, `HistoricoStatus`, `Auditoria`, `Anexos` e `Usuarios` são criadas automaticamente quando ausentes. Nunca exponha essas variáveis com prefixo `VITE_` nem versione um `credentials.json`. Os bytes dos anexos continuam em `backend/uploads/`; apenas seus metadados são persistidos na aba `Anexos`.
+
 Em outro terminal:
 
 ```bash
 npm run dev
 ```
 
-A aplicação React usa `src/api.js` e o `store.js` agora opera em modo API-first. O `localStorage` permanece apenas como cache/offline durante a transição. Quando a API está disponível, o estado inicial é carregado do servidor e as mutações são sincronizadas em fila por recebimento.
+A aplicação React usa `src/api.js` e o `store.js` opera em modo API-first: o estado inicial é carregado do servidor e as mutações são sincronizadas em fila por recebimento. Se a API estiver indisponível na carga inicial, o fallback seguro é uma lista vazia — nunca dados de demonstração.
 
 Arquivos enviados são gravados em `backend/uploads/` e seus metadados ficam associados ao recebimento. Para produção, essa camada deve ser substituída por storage corporativo/objeto e PostgreSQL.
 
@@ -330,7 +340,7 @@ Quando nem texto, nem código de barras, nem OCR conseguirem localizar uma chave
 Fora de escopo, de propósito, nesta fase:
 
 - OCR de página inteira / interpretação completa do documento (Document AI e afins) — o OCR aqui é só um fallback estreito para a chave de 44 dígitos, restrito a dígitos e a duas regiões da página.
-- Integração com Google Sheets/Drive.
+- Integração com Google Drive.
 - Alteração no `backend/server.mjs` ou no modelo de dados do recebimento — os campos de `referenciaNfe` são só sugestão.
 - Gravação automática em um recebimento (`api.createRecebimento` não é chamado por este módulo).
 - Garantir leitura de código de barras/OCR em digitalizações ruins — a meta é degradar bem, não vencer qualquer digitalização.
@@ -348,8 +358,8 @@ Conexão futura (não feita agora): a lógica de `src/features/nfeReader/extract
 7. Clique em Confirmar dados e depois em Copiar para validar o JSON final.
 8. `npm test` roda o teste da matemática da chave (`src/features/nfeReader/chaveNFe.test.mjs`) sem precisar de navegador.
 
-## MVP volátil — sem dados mock
+## Persistência via Google Sheets — sem dados mock
 
-O MVP atual inicia sem recebimentos fictícios. Os dados criados durante a utilização ficam somente em memória no navegador e são sincronizados com a API enquanto a página está aberta. **Ao atualizar/recarregar a página, os recebimentos exibidos são zerados.**
+O MVP inicia sem recebimentos fictícios. Os dados criados são enviados à API e persistidos no Google Sheets; ao atualizar/recarregar, o frontend os carrega novamente pela API.
 
-Não é utilizado `localStorage` nem `sessionStorage` para persistir recebimentos. O backend também inicia com banco em memória vazio e não grava os recebimentos em `backend/data.json`.
+Não é utilizado `localStorage` nem `sessionStorage` para persistir recebimentos. O backend não usa `backend/data.json` nem um banco em memória como fonte de verdade.
