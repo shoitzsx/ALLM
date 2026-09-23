@@ -150,6 +150,11 @@ button {
   gap: 12px;
   min-height: 48px;
   padding: 0 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .brand-mark {
@@ -2688,6 +2693,11 @@ button {
     display: flex;
     align-items: center;
     gap: 9px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .mobile-brand .brand-mark {
@@ -3222,14 +3232,6 @@ html[data-theme="dark"] {
 
 html[data-theme="dark"] body, html[data-theme="dark"] .main-shell { background: var(--app-background); }
 html[data-theme="dark"] .sidebar { color: var(--sidebar-text); background: var(--sidebar-background); }
-html[data-theme="dark"] .brand,
-html[data-theme="dark"] .mobile-brand {
-  appearance: none;
-  -webkit-appearance: none;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
 html[data-theme="dark"] .brand-copy strong, html[data-theme="dark"] .nav-item.active, html[data-theme="dark"] .sidebar-user strong { color: var(--sidebar-text); }
 html[data-theme="dark"] .brand-copy span, html[data-theme="dark"] .sidebar-context, html[data-theme="dark"] .nav-item, html[data-theme="dark"] .sidebar-user-copy span { color: var(--sidebar-muted); }
 html[data-theme="dark"] .nav-item:hover { background: rgba(255, 255, 255, 0.07); }
