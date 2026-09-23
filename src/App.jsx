@@ -48,6 +48,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react'
+import { ThemeToggle, useTheme } from './theme.jsx'
 import {
   DIVERGENCE_TYPE_OPTIONS,
   DOCUMENT_TYPE_OPTIONS,
@@ -238,7 +239,7 @@ function downloadCsv(receipts) {
   URL.revokeObjectURL(url)
 }
 
-function AppShell({ route, pendingCount, currentUser, children, onToast }) {
+function AppShell({ route, pendingCount, currentUser, children, onToast, theme, onToggleTheme }) {
   const [globalSearch, setGlobalSearch] = useState('')
   const searchRef = useRef(null)
 
@@ -324,6 +325,7 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
             <kbd>/</kbd>
           </form>
           <div className="topbar-actions">
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
             <button
               className="icon-button notification-button"
               type="button"
@@ -354,6 +356,7 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
             <strong>Recebimentos</strong>
           </button>
           <div className="mobile-top-actions">
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
             <button className="icon-button" type="button" onClick={() => navigate(`${ROUTES.receipts}?focus=search`)} aria-label="Buscar">
               <Search size={19} />
             </button>
@@ -1393,6 +1396,7 @@ export default function App() {
   const route = useHashRoute()
   const store = useRecebimentosStore()
   const [toasts, setToasts] = useState([])
+  const { theme, toggleTheme } = useTheme()
 
   const pushToast = (title, message, type = 'success') => {
     const id = `${Date.now()}-${Math.random()}`
@@ -1426,7 +1430,7 @@ export default function App() {
 
   return (
     <>
-      <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast}>
+      <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
         {content}
       </AppShell>
       <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
