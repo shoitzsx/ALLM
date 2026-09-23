@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Flashlight, FlashlightOff, RefreshCw, SwitchCamera, X } from 'lucide-react'
-import { listCameras, startLiveScan } from './liveScanner.js'
+import { AlertTriangle, Camera, CheckCircle2, Flashlight, FlashlightOff, RefreshCw, SwitchCamera, X } from 'lucide-react'
+import { captureCurrentFrame, listCameras, startLiveScan } from './liveScanner.js'
+import { analyzeNfeCanvas } from './extractor.js'
 
 const STATE = {
   REQUESTING: 'requesting_permission',
   SCANNING: 'scanning',
+  CAPTURING: 'capturing',
   FOUND: 'found',
   ERROR: 'error',
   PAUSED: 'paused',
@@ -21,10 +23,18 @@ function isSecureContextForCamera() {
 // cada novo `start()` (nova câmera, retomar de pausa, etc.).
 const HINT_STAGE_AFTER_MS = [3000, 7000]
 
-function hintForStage(stage, torchAvailable) {
-  if (stage === 0) return 'Mantenha o código dentro da área.'
+// "Capturar e analisar" só aparece depois de um tempo — não de cara, senão
+// vira o caminho padrão em vez de saída de emergência para quando a leitura
+// contínua está demorando.
+const CAPTURE_BUTTON_AFTER_MS = 6000
+
+function hintForStage(stage, torchAvailable, isPortrait) {
+  // Nunca sugerir aproximar demais: isso corta a quiet zone (margem clara)
+  // que o CODE_128 precisa nas laterais para ser decodificado.
+  if (stage === 0) return 'Enquadre o código inteiro e deixe espaço nas laterais.'
   if (stage === 1) return 'Mantenha o código centralizado e estável.'
-  return torchAvailable ? 'Aproxime a câmera ou ligue a lanterna.' : 'Aproxime a câmera e mantenha o código nítido.'
+  if (isPortrait) return 'Para facilitar a leitura, tente girar o celular.'
+  return torchAvailable ? 'Deixe o código inteiro visível e use a lanterna.' : 'Aproxime a câmera com cuidado, sem cortar as laterais.'
 }
 
 function describeError(err) {
@@ -61,6 +71,15 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
   const [cameras, setCameras] = useState([])
   const [cameraIndex, setCameraIndex] = useState(0)
   const [hintStage, setHintStage] = useState(0)
+  const [showCaptureButton, setShowCaptureButton] = useState(false)
+  const [captureMessage, setCaptureMessage] = useState('')
+  const [isPortrait, setIsPortrait] = useState(
+    () => window.matchMedia?.('(orientation: portrait)').matches ?? true,
+  )
+  // Só para um painel de diagnóstico em desenvolvimento (import.meta.env.DEV)
+  // — nunca visível em produção. Ver decodeDiagnostics.js/liveScanner.js.
+  const [diagnostics, setDiagnostics] = useState(null)
+  const [streamInfo, setStreamInfo] = useState(null)
 
   const stopScan = useCallback(() => {
     controlsRef.current?.stop()
@@ -71,12 +90,17 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
     async (deviceId) => {
       setState(STATE.REQUESTING)
       setErrorMessage('')
+      setCaptureMessage('')
       setTorchOn(false)
       setHintStage(0)
-      try {
-        const controls = await startLiveScan({
+      setShowCaptureButton(false)
+      setDiagnostics(null)
+      setStreamInfo(null)
+
+      const attemptStart = (id) =>
+        startLiveScan({
           videoElement: videoRef.current,
-          deviceId,
+          deviceId: id,
           onValidKey: (chave) => {
             setState(STATE.FOUND)
             navigator.vibrate?.(100)
@@ -85,7 +109,25 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
               onClose()
             }, 550)
           },
+          ...(import.meta.env.DEV
+            ? { onDiagnostics: setDiagnostics, onStreamReady: setStreamInfo }
+            : null),
         })
+
+      try {
+        let controls
+        try {
+          controls = await attemptStart(deviceId)
+        } catch (err) {
+          // Um deviceId específico (troca de câmera, retomar após pausa/captura)
+          // pode deixar de resolver entre uma chamada de getUserMedia e a
+          // próxima (observado mesmo sem trocar de aparelho). Antes de mostrar
+          // erro ao usuário, tenta de novo sem fixar o dispositivo — mesma
+          // câmera preferencial por `facingMode`, só não trava num id específico.
+          if (err?.name !== 'NotFoundError' || !deviceId) throw err
+          console.debug('[NFe][scanner] deviceId não resolveu, tentando de novo sem fixar câmera.')
+          controls = await attemptStart(undefined)
+        }
         controlsRef.current = controls
         setTorchAvailable(Boolean(controls.switchTorch))
         setState(STATE.SCANNING)
@@ -119,6 +161,24 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
     )
     return () => timers.forEach((timerId) => window.clearTimeout(timerId))
   }, [state])
+
+  // "Capturar e analisar" só aparece depois de alguns segundos sem sucesso —
+  // saída de emergência, não o caminho padrão. Mesmo padrão de timer único,
+  // não ligado a tentativas de decode.
+  useEffect(() => {
+    if (state !== STATE.SCANNING) return undefined
+    const timerId = window.setTimeout(() => setShowCaptureButton(true), CAPTURE_BUTTON_AFTER_MS)
+    return () => window.clearTimeout(timerId)
+  }, [state])
+
+  // Orientação do aparelho — só para trocar o texto da dica (nunca trava a
+  // tela numa orientação; ver hintForStage).
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(orientation: portrait)')
+    const onChange = () => setIsPortrait(mediaQuery.matches)
+    mediaQuery.addEventListener?.('change', onChange)
+    return () => mediaQuery.removeEventListener?.('change', onChange)
+  }, [])
 
   // Não deixa a câmera ligada em segundo plano: para ao perder visibilidade,
   // retoma (se o scanner ainda estiver aberto) ao voltar a ficar visível.
@@ -174,6 +234,45 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
     onClose()
   }
 
+  /**
+   * Saída de emergência quando a leitura contínua está demorando: captura o
+   * frame atual (Canvas, sem passar por File — `captureCurrentFrame`,
+   * liveScanner.js) e reaproveita o MESMO pipeline robusto de código de
+   * barras/OCR do upload/foto (`analyzeNfeCanvas`, extractor.js — recortes,
+   * contraste, margem artificial, deskew, e OCR se nada disso resolver). Se
+   * não encontrar nada, retoma a leitura contínua em vez de travar a tela.
+   */
+  const handleCaptureAndAnalyze = async () => {
+    const video = videoRef.current
+    if (!video) return
+    stopScan()
+    setState(STATE.CAPTURING)
+    setCaptureMessage('')
+    try {
+      const canvas = captureCurrentFrame(video)
+      const result = await analyzeNfeCanvas(canvas)
+      if (result.chaveValida) {
+        setState(STATE.FOUND)
+        navigator.vibrate?.(100)
+        window.setTimeout(() => {
+          onKeyFound(result.chaveInterpretada.chave)
+          onClose()
+        }, 550)
+      } else {
+        const message = result.warnings[0] || 'Não foi possível localizar uma chave nesta captura.'
+        // Dá tempo do usuário ler o aviso antes de `start()` reativar a câmera
+        // e limpar `captureMessage` — retomar de imediato apagaria a mensagem
+        // no mesmo instante em que ela apareceria.
+        setCaptureMessage(message)
+        window.setTimeout(() => start(cameras[cameraIndex]?.deviceId), 2000)
+      }
+    } catch (err) {
+      console.error('[NFe][scanner] Falha ao capturar/analisar o frame.', { name: err?.name, message: err?.message })
+      setCaptureMessage('Não foi possível analisar a imagem capturada.')
+      window.setTimeout(() => start(cameras[cameraIndex]?.deviceId), 2000)
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -198,8 +297,31 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
               <p className="nfe-scanner-reading">
                 Lendo código de barras<span className="nfe-scanner-dot" aria-hidden="true" />
               </p>
-              <p className="nfe-scanner-hint">{hintForStage(hintStage, torchAvailable)}</p>
+              <p className="nfe-scanner-hint">{hintForStage(hintStage, torchAvailable, isPortrait)}</p>
             </div>
+            {showCaptureButton ? (
+              <button className="nfe-scanner-capture-btn" type="button" onClick={handleCaptureAndAnalyze}>
+                <Camera size={15} /> Capturar e analisar
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {state === STATE.CAPTURING ? (
+          <div className="nfe-scanner-feedback">
+            {captureMessage ? (
+              <>
+                <AlertTriangle size={26} />
+                <strong>Nenhuma chave encontrada</strong>
+                <p>{captureMessage}</p>
+                <p className="nfe-scanner-hint">Retomando a leitura…</p>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="spin" size={26} />
+                <strong>Analisando imagem capturada…</strong>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -242,6 +364,7 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
       <footer className="nfe-scanner-footer">
         <span className="nfe-scanner-status" aria-live="polite">
           {state === STATE.SCANNING ? 'Câmera ativa — aponte para o código de barras' : null}
+          {state === STATE.CAPTURING ? 'Analisando captura' : null}
           {state === STATE.REQUESTING ? 'Aguardando permissão da câmera' : null}
           {state === STATE.FOUND ? 'Chave localizada' : null}
           {state === STATE.ERROR ? 'Câmera indisponível' : null}
@@ -265,6 +388,36 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
           ) : null}
         </div>
       </footer>
+
+      {import.meta.env.DEV ? <DevDiagnosticsPanel diagnostics={diagnostics} streamInfo={streamInfo} /> : null}
+    </div>
+  )
+}
+
+/**
+ * Painel de diagnóstico só em desenvolvimento (`import.meta.env.DEV`) — nunca
+ * embutido/visível numa build de produção. Mostra o que `onDiagnostics`/
+ * `onStreamReady` (liveScanner.js) reportam: tentativas, o que cada uma
+ * classificou como (decodeDiagnostics.js), resolução real da câmera e tempo
+ * decorrido. Nunca mostra a chave em si — só contagens.
+ */
+function DevDiagnosticsPanel({ diagnostics, streamInfo }) {
+  return (
+    <div className="nfe-scanner-devpanel">
+      <strong>DEV</strong>
+      {streamInfo ? (
+        <span>
+          {streamInfo.width}×{streamInfo.height} · pronta em {streamInfo.readyMs}ms
+        </span>
+      ) : null}
+      {diagnostics ? (
+        <span>
+          tentativas {diagnostics.attempts} · não_encontrado {diagnostics.not_found} · tam_inválido{' '}
+          {diagnostics.invalid_length} · dv_inválido {diagnostics.invalid_dv} · {Math.round(diagnostics.elapsedMs / 100) / 10}s
+        </span>
+      ) : (
+        <span>aguardando tentativas…</span>
+      )}
     </div>
   )
 }

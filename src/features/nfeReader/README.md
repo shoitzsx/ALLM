@@ -64,16 +64,20 @@ do módulo: `analyzeNfeFile(file)`.
 | [`analysisBuilder.js`](analysisBuilder.js) | Monta `fields`/`referenciaNfe`/`chaveInterpretada` a partir de uma chave já resolvida — usado tanto por `analyzeNfeFile` (arquivo) quanto por `analyzeNfeKey` (scanner ao vivo). Sem dependência de Canvas/`?url` — testável em Node puro, igual a `chaveNFe.js`. |
 | [`chaveNFe.js`](chaveNFe.js) | Matemática pura da chave de acesso: validação (dígito verificador módulo 11), interpretação dos campos (UF/ano-mês/CNPJ/série/número), busca de chaves válidas dentro de um texto livre. Sem dependência de DOM — testável em Node puro. |
 | [`pdfExtractor.js`](pdfExtractor.js) | Tudo que usa `pdfjs-dist`: abrir o PDF, extrair texto selecionável, renderizar a 1ª página em alta resolução para um canvas. |
-| [`barcodeReader.js`](barcodeReader.js) | Leitura de código de barras CODE_128 estático (arquivo/foto) via `@zxing/browser`/`@zxing/library`, com a estratégia manual de recorte/contraste/rotação (ver [por que sem `TRY_HARDER`](#por-que-o-zxing-roda-sem-try_harder)). Exporta `buildCode128Hints()`, reaproveitado também pelo scanner ao vivo. |
-| [`liveScanner.js`](liveScanner.js) | Leitura contínua de CODE_128 pela câmera (`@zxing/browser`, `decodeFromConstraints`), com os MESMOS hints de `barcodeReader.js` e a MESMA validação de chave de `chaveNFe.js`. Sem dependência de arquivo/canvas estático — usado só pelo scanner ao vivo. |
-| [`ocrReader.js`](ocrReader.js) | Fallback de OCR via `tesseract.js`, restrito a dígitos, usado só quando código de barras falha. Só se aplica ao pipeline de arquivo/foto — o scanner ao vivo não usa OCR (ver [Entradas em celular/tablet](#entradas-em-celulartablet-foto-e-scanner-ao-vivo)). |
-| [`canvasUtils.js`](canvasUtils.js) | Primitivas de canvas DOM compartilhadas por `barcodeReader.js` e `ocrReader.js`: clonar, recortar, rotacionar, ampliar, binarizar (threshold). |
+| [`barcodeReader.js`](barcodeReader.js) | Leitura de código de barras CODE_128 estático (arquivo/foto), em estágios — nativo, imagem inteira, recortes, margem artificial, deskew (ver [Etapa 2](#etapa-2--código-de-barras-code_128-barcodereaderjs)). Exporta `buildCode128Hints()`, reaproveitado também pelo scanner ao vivo. |
+| [`liveScanner.js`](liveScanner.js) | Leitura contínua de CODE_128 pela câmera — `BarcodeDetector` nativo quando suportado, `@zxing/browser` como universal (nunca os dois ao mesmo tempo). Mesmos hints de `barcodeReader.js`, mesma validação de `chaveNFe.js`. Também expõe `captureCurrentFrame()` (para "Capturar e analisar"). |
+| [`nativeBarcodeDetector.js`](nativeBarcodeDetector.js) | Wrapper fino sobre a API nativa `BarcodeDetector` do navegador — feature detection (`isNativeCode128Supported`) e decodificação (`detectCode128Native`), usados tanto pelo pipeline estático quanto pelo ao vivo. |
+| [`decodeDiagnostics.js`](decodeDiagnostics.js) | Vocabulário e contador de diagnóstico (não_encontrado/tamanho_inválido/dv_inválido/válido) compartilhado por `barcodeReader.js` e `liveScanner.js` — de onde vêm as mensagens de erro mais específicas e o painel de debug em dev. Puro, sem DOM — testável em Node. |
+| [`ocrReader.js`](ocrReader.js) | Fallback de OCR via `tesseract.js`, restrito a dígitos, usado só quando código de barras falha. Só se aplica ao pipeline de arquivo/foto/captura — o scanner ao vivo contínuo não usa OCR frame a frame (ver [Entradas em celular/tablet](#entradas-em-celulartablet-foto-e-scanner-ao-vivo)). |
+| [`canvasUtils.js`](canvasUtils.js) | Primitivas de canvas DOM compartilhadas por `barcodeReader.js` e `ocrReader.js`: clonar, recortar, rotacionar, ampliar, binarizar (threshold), adicionar margem branca artificial (`padCanvasWithWhite`). |
 | [`textHeuristics.js`](textHeuristics.js) | Regex fracas sobre o texto do PDF para campos que a chave não cobre (data de emissão, valor total, pedido de compra) — sempre confiança "conferir" ou "baixa". |
 | [`supplierCatalog.js`](supplierCatalog.js) | Catálogo local `CNPJ → nome do fornecedor` em `localStorage` (único uso de `localStorage` no app; alimentado a cada nota confirmada manualmente). |
 | [`NfeReaderPage.jsx`](NfeReaderPage.jsx) | Tela: upload/foto/scanner, botão "Analisar nota", revisão com selos de confiança, edição manual, "Confirmar dados" → JSON copiável. |
-| [`NfeLiveScanner.jsx`](NfeLiveScanner.jsx) | Overlay em tela cheia do scanner ao vivo: preview da câmera, guia de posicionamento, lanterna/troca de câmera quando suportadas, estados de permissão negada/sem câmera. |
+| [`NfeLiveScanner.jsx`](NfeLiveScanner.jsx) | Overlay em tela cheia do scanner ao vivo: preview da câmera, guia de posicionamento (com margem lateral para a quiet zone), dicas por tempo, "Capturar e analisar", lanterna/troca de câmera quando suportadas, painel de diagnóstico só em dev, estados de permissão negada/sem câmera. |
 | [`chaveNFe.test.mjs`](chaveNFe.test.mjs) | Testes de `node:test` para a matemática da chave (sem navegador). |
 | [`analysisBuilder.test.mjs`](analysisBuilder.test.mjs) | Testes de `node:test` para a montagem do resultado a partir de uma chave (`analyzeNfeKey`/`buildAnalysisFromKey`), incluindo o caso do scanner (sem texto de PDF). |
+| [`decodeDiagnostics.test.mjs`](decodeDiagnostics.test.mjs) | Testes de `node:test` para a classificação de desfecho de decodificação e o contador de diagnóstico. |
+| [`testFixtures/`](testFixtures/) | Imagens de um CODE_128 sintético válido (não dado fiscal real) + script Playwright para validar `readCode128FromCanvas` contra pixels reais de forma repetível — ver [testFixtures/README.md](testFixtures/README.md). |
 
 ## A chave de acesso e o dígito verificador
 
@@ -160,25 +164,66 @@ Só roda se a etapa 1 não achou nada. Primeiro obtém um canvas:
 - Foto → `loadImageFileToCanvas()` carrega o arquivo direto num `<canvas>` via
   `Image` + `URL.createObjectURL`.
 
-Depois, `readCode128FromCanvas(canvas)` tenta decodificar em várias
-combinações, na ordem, retornando no primeiro sucesso:
+Depois, `readCode128FromCanvas(canvas, { onAttempt })` tenta decodificar em
+**estágios** — cada um só roda se o anterior não achou nada, e uma foto bem
+enquadrada resolve no Estágio 1 sem nunca chegar perto dos mais caros. Essa
+reorganização (setembro/2026) veio de um bug real: uma foto tirada só da
+região do código de barras (sem o resto da página) não decodificava — ver
+["Investigando a robustez do scanner"](#investigando-a-robustez-do-scanner-e-de-onde-vieram-os-estágios)
+logo abaixo para o raciocínio e as evidências.
 
-1. **6 recortes proporcionais** (`CROP_VARIANTS`, `barcodeReader.js:45`): topo
-   25%, topo 35%, topo direito, topo esquerdo, metade superior, página
-   inteira — nessa ordem, das regiões mais baratas/menos ruidosas (o código de
-   barras do DANFE fica perto do topo) até a página toda como último recurso.
-   Um recorte com menos de `MIN_DECODE_WIDTH = 1200` px de largura é ampliado
-   2× (`upscaleCanvas`, com `imageSmoothingEnabled = false` para não borrar as
-   barras finas).
-2. Para cada recorte, **2 versões**: original e com contraste binarizado
-   (`thresholdCanvas`, limiar fixo `THRESHOLD_LEVEL = 160` — um único nível,
-   deliberadamente; ver [limitações conhecidas](#limitações-conhecidas-e-decisões-de-escopo)).
-3. Para cada versão, **4 rotações** (0°/90°/180°/270°), feitas manualmente por
-   `rotateCanvas` (`canvasUtils.js`, via `ctx.translate` + `ctx.rotate` +
-   `ctx.drawImage` sobre um `<canvas>` DOM comum).
+1. **Fast path**: `BarcodeDetector` nativo (`nativeBarcodeDetector.js`), se o
+   navegador suportar `code_128` — sem crops nem rotações manuais, o próprio
+   navegador decodifica. Depois, ZXing na **imagem inteira**, original +
+   contraste, 4 rotações cardeais (0°/90°/180°/270°).
+2. **Recortes de página inteira** (`CROP_VARIANTS`, `barcodeReader.js`): topo
+   25%, topo 35%, topo direito, topo esquerdo, metade superior — para fotos da
+   NF inteira, onde o código de barras é só uma faixa pequena da imagem
+   ("página inteira" já foi coberta no Estágio 1, não se repete aqui). Cada
+   recorte, original + contraste, 4 rotações.
+2b. **Margem artificial** (`padCanvasWithWhite`, `canvasUtils.js`): a imagem
+   inteira com uma borda branca acrescentada (8% de cada lado) — recupera
+   fotos em que o código foi enquadrado rente demais, sem quiet zone real
+   (ver [seção de quiet zone](#margem-clara-quiet-zone) abaixo). Mesmas 4
+   rotações, original + contraste.
+3. **Deskew** (pequenas inclinações de correção), só se nada acima resolveu:
+   a mesma imagem com margem, nos ângulos `DESKEW_ANGLES = [-11, -8, -5, -3,
+   3, 5, 8, 11]` — ver evidência de por que esse estágio existe e o que ele
+   recupera (e o que não recupera) na próxima seção.
 
-No pior caso isso é 6 × 2 × 4 = 48 tentativas de decodificação, cada uma
-logada em `console.debug`. A primeira que funcionar retorna o texto decodificado.
+Um recorte/imagem com menos de `MIN_DECODE_WIDTH = 1200` px de largura é
+ampliado 2× (`upscaleCanvas`, com `imageSmoothingEnabled = false` para não
+borrar as barras finas) antes de qualquer tentativa. Cada tentativa
+individual é logada em `console.debug` e classificada via
+`onAttempt(outcome)` (`decodeDiagnostics.js`) — usado para instrumentação
+(nunca visível ao usuário; ver [Log de diagnóstico](#log-de-diagnóstico)).
+
+### Investigando a robustez do scanner (e de onde vieram os estágios)
+
+Reproduzido com fixtures sintéticas reais (não suposição — ver
+[`testFixtures/`](testFixtures/README.md)), o pipeline **antes** desta
+rodada decodificava de forma confiável até ~2° de inclinação da câmera e
+**nunca** decodificava a partir de 3°, em qualquer combinação testada entre
+3° e 10°. Isso é uma diferença enorme na prática: uma foto de celular
+"a mão livre" perfeitamente alinhada em menos de 3° não é realista — é
+provavelmente a causa mais comum de "código de barras não localizado" numa
+foto que, a olho nu, parece perfeitamente legível.
+
+Zero quiet zone (barras tocando a borda da imagem, testado com
+`zero-margin.png`) já decodificava **antes** desta rodada, em condições
+sintéticas limpas — o problema real provavelmente é mais sutil que só
+margem: uma foto de celular real tem compressão JPEG, leve desfoque, luz
+desigual, e possivelmente ruído bem na borda do enquadramento (dedo, sombra,
+borda do papel) que uma imagem sintética perfeita não reproduz. Por isso a
+margem artificial (Estágio 2b) e a orientação de UI para deixar espaço nas
+laterais continuam valendo — são baratas e não têm contraindicação — mas a
+**inclinação** foi o fator com evidência mais forte e reproduzível.
+
+Com o estágio de deskew, o mesmo conjunto de fixtures passa a recuperar a
+maioria dos casos entre 3° e 10° (não 100% — o efeito de reamostragem do
+canvas em cada ângulo específico não é perfeitamente previsível; ver
+`testFixtures/README.md` para os números exatos, incluindo o caso que
+continua falhando).
 
 ### Por que o ZXing roda sem `TRY_HARDER`
 
@@ -248,6 +293,24 @@ vêm de regex fracas sobre o texto do PDF (`textHeuristics.js`), sempre com
 confiança "conferir" ou "baixa" — nunca "alta", porque não há verificação
 matemática por trás delas.
 
+**Código de barras → OCR é uma função só, reaproveitada.** `runBarcodeThenOcr(canvas, warnings)`
+tenta o código de barras e, se não resolver, o OCR — usada tanto por
+`analyzeNfeFile` (arquivo/foto) quanto por `analyzeNfeCanvas` (captura
+manual do scanner ao vivo, ver
+[Capturar e analisar](#capturar-e-analisar--saída-de-emergência)), para não
+duplicar essa lógica em dois lugares.
+
+**Mensagens de aviso informadas pelo diagnóstico, não genéricas.** Em vez de
+sempre "código de barras não localizado ou ilegível", `buildBarcodeWarning`
+usa os contadores de `decodeDiagnostics.js` para diferenciar "nenhum código
+foi detectado" de "o código foi detectado, mas não é uma chave de NF-e
+válida" — só diz o que os contadores realmente confirmam, nunca inventa
+diagnóstico. E como o OCR lê os **dígitos impressos**, não as barras,
+`buildOcrWarning` deixa isso explícito: se a imagem tiver só o código de
+barras (sem os 44 números escritos abaixo), é esperado que o OCR também não
+encontre nada — a mensagem orienta a incluir os números na próxima foto, em
+vez de deixar o usuário achando que a imagem estava ruim.
+
 ### Formato do resultado (`analyzeNfeFile`)
 
 ```ts
@@ -274,38 +337,60 @@ fornecedores), `conferir` (heurística de regex razoavelmente específica),
 
 ## Entradas em celular/tablet: foto e scanner ao vivo
 
-Em telas de até 920px (mesmo corte usado no resto do app para alternar entre
-layout desktop e mobile/tablet), a etapa "1. Selecionar arquivo" ganha duas
-entradas adicionais, lado a lado com o upload:
+A etapa "1. Selecionar arquivo" ganha duas entradas adicionais, lado a lado
+com o upload, quando o **dispositivo** tem a capacidade correspondente —
+detectado por feature detection (`navigator.mediaDevices?.getUserMedia`,
+`matchMedia('(pointer: coarse)')`/`navigator.maxTouchPoints`), nunca por
+largura de tela nem por user-agent (um tablet em landscape continua tendo
+câmera e toque; a largura da janela não diz nada sobre isso):
 
 - **Tirar foto** — um segundo `<input type="file" accept="image/*"
   capture="environment">`, oculto, ao lado do input de upload normal
-  (`NfeReaderPage.jsx`, `cameraInputRef`). `capture="environment"` é só uma
-  *preferência* para o navegador priorizar a câmera traseira — não uma
-  garantia; onde não suportado, o dispositivo abre o seletor de arquivos
-  normal. A foto resultante é o mesmo tipo de `File` que o upload comum: cai
-  no mesmíssimo `onSelectFile` → `analyzeNfeFile(file)`, sem pipeline
-  paralelo.
+  (`NfeReaderPage.jsx`, `cameraInputRef`). Só aparece com câmera **e** toque
+  (`capture="environment"` só faz sentido como "abrir câmera" nessa
+  combinação; num desktop com webcam mas sem toque, cai no seletor comum
+  mesmo com o atributo). `capture="environment"` é só uma *preferência* para
+  o navegador priorizar a câmera traseira — não uma garantia. A foto
+  resultante é o mesmo tipo de `File` que o upload comum: cai no mesmíssimo
+  `onSelectFile` → `analyzeNfeFile(file)`, sem pipeline paralelo.
 - **Escanear código de barras** — abre `NfeLiveScanner.jsx` em tela cheia,
-  com a câmera ao vivo (não é um seletor de arquivo).
+  com a câmera ao vivo (não é um seletor de arquivo). Só exige câmera — não
+  toque (um notebook com webcam também recebe essa opção).
 
-No desktop (>920px) só "Selecionar arquivo" aparece — a tela continua igual à
-versão original.
+No desktop comum (mouse, sem câmera/toque) só "Selecionar arquivo" aparece.
+A largura da tela continua controlando só o *layout* (quantas colunas o
+grid usa), nunca se a funcionalidade existe.
 
 ### Scanner ao vivo (`liveScanner.js` + `NfeLiveScanner.jsx`)
 
 Diferente do upload/foto, o scanner não produz um `File`: ele decodifica o
-código de barras diretamente de frames de vídeo via
-`BrowserMultiFormatReader.decodeFromConstraints` (`@zxing/browser`, já usado
-no resto do módulo), com preferência por câmera traseira
-(`facingMode: { ideal: 'environment' }`) e sem solicitar microfone (nunca
-`audio: true`).
+código de barras diretamente de frames de vídeo, com preferência por câmera
+traseira (`facingMode: { ideal: 'environment' }`) e sem solicitar microfone
+(nunca `audio: true`).
 
-**Mesmos hints, mesmo motivo de nunca usar `TRY_HARDER`.** `liveScanner.js`
+**Dois decoders possíveis, nunca os dois ao mesmo tempo.**
+`startLiveScan` escolhe uma vez por sessão de leitura:
+
+- `BarcodeDetector` nativo do navegador, quando `code_128` está na lista de
+  `getSupportedFormats()` (`nativeBarcodeDetector.js`) — mais rápido, mas só
+  existe em Chromium/Chrome/Edge/Android Chrome. `liveScanner.js` gerencia
+  `getUserMedia`/torch/lifecycle ele mesmo nesse caminho (as mesmas APIs
+  padrão de `MediaStreamTrack` que o `@zxing/browser` usa por baixo dos
+  panos — não é reinvenção).
+- `@zxing/browser` (`BrowserMultiFormatReader.decodeFromConstraints`),
+  sempre que o nativo não está disponível — o caminho universal, incluindo
+  Safari/iOS, onde `BarcodeDetector` não existe.
+
+Rodar os dois ao mesmo tempo desperdiçaria CPU decodificando o mesmo frame
+duas vezes; a escolha é feita uma única vez (`isNativeCode128Supported()`,
+memoizado) antes de abrir a câmera, não a cada frame.
+
+**Mesmos hints, mesmo motivo de nunca usar `TRY_HARDER`.** O caminho ZXing
 usa `buildCode128Hints()`, exportado de `barcodeReader.js` — a mesma função,
 não uma cópia — então o [bug de rotação interna do ZXing](#por-que-o-zxing-roda-sem-try_harder)
 não pode ressurgir aqui: `decodeFromConstraints` decodifica cada frame
-chamando o mesmo `decodeFromCanvas` de sempre por baixo dos panos.
+chamando o mesmo `decodeFromCanvas` de sempre por baixo dos panos. O caminho
+nativo não usa ZXing — o navegador decodifica direto.
 
 **Nenhum código de barras é aceito só por ter sido decodificado.** Cada
 resultado de frame passa pela mesma `normalizarChave` + `validarChaveNFe` de
@@ -348,6 +433,68 @@ compatível..."; `NotReadableError` → câmera em uso por outro app; fora de
 contexto seguro (ver abaixo) → mensagem específica sobre HTTPS. Em qualquer
 caso, "Selecionar arquivo" continua disponível como alternativa.
 
+#### Margem clara (quiet zone)
+
+O CODE_128 precisa de uma faixa em branco (quiet zone) antes e depois das
+barras para ser decodificado — não é um capricho do ZXing, é do próprio
+padrão. A moldura de enquadramento (`.nfe-scanner-frame-box`) é
+propositalmente mais estreita que o espaço disponível na tela (não preenche
+quase tudo) para reforçar visualmente que o código não deve tocar as bordas.
+A dica inicial ("Enquadre o código inteiro e deixe espaço nas laterais.") e a
+de 7s+ ("Deixe o código inteiro visível e use a lanterna."/"Aproxime a
+câmera com cuidado, sem cortar as laterais.") evitam de propósito qualquer
+frase que incentive aproximar demais — "aproxime a câmera" sozinho, sem
+qualificação, já foi motivo de bug real (ver
+[Investigando a robustez do scanner](#investigando-a-robustez-do-scanner-e-de-onde-vieram-os-estágios)).
+
+#### Dica de orientação (portrait → landscape)
+
+O código de barras do DANFE é longo e horizontal — em celular na vertical
+(portrait), ele ocupa uma fatia bem mais estreita do enquadramento do que em
+paisagem. Se a leitura não resolveu depois de ~7s **e** o aparelho está em
+portrait (`matchMedia('(orientation: portrait)')`, com listener de mudança —
+não trava nem força a orientação), a dica de 7s vira "Para facilitar a
+leitura, tente girar o celular." em vez da dica de lanterna/aproximação.
+
+#### "Capturar e analisar" — saída de emergência
+
+Se a leitura contínua não resolver em ~6s, um botão "Capturar e analisar"
+aparece (não antes — seria o caminho padrão em vez de uma saída de
+emergência). Ao tocar: `captureCurrentFrame(videoElement)` (`liveScanner.js`)
+desenha o frame atual num canvas novo — **sem** passar por `File`/serializar
+para PNG só para ler de volta depois — e `analyzeNfeCanvas(canvas)`
+(`extractor.js`) roda o **mesmo** pipeline robusto de código de barras/OCR do
+upload/foto sobre esse canvas (todos os estágios da
+[Etapa 2](#etapa-2--código-de-barras-code_128-barcodereaderjs), incluindo
+margem artificial e deskew — que o scanner ao vivo, por rodar em tempo real
+a cada frame, não tenta). Se não encontrar nada, mostra a mensagem
+específica (ver [Etapa 2](#etapa-2--código-de-barras-code_128-barcodereaderjs))
+por alguns segundos e retoma a leitura contínua sozinho — nunca trava a
+tela numa captura sem sucesso.
+
+#### Painel de diagnóstico (só em desenvolvimento)
+
+Com `import.meta.env.DEV` (nunca em build de produção), `NfeLiveScanner.jsx`
+mostra uma faixa fixa no rodapé com o que `onDiagnostics`/`onStreamReady`
+(`liveScanner.js`) reportam: resolução real negociada com a câmera, tempo até
+ficar pronta, número de tentativas e a contagem por desfecho
+(`decodeDiagnostics.js`) — nunca a chave em si. `onDiagnostics` é chamado no
+máximo a cada 500ms (não a cada tentativa — evitaria dezenas de renders React
+por segundo à toa); a animação/UI de "lendo" continua sendo CSS puro,
+independente desse throttle.
+
+#### Foco contínuo e diagnóstico de capabilities
+
+Depois que a câmera fica ativa, `liveScanner.js` tenta aplicar
+`focusMode: "continuous"` só se `track.getCapabilities()` listar isso — pura
+feature detection, igual ao torch; sem suporte (comum em Safari, que
+historicamente não expõe `getCapabilities()` em todo aparelho), não faz nada,
+nunca gera erro visível nem esconde o scanner. Em `console.debug` (dev),
+também registra `focusMode` real, largura/altura das capabilities e se
+`focusDistance`/`zoom` estão disponíveis — só como diagnóstico; **zoom não é
+alterado automaticamente** (fora de escopo: zoom agressivo pode cortar o
+código ou piorar a experiência).
+
 #### HTTPS é obrigatório para a câmera
 
 `getUserMedia` só funciona em contexto seguro. Em produção (Vercel) isso é
@@ -383,6 +530,19 @@ consegue rotacionar) só pula aquela tentativa e segue para a próxima, sempre
 com o motivo registrado. Isso foi decisão deliberada para que um problema em
 produção seja diagnosticável a partir do console, sem precisar reproduzir
 localmente.
+
+Além do log de fluxo, `decodeDiagnostics.js` classifica CADA tentativa de
+decodificação em um de cinco desfechos (não_encontrado/formato_errado/
+tamanho_inválido/dv_inválido/válido) — tanto no pipeline estático
+(`barcodeReader.js`, via `onAttempt`) quanto no scanner ao vivo
+(`liveScanner.js`, via `onDiagnostics`, throttled a 500ms). `extractor.js`
+usa esses contadores para escolher a mensagem de aviso certa (ver
+[Escolha final da chave](#escolha-final-da-chave-e-cruzamento-de-fontes-extractorjs))
+em vez de um "não localizado ou ilegível" genérico, e `NfeLiveScanner.jsx`
+mostra os contadores num painel só em desenvolvimento (ver
+[Painel de diagnóstico](#painel-de-diagnóstico-só-em-desenvolvimento)).
+Nunca loga a chave inteira, só métricas — seguro para deixar em
+`console.debug` mesmo fora de desenvolvimento.
 
 ## Reentrância — clique duplo
 
@@ -438,14 +598,23 @@ cobre `analyzeNfeKey`/`buildAnalysisFromKey`: chave válida preenchendo os
 campos derivados dela, ausência de invenção de pedido/valor/data quando não há
 texto (caso do scanner), rejeição de chave com DV inválido sem lançar, aceite
 de chave formatada com espaços, e propagação correta de `fontesCruzadas`/
-`origensChave`.
+`origensChave`. `decodeDiagnostics.test.mjs` cobre a classificação de
+desfecho (`classifyDecodedText`) e o contador (`createDiagnosticsCounter`).
 
-O restante do pipeline (renderização de PDF, ZXing estático, ZXing ao vivo via
+Mas testes de lógica pura não provam que o **decoder** consegue interpretar
+pixels de verdade — para isso, `testFixtures/` tem um script Playwright
+repetível (imagem → barcode → chave, contra o `readCode128FromCanvas` real,
+não uma simulação) — ver [testFixtures/README.md](testFixtures/README.md).
+Não faz parte de `npm test` (precisa de navegador + servidor de dev
+rodando), mas é a forma de reproduzir "essa imagem decodifica?" sem precisar
+de celular físico toda vez.
+
+O restante do pipeline (renderização de PDF, ZXing/nativo ao vivo via
 câmera, tesseract.js) depende de APIs de navegador (`Canvas`, `Worker`,
-`getUserMedia`) e não roda no test runner do Node — `liveScanner.js` e
-`NfeLiveScanner.jsx` estão na mesma situação de `barcodeReader.js`/
-`ocrReader.js`/`pdfExtractor.js` já eram. A validação desses caminhos é
-manual, seguindo o roteiro em
+`getUserMedia`, `BarcodeDetector`) e não roda no test runner do Node —
+`liveScanner.js` e `NfeLiveScanner.jsx` estão na mesma situação de
+`barcodeReader.js`/`ocrReader.js`/`pdfExtractor.js` já eram. A validação
+desses caminhos é manual, seguindo o roteiro em
 ["Como testar manualmente"](../../../README.md#como-testar-manualmente) no
 README raiz.
 
@@ -471,7 +640,26 @@ rápido:
 - **O scanner ao vivo não faz OCR contínuo sobre o vídeo, de propósito.**
   Rodar `tesseract.js` frame a frame seria pesado demais para celular; o
   objetivo do scanner é ser rápido e confiável para código de barras. OCR
-  continua sendo estritamente do pipeline de arquivo/foto.
+  continua sendo estritamente do pipeline de arquivo/foto/captura manual
+  ("Capturar e analisar").
+- **Deskew não recupera 100% das inclinações entre 3° e 10°**, por design —
+  ver [Investigando a robustez do scanner](#investigando-a-robustez-do-scanner-e-de-onde-vieram-os-estágios)
+  e `testFixtures/README.md` para os números exatos e o caso conhecido que
+  ainda falha (`tilted-10deg.png`). Não é tratado como bug escondido: está
+  documentado e coberto pelo script de validação.
+- **`BarcodeDetector` nativo é Chromium-only.** Safari/iOS (e navegadores sem
+  suporte) usam sempre o caminho ZXing — mais lento, mas testado e
+  funcional; a leitura nunca fica indisponível por falta do nativo, só um
+  pouco menos rápida.
+- **ROI (região de interesse) real não foi implementado.** Cortar o frame de
+  vídeo só na área da moldura antes de decodificar poderia reduzir ainda mais
+  o custo por tentativa, mas exigiria um pipeline de captura de frame
+  próprio — não há evidência hoje de que isso resolva algo que os estágios
+  atuais (nativo, recortes, margem, deskew) não resolvam; fica registrado
+  como possível melhoria futura, não implementado nesta rodada.
+- **Zoom não é ajustado automaticamente**, mesmo quando a câmera suporta —
+  zoom agressivo pode cortar o código ou piorar a experiência; a lanterna já
+  cobre o caso de baixa luz.
 - **Testado com dispositivo real de forma limitada durante o
   desenvolvimento.** A implementação foi validada em navegador headless com
   câmera falsa (`--use-fake-device-for-media-stream` do Chromium) — cobre o

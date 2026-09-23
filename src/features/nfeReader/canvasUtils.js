@@ -75,6 +75,34 @@ export function upscaleCanvas(source, scale) {
   return canvas
 }
 
+/**
+ * Adiciona margem branca ao redor de um canvas, num canvas novo — nunca
+ * altera os pixels originais. Recupera fotos em que o código de barras foi
+ * enquadrado rente demais (sem quiet zone real), sem exigir que o usuário
+ * tire a foto de novo. 8% de cada lado (16% de acréscimo total por eixo) —
+ * dentro da faixa de 5-10% lateral considerada razoável para CODE_128: a
+ * quiet zone padrão do formato é proporcional à largura do módulo mais fino,
+ * não um valor fixo, então uma margem proporcional ao próprio tamanho da
+ * imagem é a forma prática de "recriar" essa folga sem conhecer o módulo
+ * real. Simétrica nos dois eixos (não só nas laterais) para continuar válida
+ * também nas tentativas em 90°/270° já existentes.
+ */
+export function padCanvasWithWhite(source, ratio = 0.08) {
+  const padX = Math.max(4, Math.round(source.width * ratio))
+  const padY = Math.max(4, Math.round(source.height * ratio))
+  const canvas = document.createElement('canvas')
+  canvas.width = source.width + padX * 2
+  canvas.height = source.height + padY * 2
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) {
+    throw new Error('Canvas 2D indisponível ao adicionar margem.')
+  }
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(source, padX, padY)
+  return canvas
+}
+
 /** Converte para escala de cinza e aplica limiar (preto/branco), para digitalizações de baixo contraste. */
 export function thresholdCanvas(source, threshold) {
   const canvas = document.createElement('canvas')

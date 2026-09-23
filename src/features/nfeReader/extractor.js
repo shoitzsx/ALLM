@@ -28,6 +28,7 @@ import { extractPdfText, renderPdfFirstPageToCanvas } from './pdfExtractor.js'
 import { loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
 import { findNfeKeysWithOcr } from './ocrReader.js'
 import { buildAnalysisFromKey, CONFIDENCE, analyzeNfeKey } from './analysisBuilder.js'
+import { createDiagnosticsCounter } from './decodeDiagnostics.js'
 
 // Reexportados para continuar sendo o único ponto de entrada do módulo do
 // ponto de vista de quem consome (NfeReaderPage.jsx, README.md) — a lógica em
@@ -36,6 +37,7 @@ export { CONFIDENCE, analyzeNfeKey }
 
 const ORIGEM_TEXTO = 'texto do PDF'
 const ORIGEM_BARCODE = 'código de barras'
+const ORIGEM_CAPTURA = 'captura do scanner ao vivo'
 const ORIGEM_OCR = 'OCR'
 
 function isPdfFile(file) {
@@ -52,6 +54,78 @@ function logError(context, err) {
     message: err?.message,
     stack: err?.stack,
   })
+}
+
+/**
+ * Mensagem de aviso do estágio de código de barras, informada pelo que a
+ * instrumentação de diagnóstico (`decodeDiagnostics.js`) realmente observou
+ * — em vez de sempre "não localizado ou ilegível" (genérico demais: não diz
+ * se não achou barras nenhuma ou se achou algo que não bate com uma chave de
+ * NF-e). Nunca inventa diagnóstico além do que os contadores confirmam.
+ */
+function buildBarcodeWarning(diagnostics) {
+  if (diagnostics.invalid_length > 0 || diagnostics.invalid_dv > 0) {
+    return 'O código de barras foi detectado, mas não contém uma chave de NF-e válida.'
+  }
+  return 'Nenhum código de barras foi detectado. Enquadre o código inteiro, deixando espaço em branco nas laterais.'
+}
+
+/** OCR lê os 44 números IMPRESSOS abaixo do código, não as barras — se a foto tiver só o código de barras, é esperado que o OCR também não encontre nada. */
+function buildOcrWarning() {
+  return 'Para usar o reconhecimento de texto como alternativa, inclua também os 44 números impressos abaixo do código de barras.'
+}
+
+/**
+ * Tenta o código de barras e, se não resolver, o OCR — nessa ordem, sobre o
+ * mesmo canvas. Compartilhado por `analyzeNfeFile` (arquivo/foto) e
+ * `analyzeNfeCanvas` (captura do scanner ao vivo), para não duplicar essa
+ * lógica em dois lugares. Acrescenta avisos a `warnings` (mutado in-place,
+ * mesmo padrão já usado no resto do arquivo) e retorna `{ chave, origem }`
+ * (`chave` é `null` se nada resolveu).
+ */
+async function runBarcodeThenOcr(canvas, warnings) {
+  const diagnostics = createDiagnosticsCounter()
+  const raw = await readCode128FromCanvas(canvas, { onAttempt: (outcome) => diagnostics.record(outcome) })
+  const summary = diagnostics.summary()
+  log(`Código de barras: ${summary.attempts} tentativa(s) — não_encontrado=${summary.not_found} tamanho_inválido=${summary.invalid_length} dv_inválido=${summary.invalid_dv} válido=${summary.valid}`)
+
+  let chave = null
+  if (raw) {
+    const normalized = normalizarChave(raw)
+    chave = validarChaveNFe(normalized) ? normalized : findValidNfeKeys(raw)[0] || null
+  }
+
+  if (chave) {
+    log('Barcode encontrado:', chave)
+    return { chave, origem: ORIGEM_BARCODE }
+  }
+  warnings.push(buildBarcodeWarning(summary))
+
+  log('Código de barras não resolveu — tentando OCR como último recurso.')
+  const chavesOcr = await findNfeKeysWithOcr(canvas)
+  const chaveOcr = chavesOcr[0] || null
+  if (chaveOcr) {
+    log('Chave encontrada por OCR:', chaveOcr)
+    return { chave: chaveOcr, origem: ORIGEM_OCR }
+  }
+  warnings.push(buildOcrWarning())
+  return { chave: null, origem: null }
+}
+
+/**
+ * Analisa uma chave a partir de um canvas já capturado — sem arquivo
+ * envolvido. Usado pela ação "Capturar e analisar" do scanner ao vivo
+ * (NfeLiveScanner.jsx): quando a leitura contínua não resolve rápido, captura
+ * o frame atual da câmera e roda o MESMO pipeline robusto de código de
+ * barras/OCR do upload/foto (`runBarcodeThenOcr`) — sem reescrever nada, sem
+ * serializar o frame para arquivo só para ler de volta.
+ */
+export async function analyzeNfeCanvas(canvas) {
+  const warnings = []
+  log(`Canvas capturado do scanner ao vivo: ${canvas.width} x ${canvas.height}`)
+  const { chave, origem } = await runBarcodeThenOcr(canvas, warnings)
+  const origens = chave ? [`${origem} (${ORIGEM_CAPTURA})`] : []
+  return buildAnalysisFromKey(chave, origens, { warnings })
 }
 
 export async function analyzeNfeFile(file) {
@@ -108,23 +182,9 @@ export async function analyzeNfeFile(file) {
     }
 
     if (canvas) {
-      const raw = await readCode128FromCanvas(canvas)
-      if (raw) {
-        const normalized = normalizarChave(raw)
-        chaveDoBarcode = validarChaveNFe(normalized) ? normalized : findValidNfeKeys(raw)[0] || null
-        if (chaveDoBarcode) log('Barcode encontrado:', chaveDoBarcode)
-        else warnings.push('Código de barras lido, mas o conteúdo não corresponde a uma chave de NF-e válida.')
-      } else {
-        warnings.push('Código de barras não localizado ou ilegível — comum em digitalizações de baixa qualidade.')
-      }
-
-      if (!chaveDoBarcode) {
-        log('Código de barras não resolveu — tentando OCR como último recurso.')
-        const chavesOcr = await findNfeKeysWithOcr(canvas)
-        chaveDoOcr = chavesOcr[0] || null
-        if (chaveDoOcr) log('Chave encontrada por OCR:', chaveDoOcr)
-        else warnings.push('OCR não conseguiu identificar uma chave de NF-e válida nesta digitalização.')
-      }
+      const resultado = await runBarcodeThenOcr(canvas, warnings)
+      if (resultado.origem === ORIGEM_BARCODE) chaveDoBarcode = resultado.chave
+      else if (resultado.origem === ORIGEM_OCR) chaveDoOcr = resultado.chave
     }
   }
 

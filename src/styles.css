@@ -3311,10 +3311,14 @@ button {
   pointer-events: none;
 }
 
+/* Largura menor que o estágio disponível (não 82%+) de propósito: reforça
+   visualmente que o código não deve preencher o retângulo até a borda — o
+   CODE_128 precisa de uma margem clara (quiet zone) nas laterais para ser
+   decodificado. Ver hintForStage/"Enquadre o código inteiro..." no JSX. */
 .nfe-scanner-frame-box {
   position: relative;
-  width: min(82%, 420px);
-  height: min(34vh, 160px);
+  width: min(72%, 380px);
+  height: min(30vh, 150px);
   overflow: hidden;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 14px;
@@ -3389,6 +3393,44 @@ button {
   color: #d7dcec;
   font-weight: 500;
   font-size: 12px;
+}
+
+.nfe-scanner-hint-warning {
+  color: #f5c26b;
+}
+
+/* Único elemento clicável dentro de .nfe-scanner-frame (que é pointer-events:
+   none — só decoração) — precisa reverter isso para si mesmo. */
+.nfe-scanner-capture-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12.5px;
+  font-weight: 700;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.nfe-scanner-capture-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.nfe-scanner-devpanel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 14px;
+  background: #1a0f00;
+  color: #ffcb7a;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 
 .nfe-scanner-success-ring {
