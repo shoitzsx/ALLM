@@ -19,6 +19,29 @@ import { saveSupplier } from './supplierCatalog.js'
 import { formatFileSize } from '../../ui.jsx'
 import NfeLiveScanner from './NfeLiveScanner.jsx'
 
+/**
+ * Disponibilidade de "Tirar foto"/"Escanear código de barras" é decidida por
+ * CAPACIDADE do dispositivo, não pela largura da viewport — um tablet em
+ * landscape (1024px, 1180px...) tem câmera e toque como qualquer outro
+ * tablet, só porque a janela é larga não deixa de ser um aparelho com câmera.
+ * Nada de user-agent/lista de aparelhos (ver README do módulo).
+ *
+ * `getUserMedia` e capacidade de toque não mudam durante a sessão, então
+ * calculamos uma vez no carregamento do módulo, não a cada render nem em
+ * listener de resize.
+ */
+const CAMERA_SUPPORTED = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+const TOUCH_CAPABLE =
+  typeof window !== 'undefined' &&
+  Boolean(window.matchMedia?.('(pointer: coarse)')?.matches || navigator.maxTouchPoints > 0)
+
+// "Tirar foto" dispara o app de câmera nativo via capture="environment" — só faz sentido nessa forma em
+// aparelho de toque com câmera (num desktop com webcam, capture não abre "câmera", cai no seletor comum).
+const CAN_TAKE_PHOTO = CAMERA_SUPPORTED && TOUCH_CAPABLE
+// O scanner ao vivo é nossa própria UI de câmera (não depende de capture) — funciona em qualquer
+// dispositivo com câmera, com ou sem touch (ex.: notebook com webcam).
+const CAN_SCAN_BARCODE = CAMERA_SUPPORTED
+
 const CONFIDENCE_META = {
   [CONFIDENCE.ALTA]: { label: 'Alta confiança', icon: CheckCircle2, className: 'nfe-badge-alta' },
   [CONFIDENCE.CONFERIR]: { label: 'Conferir', icon: AlertTriangle, className: 'nfe-badge-conferir' },
@@ -238,28 +261,29 @@ export default function NfeReaderPage({ pushToast }) {
               />
             </label>
 
-            {/* Só aparecem em celular/tablet (ver @media em styles.css) — capture="environment" é apenas uma
-                preferência: se o navegador não suportar, o usuário ainda escolhe uma imagem normalmente. */}
-            <label className="nfe-source-action nfe-source-action-mobile">
-              <Camera size={16} />
-              <span>Tirar foto</span>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={onSelectFile}
-              />
-            </label>
+            {/* capture="environment" é apenas uma preferência: se o navegador não suportar, o usuário ainda
+                escolhe uma imagem normalmente. Existência do botão é decidida por capacidade (ver CAN_TAKE_PHOTO
+                no topo do arquivo), não pela largura da tela. */}
+            {CAN_TAKE_PHOTO ? (
+              <label className="nfe-source-action">
+                <Camera size={16} />
+                <span>Tirar foto</span>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={onSelectFile}
+                />
+              </label>
+            ) : null}
 
-            <button
-              className="nfe-source-action nfe-source-action-mobile"
-              type="button"
-              onClick={() => setScannerOpen(true)}
-            >
-              <ScanBarcode size={16} />
-              <span>Escanear código de barras</span>
-            </button>
+            {CAN_SCAN_BARCODE ? (
+              <button className="nfe-source-action" type="button" onClick={() => setScannerOpen(true)}>
+                <ScanBarcode size={16} />
+                <span>Escanear código de barras</span>
+              </button>
+            ) : null}
           </div>
 
           {file ? (

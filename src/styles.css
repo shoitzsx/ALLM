@@ -3195,7 +3195,7 @@ button {
 }
 
 .nfe-source-action {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -3228,13 +3228,9 @@ button {
   cursor: pointer;
 }
 
-/* "Tirar foto" e "Escanear código de barras" só fazem sentido em dispositivo com câmera de mão — mesmo
-   corte de largura usado pelo resto do app para alternar entre layout desktop e mobile/tablet. */
-@media (max-width: 920px) {
-  .nfe-source-action-mobile {
-    display: flex;
-  }
-}
+/* Existência de "Tirar foto"/"Escanear código de barras" é decidida em JS por capacidade do dispositivo
+   (CAN_TAKE_PHOTO/CAN_SCAN_BARCODE, NfeReaderPage.jsx) — não há mais gate de visibilidade por largura aqui.
+   Se só um dos dois estiver presente, a 2ª coluna do grid fica vazia; não é um problema visual. */
 
 /* --- Scanner de código de barras ao vivo (NfeLiveScanner.jsx) -------------------------------------- */
 /* Câmera ao vivo é seu próprio mundo visual (como qualquer viewfinder de câmera nativo) — escurecido de
