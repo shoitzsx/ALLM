@@ -3055,6 +3055,14 @@ button {
   }
 }
 
+@media (max-width: 360px) {
+  .upload-row-copy strong {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
