@@ -5,7 +5,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
-  Boxes,
   Building2,
   CalendarDays,
   Camera,
@@ -14,19 +13,15 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
-  CircleDashed,
   ClipboardCheck,
   ClipboardList,
-  Download,
   Eye,
   FileClock,
   FilePlus2,
   FileSpreadsheet,
   FileText,
-  Filter,
   History,
   Image as ImageIcon,
-  LayoutDashboard,
   MoreHorizontal,
   PackageOpen,
   Paperclip,
@@ -47,12 +42,10 @@ import {
   DOCUMENT_TYPE_OPTIONS,
   RECEBIMENTO_STATUS,
   RECEIPT_TYPE_OPTIONS,
-  STATUS_OPTIONS,
   UNIT_OPTIONS,
   exportRecebimentosCsv,
   filterRecebimentos,
   getAllowedNextStatuses,
-  getResponsibleName,
   hasOpenDivergences,
   isNfPending,
 } from './data.js'
@@ -69,26 +62,20 @@ import {
   formatFileSize,
   getStatusMeta,
 } from './ui.jsx'
+import { ROUTES, navigate, useHashRoute } from './layout/navigation.js'
+import { Sidebar } from './layout/Sidebar.jsx'
+import { MobileHeader } from './layout/MobileHeader.jsx'
+import { MobileNav } from './layout/MobileNav.jsx'
+import { PageHeader } from './components/shared/PageHeader.jsx'
+import { FilterBar } from './components/shared/FilterBar.jsx'
+import { KpiStrip } from './components/dashboard/KpiStrip.jsx'
+import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
+import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
+import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
 // a quem abrir esta tela experimental.
 const NfeReaderPage = lazy(() => import('./features/nfeReader/NfeReaderPage.jsx'))
-
-const ROUTES = {
-  dashboard: '/',
-  receipts: '/recebimentos',
-  newReceipt: '/novo',
-  pending: '/pendencias',
-  nfeReader: '/leitura-automatica',
-}
-
-const NAV_ITEMS = [
-  { path: ROUTES.dashboard, label: 'Visão geral', icon: LayoutDashboard },
-  { path: ROUTES.receipts, label: 'Recebimentos', icon: ClipboardList },
-  { path: ROUTES.newReceipt, label: 'Novo recebimento', icon: Plus },
-  { path: ROUTES.pending, label: 'Pendências', icon: AlertTriangle, count: true },
-  { path: ROUTES.nfeReader, label: 'Leitura automática (beta)', icon: ScanBarcode },
-]
 
 const WIZARD_STEPS = [
   { title: 'Identificação', subtitle: 'Pedido e fornecedor' },
@@ -169,44 +156,6 @@ function getLocalDate() {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
-function parseHash() {
-  const raw = window.location.hash.replace(/^#/, '') || '/'
-  const [path, queryString = ''] = raw.split('?')
-  return { path: path || '/', query: new URLSearchParams(queryString) }
-}
-
-function useHashRoute() {
-  const [route, setRoute] = useState(parseHash)
-  useEffect(() => {
-    const onHashChange = () => {
-      setRoute(parseHash())
-      window.scrollTo({ top: 0, behavior: 'instant' })
-    }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
-  return route
-}
-
-function navigate(path) {
-  const next = path.startsWith('#') ? path : `#${path}`
-  if (window.location.hash === next) {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-    return
-  }
-  window.location.hash = next
-}
-
-function displayResponsible(receipt) {
-  return getResponsibleName(receipt) || 'Não informado'
-}
-
-function getActorName(actor) {
-  if (!actor) return 'Sistema'
-  if (typeof actor === 'string') return actor
-  return actor.nome || actor.name || 'Sistema'
-}
-
 function readImagePreview(file) {
   if (!file.type?.startsWith('image/') || file.size > 2 * 1024 * 1024) {
     return Promise.resolve(null)
@@ -247,12 +196,6 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
     return () => window.removeEventListener('keydown', onShortcut)
   }, [])
 
-  const isActive = (path) => {
-    if (path === ROUTES.dashboard) return route.path === '/'
-    if (path === ROUTES.receipts) return route.path.startsWith('/recebimentos')
-    return route.path === path
-  }
-
   const submitGlobalSearch = (event) => {
     event.preventDefault()
     const value = globalSearch.trim()
@@ -261,50 +204,7 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Navegação principal">
-        <button className="brand" type="button" onClick={() => navigate('/')} aria-label="Ir para visão geral">
-          <img className="brand-mark" src="/brand/logo-mark.png" alt="Águia Sistemas" />
-          <span className="brand-copy">
-            <strong>Recebimentos</strong>
-            <span>Almoxarifado</span>
-          </span>
-        </button>
-
-        <div className="sidebar-context">Operação</div>
-        <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-                key={item.path}
-                type="button"
-                onClick={() => navigate(item.path)}
-              >
-                <Icon size={18} strokeWidth={2} />
-                <span>{item.label}</span>
-                {item.count && pendingCount ? <span className="nav-count">{pendingCount}</span> : null}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <Avatar name={currentUser?.nome || currentUser?.name} />
-            <span className="sidebar-user-copy">
-              <strong>{currentUser?.nome || currentUser?.name}</strong>
-              <span>{currentUser?.perfil || currentUser?.role}</span>
-            </span>
-          </div>
-          <span
-            className="env-badge"
-            title="Os dados ficam somente nesta sessão do navegador e são perdidos ao atualizar a página."
-          >
-            <CircleDashed size={11} /> Ambiente de validação
-          </span>
-        </div>
-      </aside>
+      <Sidebar route={route} pendingCount={pendingCount} currentUser={currentUser} />
 
       <main className="main-shell">
         <header className="topbar">
@@ -340,78 +240,17 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
                 <strong>{currentUser?.nome || currentUser?.name}</strong>
                 <span>{currentUser?.perfil || currentUser?.role}</span>
               </span>
-              <ChevronDown size={14} color="#6e7ba0" />
+              <ChevronDown size={14} className="icon-muted" />
             </button>
           </div>
         </header>
 
-        <header className="mobile-topbar">
-          <button className="mobile-brand" type="button" onClick={() => navigate('/')}>
-            <img className="brand-mark" src="/brand/logo-mark.png" alt="Águia Sistemas" />
-            <strong>Recebimentos</strong>
-          </button>
-          <div className="mobile-top-actions">
-            <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
-            <button className="icon-button" type="button" onClick={() => navigate(`${ROUTES.receipts}?focus=search`)} aria-label="Buscar">
-              <Search size={19} />
-            </button>
-            <button className="icon-button notification-button" type="button" onClick={() => navigate(ROUTES.pending)} aria-label="Pendências">
-              <Bell size={19} />
-            </button>
-          </div>
-        </header>
+        <MobileHeader theme={theme} onToggleTheme={onToggleTheme} />
 
         {children}
       </main>
 
-      <nav className="mobile-nav" aria-label="Navegação mobile">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon
-          return (
-            <button
-              className={`mobile-nav-button ${item.path === ROUTES.newReceipt ? 'primary' : ''} ${isActive(item.path) ? 'active' : ''}`}
-              key={item.path}
-              type="button"
-              onClick={() => navigate(item.path)}
-            >
-              <Icon size={20} />
-              <span>
-                {item.path === ROUTES.newReceipt
-                  ? 'Novo'
-                  : item.path === ROUTES.nfeReader
-                    ? 'Leitura NF-e'
-                    : item.label.replace('Visão geral', 'Início')}
-              </span>
-              {item.count && pendingCount ? <span className="nav-count">{pendingCount}</span> : null}
-            </button>
-          )
-        })}
-      </nav>
-    </div>
-  )
-}
-
-function PageHeader({ title, description, children }) {
-  return (
-    <header className="page-header">
-      <div className="page-header-copy">
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
-      </div>
-      {children ? <div className="page-actions">{children}</div> : null}
-    </header>
-  )
-}
-
-function KpiItem({ icon: Icon, value, label, tone = '', meta }) {
-  return (
-    <div className={`kpi-item ${tone ? `kpi-${tone}` : ''}`}>
-      <span className="kpi-icon"><Icon size={16} /></span>
-      <div className="kpi-copy">
-        <p className="kpi-label">{label}</p>
-        <div className="kpi-value">{value}</div>
-        {meta ? <p className="kpi-meta">{meta}</p> : null}
-      </div>
+      <MobileNav route={route} pendingCount={pendingCount} />
     </div>
   )
 }
@@ -437,12 +276,7 @@ function DashboardPage({ store }) {
         </button>
       </PageHeader>
 
-      <section className="kpi-strip" aria-label="Indicadores gerais">
-        <KpiItem icon={PackageOpen} value={metrics.totalRecebimentos} label="Total de recebimentos" />
-        <KpiItem icon={Boxes} value={metrics.materiaisHoje} label="Materiais recebidos hoje" tone="blue" meta={`${metrics.recebimentosHoje} recebimento(s) hoje`} />
-        <KpiItem icon={FileClock} value={metrics.documentacaoPendente} label="Documentações pendentes" tone="amber" />
-        <KpiItem icon={AlertTriangle} value={metrics.divergenciasAbertas} label="Divergências abertas" tone="red" />
-      </section>
+      <KpiStrip metrics={metrics} />
 
       <section className="dashboard-grid">
         <div className="dashboard-column">
@@ -485,27 +319,33 @@ function DashboardPage({ store }) {
                 Abrir consulta <ChevronRight size={14} />
               </button>
             </header>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr><th>Protocolo</th><th>Fornecedor</th><th>Pedido</th><th>Status</th><th /></tr>
-                </thead>
-                <tbody>
-                  {recent.map((receipt) => (
-                    <tr key={receipt.id} onClick={() => navigate(`/recebimentos/${encodeURIComponent(receipt.id)}`)}>
-                      <td><span className="protocol-link">{receipt.protocolo}</span></td>
-                      <td><div className="table-main"><strong>{receipt.fornecedor}</strong><span>{formatDate(receipt.dataRecebimento)}</span></div></td>
-                      <td>{receipt.pedido || '—'}</td>
-                      <td><StatusBadge status={receipt.status} compact /></td>
-                      <td><ChevronRight size={15} color="#6e7ba0" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mobile-records">
-              {recent.map((receipt) => <ReceiptMobileCard key={receipt.id} receipt={receipt} />)}
-            </div>
+            {recent.length ? (
+              <>
+                <div className="table-scroll">
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>Protocolo</th><th>Fornecedor</th><th>Pedido</th><th>Status</th><th /></tr>
+                    </thead>
+                    <tbody>
+                      {recent.map((receipt) => (
+                        <tr key={receipt.id} onClick={() => navigate(`/recebimentos/${encodeURIComponent(receipt.id)}`)}>
+                          <td><span className="protocol-link">{receipt.protocolo}</span></td>
+                          <td><div className="table-main"><strong>{receipt.fornecedor}</strong><span>{formatDate(receipt.dataRecebimento)}</span></div></td>
+                          <td>{receipt.pedido || '—'}</td>
+                          <td><StatusBadge status={receipt.status} compact /></td>
+                          <td><ChevronRight size={15} className="icon-muted" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mobile-records">
+                  {recent.map((receipt) => <ReceiptMobileCard key={receipt.id} receipt={receipt} />)}
+                </div>
+              </>
+            ) : (
+              <EmptyState icon={PackageOpen} title="Nenhum recebimento ainda" description="Os recebimentos registrados vão aparecer aqui." />
+            )}
           </article>
         </div>
 
@@ -533,7 +373,7 @@ function DashboardPage({ store }) {
                         <strong>{receipt.fornecedor}</strong>
                         <span>{divergence ? 'Divergência aguardando tratamento' : 'Nota Fiscal pendente'} · {receipt.protocolo}</span>
                       </span>
-                      <ChevronRight size={15} color="#6e7ba0" />
+                      <ChevronRight size={15} className="icon-muted" />
                     </button>
                   )
                 })}
@@ -545,25 +385,6 @@ function DashboardPage({ store }) {
         </div>
       </section>
     </div>
-  )
-}
-
-function ReceiptMobileCard({ receipt }) {
-  return (
-    <article className="mobile-record-card" role="button" tabIndex={0} onClick={() => navigate(`/recebimentos/${receipt.id}`)} onKeyDown={(event) => event.key === 'Enter' && navigate(`/recebimentos/${receipt.id}`)}>
-      <div className="mobile-record-top">
-        <strong>{receipt.protocolo}</strong>
-        <StatusBadge status={receipt.status} compact />
-      </div>
-      <h3>{receipt.fornecedor}</h3>
-      <p>{(receipt.itens || [])[0]?.descricao || 'Sem item informado'}</p>
-      <div className="mobile-record-meta">
-        <div><span>Pedido</span><strong>{receipt.pedido || '—'}</strong></div>
-        <div><span>NF</span><strong>{receipt.numeroNf || 'Pendente'}</strong></div>
-        <div><span>Recebimento</span><strong>{formatDate(receipt.dataRecebimento)}</strong></div>
-        <div><span>Itens</span><strong>{receipt.itens?.length || 0}</strong></div>
-      </div>
-    </article>
   )
 }
 
@@ -612,123 +433,23 @@ function ReceiptsPage({ store, initialQuery }) {
       </PageHeader>
 
       <section className="panel table-panel">
-        <div className="table-toolbar">
-          <div className="list-search">
-            <Search size={16} />
-            <input
-              autoFocus={initialQuery.get('focus') === 'search'}
-              value={filters.search}
-              onChange={(event) => setFilter('search', event.target.value)}
-              placeholder="Buscar protocolo, pedido, NF, fornecedor ou item"
-              aria-label="Pesquisar recebimentos"
-            />
-            {filters.search ? <button className="search-clear" type="button" onClick={() => setFilter('search', '')} aria-label="Limpar pesquisa"><X size={14} /></button> : null}
-          </div>
-          <select className="filter-select" value={filters.status} onChange={(event) => setFilter('status', event.target.value)} aria-label="Filtrar por status">
-            <option value="">Todos os status</option>
-            {STATUS_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.shortLabel}</option>)}
-          </select>
-          <label className="filter-toggle">
-            <input type="checkbox" checked={filters.nfPendente} onChange={(event) => setFilter('nfPendente', event.target.checked)} />
-            NF pendente
-          </label>
-          <button className="btn btn-secondary" type="button" onClick={() => setFiltersOpen((open) => !open)}>
-            <Filter size={15} /> Filtros {activeCount ? `(${activeCount})` : ''}
-          </button>
-          <button className="icon-button" type="button" onClick={() => downloadCsv(filtered)} aria-label="Exportar CSV"><Download size={17} /></button>
-        </div>
-
-        {filtersOpen ? (
-          <div className="advanced-filters">
-            <div className="form-grid">
-              <div className="field">
-                <label>Data inicial</label>
-                <input type="date" value={filters.periodoInicio} onChange={(event) => setFilter('periodoInicio', event.target.value)} />
-              </div>
-              <div className="field">
-                <label>Data final</label>
-                <input type="date" value={filters.periodoFim} onChange={(event) => setFilter('periodoFim', event.target.value)} />
-              </div>
-              <div className="field">
-                <label>Fornecedor</label>
-                <select value={filters.fornecedor} onChange={(event) => setFilter('fornecedor', event.target.value)}>
-                  <option value="">Todos</option>
-                  {suppliers.map((supplier) => <option value={supplier} key={supplier}>{supplier}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Tipo</label>
-                <select value={filters.tipo} onChange={(event) => setFilter('tipo', event.target.value)}>
-                  <option value="">Todos</option>
-                  {RECEIPT_TYPE_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Responsável</label>
-                <select value={filters.responsavel} onChange={(event) => setFilter('responsavel', event.target.value)}>
-                  <option value="">Todos</option>
-                  {responsibles.map((name) => <option value={name} key={name}>{name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="advanced-filter-actions">
-              <span>{filtered.length} registro(s) encontrado(s)</span>
-              <button className="btn btn-ghost btn-sm" type="button" onClick={clearFilters}>Limpar filtros</button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="active-filter-bar">
-          <span><strong>{filtered.length}</strong> de {store.receipts.length} recebimentos</span>
-          {filters.search ? <span className="filter-chip">Busca: {filters.search}<button type="button" onClick={() => setFilter('search', '')}><X size={11} /></button></span> : null}
-          {activeCount ? <button className="panel-link" type="button" onClick={clearFilters}>Limpar tudo</button> : null}
-          <button className="panel-link sort-link" type="button" onClick={() => setSortDirection((direction) => direction === 'desc' ? 'asc' : 'desc')}>
-            Data {sortDirection === 'desc' ? 'mais recente' : 'mais antiga'}
-          </button>
-        </div>
-
-        {filtered.length ? (
-          <>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Protocolo</th><th>Pedido / NF</th><th>Fornecedor</th><th>Data</th><th>Itens</th><th>Tipo</th><th>Responsável</th><th>Status</th><th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((receipt) => (
-                    <tr key={receipt.id} onClick={() => navigate(`/recebimentos/${encodeURIComponent(receipt.id)}`)}>
-                      <td><span className="protocol-link">{receipt.protocolo}</span></td>
-                      <td><div className="table-main"><strong>PC {receipt.pedido || '—'}</strong>{receipt.numeroNf ? <span>NF {receipt.numeroNf}</span> : <span className="nf-pending"><FileClock size={11} /> NF pendente</span>}</div></td>
-                      <td><div className="table-main"><strong>{receipt.fornecedor}</strong><span>{receipt.cnpjFornecedor || 'Cadastro local'}</span></div></td>
-                      <td>{formatDate(receipt.dataRecebimento)}</td>
-                      <td><span className="table-items-count">{receipt.itens?.length || 0}</span></td>
-                      <td>{receipt.tipo}</td>
-                      <td><div className="table-main"><strong>{displayResponsible(receipt)}</strong><span>Almoxarifado</span></div></td>
-                      <td><StatusBadge status={receipt.status} compact /></td>
-                      <td><ChevronRight size={15} color="#6e7ba0" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mobile-records">
-              {filtered.map((receipt) => <ReceiptMobileCard key={receipt.id} receipt={receipt} />)}
-            </div>
-            <footer className="pagination">
-              <span>Mostrando {filtered.length} registro(s)</span>
-              <div className="pagination-controls"><button className="page-number active" type="button">1</button></div>
-            </footer>
-          </>
-        ) : (
-          <EmptyState
-            icon={Search}
-            title="Nenhum recebimento encontrado"
-            description="Tente remover alguns filtros ou pesquise por outro termo."
-            action={<button className="btn btn-secondary" type="button" onClick={clearFilters}>Limpar filtros</button>}
-          />
-        )}
+        <FilterBar
+          filters={filters}
+          setFilter={setFilter}
+          clearFilters={clearFilters}
+          activeCount={activeCount}
+          filtersOpen={filtersOpen}
+          setFiltersOpen={setFiltersOpen}
+          suppliers={suppliers}
+          responsibles={responsibles}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
+          totalCount={store.receipts.length}
+          filteredCount={filtered.length}
+          onExport={() => downloadCsv(filtered)}
+          autoFocusSearch={initialQuery.get('focus') === 'search'}
+        />
+        <ReceiptsTable receipts={filtered} onClearFilters={clearFilters} />
       </section>
     </div>
   )
@@ -924,7 +645,7 @@ function NewReceiptPage({ store, pushToast }) {
                   <div className="responsible-preview">
                     <Avatar name={store.currentUser.nome || store.currentUser.name} />
                     <div><strong>{store.currentUser.nome || store.currentUser.name}</strong><span>{store.currentUser.perfil || store.currentUser.role} · identificado automaticamente</span></div>
-                    <ShieldCheck size={16} color="#2748c7" style={{ marginLeft: 'auto' }} />
+                    <ShieldCheck size={16} className="icon-brand" style={{ marginLeft: 'auto' }} />
                   </div>
                 </div>
                 <div className="field field-full">
@@ -970,26 +691,57 @@ function NewReceiptPage({ store, pushToast }) {
                   </div>
                 </div>
                 {!form.numeroNf ? <div className="info-strip warning"><FileClock size={15} /><span><strong>NF ainda não disponível.</strong> O registro seguirá como “Aguardando documentação” e poderá ser complementado depois.</span></div> : null}
-                <div className="upload-grid upload-grid-spaced">
-                  {DOCUMENT_CARDS.map((card) => {
+                <div className="upload-section">
+                  {DOCUMENT_CARDS.filter((card) => card.featured).map((card) => {
                     const Icon = card.icon
                     const files = form.anexos.map((file, index) => ({ ...file, originalIndex: index })).filter((file) => file.categoria === card.category)
                     return (
-                      <div className={`upload-card ${card.featured ? 'featured' : ''}`} key={card.category}>
+                      <div className="upload-card featured" key={card.category}>
                         <div className="upload-card-head">
                           <div className="upload-card-title"><span><Icon size={15} /></span><div><strong>{card.title}</strong><small>{card.subtitle}</small></div></div>
                           {files.length ? <span className="table-items-count">{files.length}</span> : null}
                         </div>
                         <label className="upload-zone">
                           <Upload size={19} />
-                          <strong>{card.category === 'Foto' ? 'Tirar foto ou selecionar da galeria' : 'Selecionar arquivo'}</strong>
-                          <span>{card.multiple ? 'Você pode incluir vários arquivos' : 'PDF ou imagem, até 10 MB'}</span>
+                          <strong>Tirar foto ou selecionar da galeria</strong>
+                          <span>Você pode incluir vários arquivos</span>
                           <input type="file" accept={card.accept} capture={card.capture} multiple={card.multiple} onChange={(event) => { addFiles(card.category, event.target.files); event.target.value = '' }} />
                         </label>
                         {files.length ? <div className="file-list">{files.map((file) => <div className="file-row" key={`${file.name}-${file.originalIndex}`}><span className="file-row-icon">{file.mimeType?.startsWith('image/') ? <ImageIcon size={14} /> : <FileText size={14} />}</span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><button className="icon-button" type="button" onClick={() => removeLocalFile(file.originalIndex)} aria-label="Remover arquivo"><X size={14} /></button></div>)}</div> : null}
                       </div>
                     )
                   })}
+
+                  <div className="upload-list">
+                    {DOCUMENT_CARDS.filter((card) => !card.featured).map((card) => {
+                      const Icon = card.icon
+                      const files = form.anexos.map((file, index) => ({ ...file, originalIndex: index })).filter((file) => file.categoria === card.category)
+                      return (
+                        <div className="upload-row" key={card.category}>
+                          <div className="upload-row-main">
+                            <span className="upload-row-icon"><Icon size={16} /></span>
+                            <div className="upload-row-copy"><strong>{card.title}</strong><span>{card.subtitle}</span></div>
+                            {files.length ? <span className="table-items-count">{files.length}</span> : null}
+                            <label className="upload-row-action">
+                              <Upload size={13} /> Selecionar
+                              <input type="file" accept={card.accept} multiple={card.multiple} onChange={(event) => { addFiles(card.category, event.target.files); event.target.value = '' }} />
+                            </label>
+                          </div>
+                          {files.length ? (
+                            <div className="file-list upload-row-files">
+                              {files.map((file) => (
+                                <div className="file-row" key={`${file.name}-${file.originalIndex}`}>
+                                  <span className="file-row-icon">{file.mimeType?.startsWith('image/') ? <ImageIcon size={14} /> : <FileText size={14} />}</span>
+                                  <div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div>
+                                  <button className="icon-button" type="button" onClick={() => removeLocalFile(file.originalIndex)} aria-label="Remover arquivo"><X size={14} /></button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1165,7 +917,7 @@ function DetailPage({ store, receiptId, pushToast }) {
       <section className="detail-layout detail-layout-spaced">
         <div className="detail-main">
           <article className="panel">
-            <header className="panel-header"><div><h2>Dados gerais</h2><p>Informações que identificam o recebimento</p></div><MoreHorizontal size={18} color="#6e7ba0" /></header>
+            <header className="panel-header"><div><h2>Dados gerais</h2><p>Informações que identificam o recebimento</p></div><MoreHorizontal size={18} className="icon-muted" /></header>
             <div className="detail-section-body definition-grid">
               <div className="definition-item"><span>Pedido de Compra</span><strong>{receipt.pedido || 'Não informado'}</strong></div>
               <div className="definition-item"><span>Nota Fiscal</span><strong>{receipt.numeroNf ? `${receipt.numeroNf}${receipt.serieNf ? ` · Série ${receipt.serieNf}` : ''}` : 'Pendente'}</strong></div>
@@ -1188,7 +940,7 @@ function DetailPage({ store, receiptId, pushToast }) {
                     <div className="detail-item-description"><strong>{item.descricao}</strong><span>Linha {item.numero || '—'} · Código {item.codigo || 'não informado'}</span></div>
                     <div className="item-quantity ordered-quantity"><span>Solicitada</span><strong>{item.quantidadeSolicitada ?? '—'} {item.unidade}</strong></div>
                     <div className="item-quantity"><span>Recebida</span><strong className={mismatch ? 'quantity-alert' : ''}>{item.quantidadeRecebida} {item.unidade}</strong></div>
-                    <span>{mismatch ? <AlertTriangle size={16} color="#a63a38" /> : <CheckCircle2 size={16} color="#2748c7" />}</span>
+                    <span>{mismatch ? <AlertTriangle size={16} className="icon-danger" /> : <CheckCircle2 size={16} className="icon-brand" />}</span>
                   </div>
                 )
               })}
@@ -1208,7 +960,7 @@ function DetailPage({ store, receiptId, pushToast }) {
                 ))}
                 {!docs.some((file) => (file.categoria || file.tipo) === 'Nota Fiscal') ? (
                   <button className="document-card pending" type="button" onClick={() => { setDocumentForm((current) => ({ ...current, category: 'Nota Fiscal' })); setDocumentModal(true) }}>
-                    <span className="document-icon"><FileClock size={16} /></span><span className="document-copy"><strong>Nota Fiscal pendente</strong><span>Clique para anexar</span></span><Plus size={15} color="#8c5d0a" />
+                    <span className="document-icon"><FileClock size={16} /></span><span className="document-copy"><strong>Nota Fiscal pendente</strong><span>Clique para anexar</span></span><Plus size={15} className="icon-warning" />
                   </button>
                 ) : null}
                 {!docs.length && !nfPending ? <EmptyState icon={FileText} title="Sem documentos" description="Nenhum documento foi anexado ainda." /> : null}
@@ -1246,7 +998,7 @@ function DetailPage({ store, receiptId, pushToast }) {
           </article>
 
           <article className="panel">
-            <header className="panel-header"><div><h2>Histórico</h2><p>Rastreabilidade do registro</p></div><History size={17} color="#6e7ba0" /></header>
+            <header className="panel-header"><div><h2>Histórico</h2><p>Rastreabilidade do registro</p></div><History size={17} className="icon-muted" /></header>
             <div className="timeline">
               {history.slice(0, 10).map((entry, index) => {
                 const isStatus = entry.kind === 'status'
@@ -1288,7 +1040,7 @@ function DetailPage({ store, receiptId, pushToast }) {
           <div className="field field-full">
             <div className="field-label">Arquivo</div>
             <label className="upload-zone"><Upload size={20} /><strong>Selecionar do dispositivo</strong><span>PDF ou imagem, até 10 MB por arquivo</span><input type="file" multiple={documentForm.category === 'Foto' || documentForm.category === 'Outro'} accept={documentForm.category === 'Foto' ? 'image/*' : 'application/pdf,image/*'} capture={documentForm.category === 'Foto' ? 'environment' : undefined} onChange={(event) => setDocumentForm((current) => ({ ...current, files: Array.from(event.target.files || []) }))} /></label>
-            {documentForm.files.length ? <div className="file-list">{documentForm.files.map((file) => <div className="file-row" key={file.name}><span className="file-row-icon"><FileText size={14} /></span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><CheckCircle2 size={15} color="#2748c7" /></div>)}</div> : null}
+            {documentForm.files.length ? <div className="file-list">{documentForm.files.map((file) => <div className="file-row" key={file.name}><span className="file-row-icon"><FileText size={14} /></span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><CheckCircle2 size={15} className="icon-brand" /></div>)}</div> : null}
           </div>
         </div>
       </Modal>
