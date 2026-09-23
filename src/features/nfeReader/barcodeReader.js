@@ -62,7 +62,14 @@ export const CROP_VARIANTS = [
   { label: 'página inteira', region: null },
 ]
 
-function buildHints() {
+/**
+ * Hints do ZXing compartilhados por toda leitura de CODE_128 do módulo —
+ * estático (este arquivo) e ao vivo pela câmera (liveScanner.js). Nunca inclui
+ * `DecodeHintType.TRY_HARDER`: ver o comentário no topo deste arquivo sobre o
+ * bug de rotação interna do ZXing. Uma única fonte evita duas implementações
+ * divergentes de "o que conta como código de barras aceitável" no projeto.
+ */
+export function buildCode128Hints() {
   const hints = new Map()
   hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128])
   return hints
@@ -107,7 +114,7 @@ export async function readCode128FromCanvas(sourceCanvas) {
     return null
   }
 
-  const reader = new BrowserMultiFormatReader(buildHints())
+  const reader = new BrowserMultiFormatReader(buildCode128Hints())
 
   for (const variant of CROP_VARIANTS) {
     let baseCanvas

@@ -321,9 +321,11 @@ Tela isolada em `Leitura automática (beta)` no menu lateral (`src/features/nfeR
 
 Documentação técnica completa do pipeline (diagrama, o que cada arquivo faz, algoritmo da chave, por que o ZXing roda sem `TRY_HARDER`, assets self-hosted, limitações conhecidas): [`src/features/nfeReader/README.md`](src/features/nfeReader/README.md).
 
+Em celular/tablet (≤920px), além do upload, a etapa 1 ganha mais duas entradas lado a lado — **Tirar foto** (câmera traseira, gera o mesmo tipo de arquivo do upload) e **Escanear código de barras** (câmera ao vivo, sem passar por arquivo nenhum). No desktop só "Selecionar arquivo" aparece, como antes. Detalhes completos do scanner ao vivo (validação, encerramento da câmera, lanterna/troca de câmera, exigência de HTTPS): [seção dedicada](src/features/nfeReader/README.md#entradas-em-celulartablet-foto-e-scanner-ao-vivo) no README do módulo.
+
 O que ela faz, 100% no navegador, em ordem de custo (cada etapa só entra em cena se a anterior não achou uma chave válida):
 
-1. Upload de um PDF (DANFE) ou foto (JPG/PNG) da NF, com um botão explícito **Analisar nota** — nada roda automaticamente ao selecionar o arquivo.
+1. Upload de um PDF (DANFE), foto (JPG/PNG) da NF ou leitura do código de barras pela câmera ao vivo, com um botão explícito **Analisar nota** para arquivo/foto (o scanner ao vivo analisa assim que encontra uma chave válida, sem clique adicional) — nada roda automaticamente ao só selecionar o arquivo.
 2. Se for PDF, tenta extrair o texto embutido (`pdfjs-dist`). Se achar uma chave de 44 dígitos válida (dígito verificador módulo 11 — `src/features/nfeReader/chaveNFe.js`, função `findValidNfeKeys`, tolerante a espaço/ponto/hífen/quebra de linha entre os dígitos), usa ela direto e **para por aqui** — não renderiza página nem aciona leitor de código de barras/OCR.
 3. Sem chave no texto → renderiza a 1ª página em ~300 DPI (ou usa a foto direto) e tenta ler um código de barras CODE_128 com `@zxing/browser`/`@zxing/library`, testando vários recortes da página (topo 25%/35%, topo direito/esquerdo, metade superior, página inteira), cada um em versão original e com contraste ajustado, nas 4 rotações — tudo com canvases DOM próprios, sem depender da rotação automática interna do ZXing.
 4. Código de barras também não achou → tenta OCR com `tesseract.js` sobre a mesma imagem, restrito a dígitos, como último recurso para digitalizações ruins.
@@ -344,6 +346,7 @@ Fora de escopo, de propósito, nesta fase:
 - Alteração no `backend/server.mjs` ou no modelo de dados do recebimento — os campos de `referenciaNfe` são só sugestão.
 - Gravação automática em um recebimento (`api.createRecebimento` não é chamado por este módulo).
 - Garantir leitura de código de barras/OCR em digitalizações ruins — a meta é degradar bem, não vencer qualquer digitalização.
+- OCR contínuo sobre o vídeo do scanner ao vivo — pesado demais para celular; o scanner é estritamente leitura de código de barras, OCR continua só no pipeline de arquivo/foto.
 
 Conexão futura (não feita agora): a lógica de `src/features/nfeReader/extractor.js` foi isolada exatamente para que, quando o app estiver pronto para usar isso de verdade, a Etapa 3 (Evidências) do wizard `Novo recebimento` possa chamar `analyzeNfeFile()` ao anexar a Nota Fiscal e pré-preencher `numeroNf`/`serieNf`/`fornecedor`/`cnpjFornecedor`, sem reescrever nada do pipeline.
 
@@ -356,7 +359,14 @@ Conexão futura (não feita agora): a lógica de `src/features/nfeReader/extract
 5. **Arquivo sem chave legível em lugar nenhum**: o resumo da revisão indica que nenhuma chave válida foi localizada (depois de tentar texto, código de barras e OCR); preencha os campos e confirme normalmente — sem travar.
 6. Preencha o Fornecedor manualmente uma vez para um CNPJ novo e confirme — na próxima análise de uma nota do mesmo CNPJ, o Fornecedor deve vir pré-preenchido do catálogo local com selo verde.
 7. Clique em Confirmar dados e depois em Copiar para validar o JSON final.
-8. `npm test` roda o teste da matemática da chave (`src/features/nfeReader/chaveNFe.test.mjs`) sem precisar de navegador.
+8. `npm test` roda os testes de `src/features/nfeReader/*.test.mjs` (matemática da chave e montagem do resultado) sem precisar de navegador.
+9. **Foto e scanner só aparecem em celular/tablet**: redimensione a janela (ou abra as ferramentas de dispositivo do navegador) para ≤920px — "Tirar foto" e "Escanear código de barras" devem aparecer ao lado de "Selecionar arquivo"; acima de 920px, só "Selecionar arquivo" deve estar visível.
+10. **Tirar foto**: em um celular real, toca em "Tirar foto" deve preferir abrir a câmera traseira (não é garantido pelo navegador); a foto resultante aparece na lista de arquivo igual a um upload normal, e "Analisar nota" funciona do mesmo jeito.
+11. **Abrir o scanner solicita permissão de câmera** — em um navegador que já negou a permissão antes, deve aparecer a mensagem "Permissão da câmera negada..." com a opção de usar "Selecionar arquivo" em vez de travar a tela.
+12. **Scanner com uma chave de NF-e real** (uma nota impressa em mãos, ou o DANFE aberto em outra tela): aponte a câmera para o código de barras — ao decodificar, a tela deve mostrar "Chave da NF-e localizada", vibrar (se o aparelho suportar) e fechar sozinha, levando para a Etapa 2 já preenchida.
+13. **Scanner com outro código de barras** (código de produto, etiqueta, código de outra nota) — não deve travar nem aceitar: a leitura continua até achar um CODE_128 que seja uma chave de NF-e válida (44 dígitos, dígito verificador correto).
+14. **Câmera desliga de verdade**: abra o scanner, depois toque "Cancelar" — em um celular, o indicador de câmera ativa do sistema operacional (ponto/ícone na barra de status) deve sumir. Repita saindo da tela (voltar) e trocando de aba/app (a câmera deve pausar) em vez de cancelar.
+15. **HTTPS**: testar o scanner em um celular físico contra o Vite dev server pelo IP da rede local (`http://192.168.x.x:5173`) falha ao abrir a câmera — isso é o navegador bloqueando `getUserMedia` fora de contexto seguro, não um bug do scanner. Use `localhost` (só funciona no mesmo computador) ou um deploy de preview em HTTPS para testar em aparelho físico.
 
 ## Persistência via Google Sheets — sem dados mock
 

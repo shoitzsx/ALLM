@@ -3184,6 +3184,223 @@ button {
   word-break: break-word;
 }
 
+.nfe-source-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.nfe-source-actions .upload-zone {
+  grid-column: 1 / -1;
+}
+
+.nfe-source-action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-sm);
+  color: var(--ink-700);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.nfe-source-action:hover {
+  border-color: var(--brand-500);
+  color: var(--brand-700);
+  background: var(--brand-50);
+}
+
+.nfe-source-action input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* "Tirar foto" e "Escanear código de barras" só fazem sentido em dispositivo com câmera de mão — mesmo
+   corte de largura usado pelo resto do app para alternar entre layout desktop e mobile/tablet. */
+@media (max-width: 920px) {
+  .nfe-source-action-mobile {
+    display: flex;
+  }
+}
+
+/* --- Scanner de código de barras ao vivo (NfeLiveScanner.jsx) -------------------------------------- */
+/* Câmera ao vivo é seu próprio mundo visual (como qualquer viewfinder de câmera nativo) — escurecido de
+   propósito em vez de seguir os tokens claros/escuros do resto do app, para não competir com o preview
+   da câmera. Continua sem glow/neon: só a paleta neutra + o azul de marca já usado no resto do ALM. */
+.nfe-scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  background: #05070d;
+  color: #f2f4f9;
+}
+
+.nfe-scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) 14px 12px;
+  background: rgba(8, 11, 20, 0.92);
+  flex: 0 0 auto;
+}
+
+.nfe-scanner-header strong {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.nfe-scanner-header-spacer {
+  width: 78px;
+}
+
+.nfe-scanner-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #f2f4f9;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nfe-scanner-cancel:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.nfe-scanner-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.nfe-scanner-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nfe-scanner-frame {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.nfe-scanner-frame-box {
+  width: min(82%, 420px);
+  height: min(34vh, 160px);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+}
+
+.nfe-scanner-frame p {
+  max-width: 320px;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.nfe-scanner-feedback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(5, 7, 13, 0.72);
+}
+
+.nfe-scanner-feedback strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.nfe-scanner-feedback p {
+  max-width: 320px;
+  margin: 0;
+  color: #d7dcec;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.nfe-scanner-feedback-ok {
+  color: #7fe6a3;
+}
+
+.nfe-scanner-feedback-error {
+  color: #f5b3b0;
+}
+
+.nfe-scanner-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px max(12px, env(safe-area-inset-bottom));
+  background: rgba(8, 11, 20, 0.92);
+  flex: 0 0 auto;
+}
+
+.nfe-scanner-status {
+  color: #b6bfd6;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nfe-scanner-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nfe-scanner-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #f2f4f9;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nfe-scanner-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* Tema: tokens semânticos mantêm o claro atual e concentram as superfícies do escuro. */
 html[data-theme="dark"] {
   color: #f4f7fb;

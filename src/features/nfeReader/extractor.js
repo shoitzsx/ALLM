@@ -23,19 +23,16 @@
  * "Não encontrado" só é reportado depois que texto, barcode e OCR já foram
  * tentados (ou não se aplicavam).
  */
-import { findValidNfeKeys, interpretarChave, normalizarChave, validarChaveNFe } from './chaveNFe.js'
+import { findValidNfeKeys, normalizarChave, validarChaveNFe } from './chaveNFe.js'
 import { extractPdfText, renderPdfFirstPageToCanvas } from './pdfExtractor.js'
 import { loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
 import { findNfeKeysWithOcr } from './ocrReader.js'
-import { findDataEmissao, findPedido, findValorTotal } from './textHeuristics.js'
-import { getSupplierByCnpj } from './supplierCatalog.js'
+import { buildAnalysisFromKey, CONFIDENCE, analyzeNfeKey } from './analysisBuilder.js'
 
-export const CONFIDENCE = {
-  ALTA: 'alta',
-  CONFERIR: 'conferir',
-  BAIXA: 'baixa',
-  NAO_ENCONTRADO: 'nao_encontrado',
-}
+// Reexportados para continuar sendo o único ponto de entrada do módulo do
+// ponto de vista de quem consome (NfeReaderPage.jsx, README.md) — a lógica em
+// si vive em analysisBuilder.js (ver o porquê no topo daquele arquivo).
+export { CONFIDENCE, analyzeNfeKey }
 
 const ORIGEM_TEXTO = 'texto do PDF'
 const ORIGEM_BARCODE = 'código de barras'
@@ -43,20 +40,6 @@ const ORIGEM_OCR = 'OCR'
 
 function isPdfFile(file) {
   return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
-}
-
-function field(value, confidence, origin = '') {
-  return { value: value ?? '', confidence, origin }
-}
-
-function notFound() {
-  return field('', CONFIDENCE.NAO_ENCONTRADO)
-}
-
-function todayLocalDate() {
-  const now = new Date()
-  const offset = now.getTimezoneOffset()
-  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
 function log(...args) {
@@ -164,47 +147,5 @@ export async function analyzeNfeFile(file) {
     origens.push(ORIGEM_OCR)
   }
 
-  const interpretada = chave ? interpretarChave(chave) : null
-  const origin = origens.join(' + ')
-  const fromChave = (value) => (interpretada ? field(value, CONFIDENCE.ALTA, origin) : notFound())
-
-  const supplierMatch = interpretada ? getSupplierByCnpj(interpretada.cnpj) : null
-  const dataEmissaoHeur = findDataEmissao(text)
-  const valorTotalHeur = findValorTotal(text)
-  const pedidoHeur = findPedido(text)
-
-  const fields = {
-    numeroNf: fromChave(interpretada?.numeroNf),
-    serieNf: fromChave(interpretada?.serie),
-    cnpjFornecedor: fromChave(interpretada?.cnpjFormatado),
-    fornecedor: supplierMatch
-      ? field(supplierMatch, CONFIDENCE.ALTA, 'catálogo de fornecedores')
-      : notFound(),
-    pedido: pedidoHeur
-      ? field(pedidoHeur.value, CONFIDENCE.BAIXA, 'heurística de texto (regex)')
-      : notFound(),
-    dataRecebimento: field(todayLocalDate(), CONFIDENCE.NAO_ENCONTRADO, 'sugestão: data de hoje'),
-  }
-
-  const referenciaNfe = {
-    chaveAcesso: fromChave(chave),
-    ufEmitente: fromChave(interpretada?.ufSigla),
-    anoMesEmissao: fromChave(interpretada?.anoMesLabel),
-    dataEmissao: dataEmissaoHeur
-      ? field(dataEmissaoHeur.value, CONFIDENCE.CONFERIR, 'heurística de texto (regex)')
-      : notFound(),
-    valorTotal: valorTotalHeur
-      ? field(valorTotalHeur.value, CONFIDENCE.CONFERIR, 'heurística de texto (regex)')
-      : notFound(),
-  }
-
-  return {
-    chaveValida: Boolean(interpretada),
-    chaveInterpretada: interpretada,
-    fontesCruzadas,
-    origensChave: origens,
-    fields,
-    referenciaNfe,
-    warnings,
-  }
+  return buildAnalysisFromKey(chave, origens, { text, fontesCruzadas, warnings })
 }

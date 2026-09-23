@@ -60,16 +60,20 @@ do módulo: `analyzeNfeFile(file)`.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [`extractor.js`](extractor.js) | Orquestra o pipeline (a tabela acima), decide qual fonte "ganha", monta o objeto de resultado. Único ponto que a UI chama. |
+| [`extractor.js`](extractor.js) | Orquestra o pipeline de arquivo (a tabela acima): decide qual fonte "ganha", delega a montagem do resultado a `analysisBuilder.js`. Reexporta `CONFIDENCE`/`analyzeNfeKey` — continua sendo o único ponto que a UI importa. |
+| [`analysisBuilder.js`](analysisBuilder.js) | Monta `fields`/`referenciaNfe`/`chaveInterpretada` a partir de uma chave já resolvida — usado tanto por `analyzeNfeFile` (arquivo) quanto por `analyzeNfeKey` (scanner ao vivo). Sem dependência de Canvas/`?url` — testável em Node puro, igual a `chaveNFe.js`. |
 | [`chaveNFe.js`](chaveNFe.js) | Matemática pura da chave de acesso: validação (dígito verificador módulo 11), interpretação dos campos (UF/ano-mês/CNPJ/série/número), busca de chaves válidas dentro de um texto livre. Sem dependência de DOM — testável em Node puro. |
 | [`pdfExtractor.js`](pdfExtractor.js) | Tudo que usa `pdfjs-dist`: abrir o PDF, extrair texto selecionável, renderizar a 1ª página em alta resolução para um canvas. |
-| [`barcodeReader.js`](barcodeReader.js) | Leitura de código de barras CODE_128 via `@zxing/browser`/`@zxing/library`, com a estratégia manual de recorte/contraste/rotação (ver [por que sem `TRY_HARDER`](#por-que-o-zxing-roda-sem-try_harder)). |
-| [`ocrReader.js`](ocrReader.js) | Fallback de OCR via `tesseract.js`, restrito a dígitos, usado só quando código de barras falha. |
+| [`barcodeReader.js`](barcodeReader.js) | Leitura de código de barras CODE_128 estático (arquivo/foto) via `@zxing/browser`/`@zxing/library`, com a estratégia manual de recorte/contraste/rotação (ver [por que sem `TRY_HARDER`](#por-que-o-zxing-roda-sem-try_harder)). Exporta `buildCode128Hints()`, reaproveitado também pelo scanner ao vivo. |
+| [`liveScanner.js`](liveScanner.js) | Leitura contínua de CODE_128 pela câmera (`@zxing/browser`, `decodeFromConstraints`), com os MESMOS hints de `barcodeReader.js` e a MESMA validação de chave de `chaveNFe.js`. Sem dependência de arquivo/canvas estático — usado só pelo scanner ao vivo. |
+| [`ocrReader.js`](ocrReader.js) | Fallback de OCR via `tesseract.js`, restrito a dígitos, usado só quando código de barras falha. Só se aplica ao pipeline de arquivo/foto — o scanner ao vivo não usa OCR (ver [Entradas em celular/tablet](#entradas-em-celulartablet-foto-e-scanner-ao-vivo)). |
 | [`canvasUtils.js`](canvasUtils.js) | Primitivas de canvas DOM compartilhadas por `barcodeReader.js` e `ocrReader.js`: clonar, recortar, rotacionar, ampliar, binarizar (threshold). |
 | [`textHeuristics.js`](textHeuristics.js) | Regex fracas sobre o texto do PDF para campos que a chave não cobre (data de emissão, valor total, pedido de compra) — sempre confiança "conferir" ou "baixa". |
 | [`supplierCatalog.js`](supplierCatalog.js) | Catálogo local `CNPJ → nome do fornecedor` em `localStorage` (único uso de `localStorage` no app; alimentado a cada nota confirmada manualmente). |
-| [`NfeReaderPage.jsx`](NfeReaderPage.jsx) | Tela: upload, botão "Analisar nota", revisão com selos de confiança, edição manual, "Confirmar dados" → JSON copiável. |
+| [`NfeReaderPage.jsx`](NfeReaderPage.jsx) | Tela: upload/foto/scanner, botão "Analisar nota", revisão com selos de confiança, edição manual, "Confirmar dados" → JSON copiável. |
+| [`NfeLiveScanner.jsx`](NfeLiveScanner.jsx) | Overlay em tela cheia do scanner ao vivo: preview da câmera, guia de posicionamento, lanterna/troca de câmera quando suportadas, estados de permissão negada/sem câmera. |
 | [`chaveNFe.test.mjs`](chaveNFe.test.mjs) | Testes de `node:test` para a matemática da chave (sem navegador). |
+| [`analysisBuilder.test.mjs`](analysisBuilder.test.mjs) | Testes de `node:test` para a montagem do resultado a partir de uma chave (`analyzeNfeKey`/`buildAnalysisFromKey`), incluindo o caso do scanner (sem texto de PDF). |
 
 ## A chave de acesso e o dígito verificador
 
@@ -268,6 +272,106 @@ matemática por trás delas.
 fornecedores), `conferir` (heurística de regex razoavelmente específica),
 `baixa` (heurística de regex mais genérica) ou `nao_encontrado`.
 
+## Entradas em celular/tablet: foto e scanner ao vivo
+
+Em telas de até 920px (mesmo corte usado no resto do app para alternar entre
+layout desktop e mobile/tablet), a etapa "1. Selecionar arquivo" ganha duas
+entradas adicionais, lado a lado com o upload:
+
+- **Tirar foto** — um segundo `<input type="file" accept="image/*"
+  capture="environment">`, oculto, ao lado do input de upload normal
+  (`NfeReaderPage.jsx`, `cameraInputRef`). `capture="environment"` é só uma
+  *preferência* para o navegador priorizar a câmera traseira — não uma
+  garantia; onde não suportado, o dispositivo abre o seletor de arquivos
+  normal. A foto resultante é o mesmo tipo de `File` que o upload comum: cai
+  no mesmíssimo `onSelectFile` → `analyzeNfeFile(file)`, sem pipeline
+  paralelo.
+- **Escanear código de barras** — abre `NfeLiveScanner.jsx` em tela cheia,
+  com a câmera ao vivo (não é um seletor de arquivo).
+
+No desktop (>920px) só "Selecionar arquivo" aparece — a tela continua igual à
+versão original.
+
+### Scanner ao vivo (`liveScanner.js` + `NfeLiveScanner.jsx`)
+
+Diferente do upload/foto, o scanner não produz um `File`: ele decodifica o
+código de barras diretamente de frames de vídeo via
+`BrowserMultiFormatReader.decodeFromConstraints` (`@zxing/browser`, já usado
+no resto do módulo), com preferência por câmera traseira
+(`facingMode: { ideal: 'environment' }`) e sem solicitar microfone (nunca
+`audio: true`).
+
+**Mesmos hints, mesmo motivo de nunca usar `TRY_HARDER`.** `liveScanner.js`
+usa `buildCode128Hints()`, exportado de `barcodeReader.js` — a mesma função,
+não uma cópia — então o [bug de rotação interna do ZXing](#por-que-o-zxing-roda-sem-try_harder)
+não pode ressurgir aqui: `decodeFromConstraints` decodifica cada frame
+chamando o mesmo `decodeFromCanvas` de sempre por baixo dos panos.
+
+**Nenhum código de barras é aceito só por ter sido decodificado.** Cada
+resultado de frame passa pela mesma `normalizarChave` + `validarChaveNFe` de
+`chaveNFe.js` usada em todo o resto do pipeline — um CODE_128 que não seja uma
+chave de 44 dígitos com dígito verificador correto (etiqueta, código de
+produto, código da transportadora) é ignorado e a leitura continua. Isso evita
+falso positivo com outros códigos de barras que a câmera possa enxergar junto
+com o da NF-e.
+
+**Parada é imediata e única.** Quando um frame decodifica para uma chave
+válida, `liveScanner.js` chama `controls.stop()` (a referência de controle que
+o próprio ZXing passa a cada callback, disponível mesmo antes da Promise de
+`startLiveScan` resolver) *antes* de notificar quem chamou — nenhum frame
+seguinte pode disparar um segundo callback. `NfeLiveScanner.jsx` então libera
+todas as tracks do `MediaStream`, mostra "Chave da NF-e localizada" por ~550ms
+(com `navigator.vibrate?.(100)` se o dispositivo suportar), fecha a tela e
+entrega a chave para `analyzeNfeKey(chave)` — o **mesmo formato de resultado**
+de `analyzeNfeFile`, montado por `buildAnalysisFromKey` (`analysisBuilder.js`).
+
+**A câmera nunca fica ligada esquecida.** `NfeLiveScanner.jsx` para o
+`MediaStream` (ZXing `controls.stop()`, que também desliga a lanterna se
+estiver acesa) em todos estes casos: usuário toca "Cancelar", chave
+encontrada, `document.visibilityState` deixa de ser `visible` (aba/app em
+segundo plano — retoma sozinho ao voltar a ficar visível, se o scanner ainda
+estiver aberto), tecla Escape, ou o componente deixar de estar `open`. Nenhum
+frame de vídeo é enviado a lugar nenhum — tudo roda localmente no navegador,
+sem gravação, sem backend.
+
+**Lanterna e troca de câmera são opcionais e condicionais.** `startLiveScan`
+retorna `switchTorch` só quando o `MediaStreamTrack` realmente expõe suporte a
+torch (checado pelo próprio `@zxing/browser` via
+`track.getCapabilities()`) — o botão de lanterna só aparece nesse caso.
+"Trocar câmera" só aparece quando `listCameras()` (que só devolve `label`s
+confiáveis *depois* da primeira permissão concedida — por isso só é chamada
+depois do primeiro `startLiveScan` bem-sucedido) encontra mais de uma câmera.
+
+**Erros de câmera viram mensagem, nunca stack trace.** `NotAllowedError` →
+"Permissão da câmera negada..."; `NotFoundError` → "Nenhuma câmera
+compatível..."; `NotReadableError` → câmera em uso por outro app; fora de
+contexto seguro (ver abaixo) → mensagem específica sobre HTTPS. Em qualquer
+caso, "Selecionar arquivo" continua disponível como alternativa.
+
+#### HTTPS é obrigatório para a câmera
+
+`getUserMedia` só funciona em contexto seguro. Em produção (Vercel) isso é
+automático. Em desenvolvimento, `localhost` funciona normalmente, mas acessar
+o Vite dev server por um IP da rede local (`http://192.168.x.x:5173`, o modo
+usado por `npm run dev -- --host` para testar em celular físico) **não** é
+contexto seguro — o navegador do celular bloqueia a câmera nesse caso. Isso
+não é bug do scanner: é o navegador aplicando a mesma regra de sempre para
+`getUserMedia`. Para testar a câmera em um celular físico durante o
+desenvolvimento, é necessário HTTPS local (túnel tipo `ngrok`/`localtunnel`,
+ou certificado local) ou testar direto contra um deploy de preview.
+
+#### O que o scanner preenche — e o que ele não inventa
+
+Igual ao pipeline de arquivo, os campos que vêm matematicamente da chave
+(`numeroNf`, `serieNf`, `cnpjFornecedor`, `referenciaNfe.*`) saem com
+confiança `alta`; `fornecedor` só é preenchido se o CNPJ já estiver no
+catálogo local. Como não há texto de PDF envolvido, `pedido`,
+`referenciaNfe.valorTotal` e `referenciaNfe.dataEmissao` — que no pipeline de
+arquivo vêm de regex sobre o texto extraído — ficam como "não encontrado": o
+scanner não inventa um pedido de compra, valor ou data que ele não leu. O
+usuário preenche esses campos manualmente na tela de revisão, exatamente como
+já acontecia quando nenhuma heurística encontrava nada no pipeline original.
+
 ## Log de diagnóstico
 
 Todo o pipeline loga no console do navegador com prefixo `[NFe]` — fluxo
@@ -329,11 +433,19 @@ Node). `chaveNFe.test.mjs` cobre: validação do DV de uma chave real, extraçã
 de todos os campos interpretados, `findValidNfeKeys` com a chave formatada
 com espaços/hífens/quebras de linha, rejeição de sequências de 44 dígitos com
 DV inválido, deduplicação de chaves repetidas no mesmo texto, e rejeição de
-uma chave com DV adulterado via `interpretarChave`.
+uma chave com DV adulterado via `interpretarChave`. `analysisBuilder.test.mjs`
+cobre `analyzeNfeKey`/`buildAnalysisFromKey`: chave válida preenchendo os
+campos derivados dela, ausência de invenção de pedido/valor/data quando não há
+texto (caso do scanner), rejeição de chave com DV inválido sem lançar, aceite
+de chave formatada com espaços, e propagação correta de `fontesCruzadas`/
+`origensChave`.
 
-O restante do pipeline (renderização de PDF, ZXing, tesseract.js) depende de
-APIs de navegador (`Canvas`, `Worker`) e não roda no test runner do Node — a
-validação desses caminhos é manual, seguindo o roteiro em
+O restante do pipeline (renderização de PDF, ZXing estático, ZXing ao vivo via
+câmera, tesseract.js) depende de APIs de navegador (`Canvas`, `Worker`,
+`getUserMedia`) e não roda no test runner do Node — `liveScanner.js` e
+`NfeLiveScanner.jsx` estão na mesma situação de `barcodeReader.js`/
+`ocrReader.js`/`pdfExtractor.js` já eram. A validação desses caminhos é
+manual, seguindo o roteiro em
 ["Como testar manualmente"](../../../README.md#como-testar-manualmente) no
 README raiz.
 
@@ -356,6 +468,18 @@ rápido:
 - **OCR de página inteira/interpretação completa do documento está fora de
   escopo** — o OCR aqui é estritamente um fallback de 44 dígitos, não um
   substituto para leitura de campos de texto livre.
+- **O scanner ao vivo não faz OCR contínuo sobre o vídeo, de propósito.**
+  Rodar `tesseract.js` frame a frame seria pesado demais para celular; o
+  objetivo do scanner é ser rápido e confiável para código de barras. OCR
+  continua sendo estritamente do pipeline de arquivo/foto.
+- **Testado com dispositivo real de forma limitada durante o
+  desenvolvimento.** A implementação foi validada em navegador headless com
+  câmera falsa (`--use-fake-device-for-media-stream` do Chromium) — cobre o
+  fluxo de permissão, início/parada da câmera, o laço de decodificação ao
+  vivo sem disparar o bug de rotação do ZXing, e o encerramento correto das
+  tracks. Não substitui teste em aparelho físico Android/iOS — ver
+  ["Testes que precisam de dispositivo físico"](../../../README.md#como-testar-manualmente)
+  no README raiz.
 
 ## Conexão futura (não feita)
 

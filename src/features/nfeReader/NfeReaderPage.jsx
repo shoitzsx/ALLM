@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   Copy,
   FileText,
@@ -13,9 +14,10 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { analyzeNfeFile, CONFIDENCE } from './extractor.js'
+import { analyzeNfeFile, analyzeNfeKey, CONFIDENCE } from './extractor.js'
 import { saveSupplier } from './supplierCatalog.js'
 import { formatFileSize } from '../../ui.jsx'
+import NfeLiveScanner from './NfeLiveScanner.jsx'
 
 const CONFIDENCE_META = {
   [CONFIDENCE.ALTA]: { label: 'Alta confiança', icon: CheckCircle2, className: 'nfe-badge-alta' },
@@ -74,6 +76,7 @@ function FieldRow({ def, meta, value, onChange, corrected }) {
 
 export default function NfeReaderPage({ pushToast }) {
   const inputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const processingRef = useRef(false)
   const [file, setFile] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -82,6 +85,7 @@ export default function NfeReaderPage({ pushToast }) {
   const [confirmed, setConfirmed] = useState(null)
   const [copied, setCopied] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   const metaByKey = useMemo(() => {
     if (!analysis) return {}
@@ -95,6 +99,7 @@ export default function NfeReaderPage({ pushToast }) {
     setConfirmed(null)
     setErrorMessage('')
     if (inputRef.current) inputRef.current.value = ''
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
   }
 
   const onSelectFile = (event) => {
@@ -104,6 +109,22 @@ export default function NfeReaderPage({ pushToast }) {
     setFieldValues({})
     setConfirmed(null)
     setErrorMessage('')
+  }
+
+  /** Aplica um resultado de análise (vindo de arquivo ou da chave lida pelo scanner) ao estado da tela. */
+  const applyAnalysisResult = (result) => {
+    setAnalysis(result)
+    const initialValues = {}
+    Object.entries({ ...result.fields, ...result.referenciaNfe }).forEach(([key, meta]) => {
+      initialValues[key] = meta.value
+    })
+    setFieldValues(initialValues)
+    pushToast?.(
+      result.chaveValida ? 'Chave de acesso localizada' : 'Análise concluída',
+      result.chaveValida
+        ? `Dígito verificador conferido, via ${result.origensChave.join(' e ')}.`
+        : 'Não foi possível localizar uma chave válida. Revise e preencha manualmente.',
+    )
   }
 
   const runAnalysis = async () => {
@@ -117,24 +138,21 @@ export default function NfeReaderPage({ pushToast }) {
     setErrorMessage('')
     try {
       const result = await analyzeNfeFile(file)
-      setAnalysis(result)
-      const initialValues = {}
-      Object.entries({ ...result.fields, ...result.referenciaNfe }).forEach(([key, meta]) => {
-        initialValues[key] = meta.value
-      })
-      setFieldValues(initialValues)
-      pushToast?.(
-        result.chaveValida ? 'Chave de acesso localizada' : 'Análise concluída',
-        result.chaveValida
-          ? `Dígito verificador conferido, via ${result.origensChave.join(' e ')}.`
-          : 'Não foi possível localizar uma chave válida. Revise e preencha manualmente.',
-      )
+      applyAnalysisResult(result)
     } catch (error) {
       setErrorMessage(error?.message || 'Não foi possível analisar o arquivo selecionado.')
     } finally {
       processingRef.current = false
       setAnalyzing(false)
     }
+  }
+
+  /** Chave já validada pelo scanner ao vivo (NfeLiveScanner) — mesmo formato de resultado, sem arquivo envolvido. */
+  const handleScannedKey = (chave) => {
+    setFile(null)
+    setErrorMessage('')
+    const result = analyzeNfeKey(chave)
+    applyAnalysisResult(result)
   }
 
   const setFieldValue = (key, value) => setFieldValues((current) => ({ ...current, [key]: value }))
@@ -203,21 +221,46 @@ export default function NfeReaderPage({ pushToast }) {
         <header className="panel-header">
           <div>
             <h2>1. Selecionar arquivo</h2>
-            <p>PDF do DANFE ou foto (JPG/PNG) da Nota Fiscal</p>
+            <p>PDF do DANFE, foto da Nota Fiscal ou leitura do código de barras pela câmera</p>
           </div>
         </header>
         <div className="detail-section-body">
-          <label className="upload-zone">
-            <Upload size={19} />
-            <strong>Selecionar arquivo</strong>
-            <span>PDF ou imagem, até 10 MB</span>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              onChange={onSelectFile}
-            />
-          </label>
+          <div className="nfe-source-actions">
+            <label className="upload-zone">
+              <Upload size={19} />
+              <strong>Selecionar arquivo</strong>
+              <span>PDF ou imagem, até 10 MB</span>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                onChange={onSelectFile}
+              />
+            </label>
+
+            {/* Só aparecem em celular/tablet (ver @media em styles.css) — capture="environment" é apenas uma
+                preferência: se o navegador não suportar, o usuário ainda escolhe uma imagem normalmente. */}
+            <label className="nfe-source-action nfe-source-action-mobile">
+              <Camera size={16} />
+              <span>Tirar foto</span>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={onSelectFile}
+              />
+            </label>
+
+            <button
+              className="nfe-source-action nfe-source-action-mobile"
+              type="button"
+              onClick={() => setScannerOpen(true)}
+            >
+              <ScanBarcode size={16} />
+              <span>Escanear código de barras</span>
+            </button>
+          </div>
 
           {file ? (
             <div className="file-list">
@@ -340,6 +383,8 @@ export default function NfeReaderPage({ pushToast }) {
           </section>
         </>
       ) : null}
+
+      <NfeLiveScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onKeyFound={handleScannedKey} />
     </div>
   )
 }
