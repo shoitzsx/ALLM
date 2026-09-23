@@ -32,11 +32,24 @@ import { normalizarChave, validarChaveNFe } from './chaveNFe.js'
 // Mais ágil que o padrão da lib (500ms/500ms): a decodificação em si é barata
 // (mesmo decodeFromCanvas de sempre sobre um frame de vídeo), o gargalo real
 // é a câmera entregar frames — não há necessidade de esperar tanto entre
-// tentativas para uma leitura ao vivo parecer responsiva.
+// tentativas para uma leitura ao vivo parecer responsiva. 100ms é o valor
+// pedido para testar (~10 tentativas/s no teto); se isso se mostrar pesado
+// demais em aparelho físico (CPU/bateria/temperatura), suba de volta para
+// algo entre 150-200ms — é só este número, nada mais no pipeline depende dele.
 const SCAN_OPTIONS = {
-  delayBetweenScanAttempts: 200,
+  delayBetweenScanAttempts: 100,
   delayBetweenScanSuccess: 400,
 }
+
+// 1280x720 (HD) em vez de 1920x1080 (Full HD): a chave de 44 dígitos em
+// CODE_128 não precisa da resolução máxima da câmera para ficar legível — é
+// texto/barras relativamente grandes na página, não letras miúdas. HD reduz
+// a quantidade de pixels que o ZXing varre a cada tentativa (menos de 60% dos
+// pixels de 1080p) sem deixar as barras finas do código ilegíveis. `ideal`
+// (nunca `exact`): o navegador ainda negocia livremente com o hardware
+// disponível, sem falhar em câmeras que não entreguem exatamente 1280x720.
+const CAMERA_WIDTH_IDEAL = 1280
+const CAMERA_HEIGHT_IDEAL = 720
 
 /**
  * Lista as câmeras disponíveis. Os `label`s só vêm preenchidos depois que a
@@ -50,6 +63,32 @@ export async function listCameras() {
   } catch (err) {
     console.error('[NFe][scanner] Não foi possível listar câmeras.', { name: err?.name, message: err?.message })
     return []
+  }
+}
+
+/**
+ * Aplica foco contínuo quando a câmera realmente expõe suporte a isso — pura
+ * feature detection, igual ao torch já existente: só tenta se
+ * `getCapabilities()` listar `focusMode` incluindo `"continuous"`. Sem esse
+ * suporte (ex.: Safari, que historicamente não expõe `getCapabilities()` em
+ * todo dispositivo), simplesmente não faz nada — nunca lança, nunca esconde
+ * o scanner. Não é a mesma coisa que o torch (que o próprio @zxing/browser já
+ * resolve prontinho); aqui é a track de vídeo direto, por isso o try/catch
+ * próprio.
+ */
+async function tryApplyContinuousFocus(controls) {
+  try {
+    if (typeof controls.streamVideoCapabilitiesGet !== 'function') return false
+    const capabilities = controls.streamVideoCapabilitiesGet(() => true)
+    if (!capabilities?.focusMode?.includes?.('continuous')) return false
+    await controls.streamVideoConstraintsApply({ advanced: [{ focusMode: 'continuous' }] })
+    return true
+  } catch (err) {
+    console.debug('[NFe][scanner] foco contínuo não aplicado (sem suporte ou falha ao negociar).', {
+      name: err?.name,
+      message: err?.message,
+    })
+    return false
   }
 }
 
@@ -68,14 +107,22 @@ export async function listCameras() {
  * Retorna `{ stop, switchTorch }`: `switchTorch` só existe (não é `null`)
  * quando a câmera realmente expõe suporte a torch (checado pelo próprio
  * @zxing/browser via `MediaStreamTrack.getCapabilities()`).
+ *
+ * Instrumentação (`console.debug` só, nunca visível ao usuário, nunca loga a
+ * chave inteira — só métricas): tempo até a câmera ficar pronta, resolução
+ * real negociada pelo navegador, e — ao encontrar uma chave — quantas
+ * tentativas de decodificação isso levou e quanto tempo passou.
  */
 export async function startLiveScan({ videoElement, deviceId, onValidKey, onDecodeAttempt }) {
+  const startedAt = performance.now()
+  let attempts = 0
+
   const reader = new BrowserMultiFormatReader(buildCode128Hints(), SCAN_OPTIONS)
   const constraints = {
     video: {
       facingMode: { ideal: 'environment' },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
+      width: { ideal: CAMERA_WIDTH_IDEAL },
+      height: { ideal: CAMERA_HEIGHT_IDEAL },
       ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
     },
   }
@@ -89,6 +136,7 @@ export async function startLiveScan({ videoElement, deviceId, onValidKey, onDeco
   // com sucesso antes deste `await` terminar de resolver.
   const controls = await reader.decodeFromConstraints(constraints, videoElement, (result, _err, liveControls) => {
     if (found) return
+    attempts += 1
     onDecodeAttempt?.()
     if (!result) return
 
@@ -96,9 +144,23 @@ export async function startLiveScan({ videoElement, deviceId, onValidKey, onDeco
     if (chave.length === 44 && validarChaveNFe(chave)) {
       found = true
       liveControls.stop()
+      const elapsedS = ((performance.now() - startedAt) / 1000).toFixed(1)
+      console.debug(`[NFe][scanner] chave encontrada em ${elapsedS}s após ${attempts} tentativa(s)`)
       onValidKey(chave)
     }
   })
+
+  const readyMs = Math.round(performance.now() - startedAt)
+  console.debug(`[NFe][scanner] câmera pronta em ${readyMs}ms`)
+  try {
+    const settings = controls.streamVideoSettingsGet?.(() => true)
+    if (settings) console.debug(`[NFe][scanner] stream ${settings.width}x${settings.height}`)
+  } catch (err) {
+    console.debug('[NFe][scanner] não foi possível ler a resolução real do stream.', { name: err?.name })
+  }
+
+  const continuousFocusApplied = await tryApplyContinuousFocus(controls)
+  if (continuousFocusApplied) console.debug('[NFe][scanner] foco contínuo aplicado')
 
   return {
     stop: () => {

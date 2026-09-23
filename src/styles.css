@@ -3312,11 +3312,46 @@ button {
 }
 
 .nfe-scanner-frame-box {
+  position: relative;
   width: min(82%, 420px);
   height: min(34vh, 160px);
+  overflow: hidden;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 14px;
   box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+  animation: nfe-scan-frame-pulse 3s ease-in-out infinite;
+}
+
+/* A linha é o indicador principal de atividade — sobe/desce dentro da moldura
+   enquanto SCANNING. Some do DOM inteiro fora de SCANNING (ver JSX), então já
+   não anima quando não precisa. */
+.nfe-scanner-scanline {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9) 20%, var(--brand-500, #3161e0) 50%, rgba(255, 255, 255, 0.9) 80%, transparent);
+  box-shadow: 0 0 6px 1px rgba(90, 140, 255, 0.6);
+  animation: nfe-scan-sweep 1.7s ease-in-out infinite;
+}
+
+@keyframes nfe-scan-sweep {
+  0%, 100% { top: 4%; }
+  50% { top: calc(100% - 4% - 2px); }
+}
+
+@keyframes nfe-scan-frame-pulse {
+  0%, 100% { border-color: rgba(255, 255, 255, 0.75); }
+  50% { border-color: rgba(255, 255, 255, 0.95); }
+}
+
+.nfe-scanner-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .nfe-scanner-frame p {
@@ -3327,6 +3362,61 @@ button {
   font-size: 13px;
   font-weight: 600;
   text-align: center;
+}
+
+.nfe-scanner-reading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.nfe-scanner-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-500, #3161e0);
+  box-shadow: 0 0 5px 1px rgba(90, 140, 255, 0.7);
+  animation: nfe-scan-dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes nfe-scan-dot-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.nfe-scanner-hint {
+  color: #d7dcec;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.nfe-scanner-success-ring {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid #7fe6a3;
+  box-shadow: 0 0 0 6px rgba(127, 230, 163, 0.15);
+}
+
+/* Quem prefere menos movimento: a moldura fica estática (sem pulso de borda),
+   a linha para de se mexer (mas ainda marca "algo está acontecendo" parada
+   dentro da área, em vez de sumir), e o ponto ao lado de "Lendo" some — o
+   texto sozinho já comunica o estado. O scanner continua 100% funcional. */
+@media (prefers-reduced-motion: reduce) {
+  .nfe-scanner-frame-box {
+    animation: none;
+  }
+  .nfe-scanner-scanline {
+    animation: none;
+    top: 50%;
+  }
+  .nfe-scanner-dot {
+    animation: none;
+    display: none;
+  }
 }
 
 .nfe-scanner-feedback {

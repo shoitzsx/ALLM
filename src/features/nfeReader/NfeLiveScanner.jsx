@@ -15,6 +15,18 @@ function isSecureContextForCamera() {
   return ['localhost', '127.0.0.1'].includes(window.location.hostname)
 }
 
+// Dicas por tempo enquanto SCANNING — nunca progresso falso ("50%", "quase
+// pronto"), só orientação. Só uma visível por vez; avança por tempo decorrido
+// (setTimeout, 2 timers, não um estado por tentativa de decode). Zerado a
+// cada novo `start()` (nova câmera, retomar de pausa, etc.).
+const HINT_STAGE_AFTER_MS = [3000, 7000]
+
+function hintForStage(stage, torchAvailable) {
+  if (stage === 0) return 'Mantenha o código dentro da área.'
+  if (stage === 1) return 'Mantenha o código centralizado e estável.'
+  return torchAvailable ? 'Aproxime a câmera ou ligue a lanterna.' : 'Aproxime a câmera e mantenha o código nítido.'
+}
+
 function describeError(err) {
   if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
     return 'Permissão da câmera negada. Libere o acesso à câmera nas configurações do navegador ou use "Selecionar arquivo".'
@@ -48,6 +60,7 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
   const [torchAvailable, setTorchAvailable] = useState(false)
   const [cameras, setCameras] = useState([])
   const [cameraIndex, setCameraIndex] = useState(0)
+  const [hintStage, setHintStage] = useState(0)
 
   const stopScan = useCallback(() => {
     controlsRef.current?.stop()
@@ -59,6 +72,7 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
       setState(STATE.REQUESTING)
       setErrorMessage('')
       setTorchOn(false)
+      setHintStage(0)
       try {
         const controls = await startLiveScan({
           videoElement: videoRef.current,
@@ -94,6 +108,17 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
     return () => stopScan()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Dica temporizada: só 2 timers agendados uma vez por sessão de leitura, não
+  // um setState por tentativa de decode. A animação em si (linha do scanner)
+  // é 100% CSS e roda independente disso — isto só troca uma linha de texto.
+  useEffect(() => {
+    if (state !== STATE.SCANNING) return undefined
+    const timers = HINT_STAGE_AFTER_MS.map((delay, index) =>
+      window.setTimeout(() => setHintStage(index + 1), delay),
+    )
+    return () => timers.forEach((timerId) => window.clearTimeout(timerId))
+  }, [state])
 
   // Não deixa a câmera ligada em segundo plano: para ao perder visibilidade,
   // retoma (se o scanner ainda estiver aberto) ao voltar a ficar visível.
@@ -166,14 +191,23 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
 
         {state === STATE.SCANNING ? (
           <div className="nfe-scanner-frame">
-            <span className="nfe-scanner-frame-box" aria-hidden="true" />
-            <p>Posicione o código de barras da NF-e dentro da área</p>
+            <span className="nfe-scanner-frame-box" aria-hidden="true">
+              <span className="nfe-scanner-scanline" aria-hidden="true" />
+            </span>
+            <div className="nfe-scanner-copy">
+              <p className="nfe-scanner-reading">
+                Lendo código de barras<span className="nfe-scanner-dot" aria-hidden="true" />
+              </p>
+              <p className="nfe-scanner-hint">{hintForStage(hintStage, torchAvailable)}</p>
+            </div>
           </div>
         ) : null}
 
         {state === STATE.FOUND ? (
           <div className="nfe-scanner-feedback nfe-scanner-feedback-ok">
-            <CheckCircle2 size={40} />
+            <span className="nfe-scanner-success-ring">
+              <CheckCircle2 size={40} />
+            </span>
             <strong>Chave da NF-e localizada</strong>
           </div>
         ) : null}
