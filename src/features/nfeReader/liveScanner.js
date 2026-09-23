@@ -160,7 +160,14 @@ function adaptMediaStreamTrack(track) {
   }
 }
 
-function buildConstraints(deviceId) {
+/**
+ * Exportada para o benchmark de diagnóstico (NfeScannerBenchmark.jsx)
+ * reaproveitar EXATAMENTE a mesma configuração de câmera usada em produção
+ * (1280x720 ideal, facingMode environment) — requisito do benchmark: os três
+ * engines precisam ser comparados sob a mesma configuração de câmera, nunca
+ * uma configuração diferente por decoder.
+ */
+export function buildConstraints(deviceId) {
   return {
     video: {
       facingMode: { ideal: 'environment' },

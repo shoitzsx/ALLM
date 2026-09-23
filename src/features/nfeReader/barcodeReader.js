@@ -101,6 +101,28 @@ export function buildCode128Hints() {
   return hints
 }
 
+/**
+ * Decodificação ZXing "crua" — uma única tentativa, sem recorte/rotação/
+ * contraste/deskew — usada apenas pelo benchmark de decoders
+ * (decoders/zxingDecoder.js) para comparar o ZXing isoladamente contra os
+ * outros engines na MESMA imagem, sem o pipeline de estágios. Reaproveita os
+ * mesmos hints/reader que o resto do arquivo (`buildCode128Hints`,
+ * `BrowserMultiFormatReader`) — nunca uma segunda configuração divergente.
+ * O pipeline de produção continua sendo `readCode128FromCanvas`, abaixo;
+ * esta função não é chamada por ele.
+ */
+export function decodeCode128RawZxing(canvas) {
+  const reader = new BrowserMultiFormatReader(buildCode128Hints())
+  try {
+    const result = reader.decodeFromCanvas(canvas)
+    return result?.getText() || null
+  } catch (err) {
+    if (err instanceof NotFoundException) return null
+    logUnexpectedError('decode cru (benchmark)', err)
+    return null
+  }
+}
+
 function logUnexpectedError(context, err) {
   console.error('[NFe][barcode]', {
     context,

@@ -77,7 +77,17 @@ do módulo: `analyzeNfeFile(file)`.
 | [`chaveNFe.test.mjs`](chaveNFe.test.mjs) | Testes de `node:test` para a matemática da chave (sem navegador). |
 | [`analysisBuilder.test.mjs`](analysisBuilder.test.mjs) | Testes de `node:test` para a montagem do resultado a partir de uma chave (`analyzeNfeKey`/`buildAnalysisFromKey`), incluindo o caso do scanner (sem texto de PDF). |
 | [`decodeDiagnostics.test.mjs`](decodeDiagnostics.test.mjs) | Testes de `node:test` para a classificação de desfecho de decodificação e o contador de diagnóstico. |
-| [`testFixtures/`](testFixtures/) | Imagens de um CODE_128 sintético válido (não dado fiscal real) + script Playwright para validar `readCode128FromCanvas` contra pixels reais de forma repetível — ver [testFixtures/README.md](testFixtures/README.md). |
+| [`testFixtures/`](testFixtures/) | Imagens de um CODE_128 sintético válido (não dado fiscal real) + script Playwright para validar `readCode128FromCanvas` contra pixels reais de forma repetível — ver [testFixtures/README.md](testFixtures/README.md). `validate-decoder-benchmark.mjs` roda a mesma bateria de fixtures nos três decoders (Nível A). |
+| [`decoders/decoderTypes.js`](decoders/decoderTypes.js) | Formato de resultado padronizado (`buildDecodeResult`) e validação de chave ÚNICA compartilhada pelos três adapters do benchmark — nenhum engine implementa validação própria. Puro — testável em Node. |
+| [`decoders/nativeDecoder.js`](decoders/nativeDecoder.js) | Adapter do benchmark para o `BarcodeDetector` nativo — cronometra e encaminha para `nativeBarcodeDetector.js`, sem duplicar nada. |
+| [`decoders/zxingDecoder.js`](decoders/zxingDecoder.js) | Adapter do benchmark para o ZXing — `decodeWithZxing` (decoder cru, uma tentativa, via nova `decodeCode128RawZxing` em `barcodeReader.js`) e `decodeWithProductionPipeline` (roda `readCode128FromCanvas` completo, o pipeline de produção como um todo). |
+| [`decoders/zbarDecoder.js`](decoders/zbarDecoder.js) | Adapter do benchmark para o ZBar (`@undecaf/zbar-wasm`) — `import()` dinâmico, nunca importado estaticamente; carrega o `.wasm` só quando chamado de verdade. |
+| [`NfeScannerBenchmark.jsx`](NfeScannerBenchmark.jsx) | Painel de diagnóstico/benchmark dos três decoders — só existe com `?nfeScannerDebug=1` na URL, carregado via `React.lazy`. Ver [Benchmark de decoders](#benchmark-de-decoders-diagnóstico) abaixo. |
+| [`benchmarkLiveRunner.js`](benchmarkLiveRunner.js) | Motor do teste ao vivo por engine (Modo B do benchmark) — laço único e compartilhado pelos três engines, nunca dois rodando ao mesmo tempo. |
+| [`imageStats.js`](imageStats.js) | Luminosidade média/contraste aproximado de um frame, para o painel de diagnóstico — nunca um "score de qualidade" inventado. `computeLuminanceStats` é pura — testável em Node. |
+| [`cameraCapabilities.js`](cameraCapabilities.js) | Formata `getSettings()`/`getCapabilities()` da câmera para exibição, separando suporte de estado ativo. Puro — testável em Node. |
+| [`benchmarkReport.js`](benchmarkReport.js) | Monta o texto de "Copiar diagnóstico" — puro, nunca inclui chave completa/CNPJ/pedido/valor/fornecedor. Testável em Node. |
+| [`scannerDebug.js`](scannerDebug.js) | `isScannerDebugEnabled()` — ativa o benchmark por `?nfeScannerDebug=1` na URL (não por `import.meta.env.DEV`, porque o teste decisivo acontece no deploy HTTPS). |
 
 ## A chave de acesso e o dígito verificador
 
@@ -519,6 +529,247 @@ scanner não inventa um pedido de compra, valor ou data que ele não leu. O
 usuário preenche esses campos manualmente na tela de revisão, exatamente como
 já acontecia quando nenhuma heurística encontrava nada no pipeline original.
 
+## Benchmark de decoders (diagnóstico)
+
+Motivação: mesmo depois da investigação de robustez da rodada anterior
+(estágios de recorte/margem/deskew — ver
+[Investigando a robustez do scanner](#investigando-a-robustez-do-scanner-e-de-onde-vieram-os-estágios)),
+uma DANFE real em celular físico continuou sem ser lida depois de vários
+segundos. Em vez de continuar "chutando" ajustes (resolução, intervalo,
+ângulos), esta ferramenta existe para **medir** qual mecanismo de leitura
+funciona melhor com aquela NF específica: `BarcodeDetector` nativo, ZXing ou
+ZBar (WebAssembly) — sem trocar o que roda em produção até haver evidência.
+
+### Camada comum (`decoders/`)
+
+Os três engines são acessados por uma interface única — `decodeWith*(source)`
+— que devolve sempre o mesmo formato (`buildDecodeResult`,
+`decoders/decoderTypes.js`):
+
+```ts
+{
+  engine: 'native' | 'zxing' | 'zbar',
+  available: boolean,       // o engine existe neste navegador?
+  detected: boolean,        // achou ALGUM CODE128?
+  format: 'CODE_128' | null,
+  digitCount: number,
+  validNfeKey: boolean,     // passou por normalizarChave + validarChaveNFe
+  maskedValue: string | null,  // ex. "4226••••••••••••••••••••••••••••••••1234"
+  decodeTimeMs: number | null,
+  error: string | null,
+}
+```
+
+**A validação é uma só**, centralizada em `decoderTypes.js` — nenhum dos três
+adapters (`nativeDecoder.js`/`zxingDecoder.js`/`zbarDecoder.js`) implementa
+sua própria checagem de "isso é uma chave de NF-e válida". A diferença entre
+engines é estritamente decodificação de pixels → texto; o critério de "chave
+válida" é idêntico para os três (`normalizarChave` + `validarChaveNFe`,
+`chaveNFe.js` — as mesmas funções do resto do módulo).
+
+- **`nativeDecoder.js`** encaminha para `nativeBarcodeDetector.js` (já usado
+  em produção) — nenhuma lógica nova de decodificação.
+- **`zxingDecoder.js`** tem dois níveis: `decodeWithZxing` chama a nova
+  `decodeCode128RawZxing` (`barcodeReader.js`) — uma única tentativa, mesmos
+  hints (`buildCode128Hints`, sem `TRY_HARDER`), sem recorte/rotação/deskew —
+  e `decodeWithProductionPipeline`, que chama `readCode128FromCanvas` (o
+  pipeline de produção completo, que já mistura nativo+ZXing+pré-
+  processamento internamente — por isso é reportado como "pipeline atual",
+  não como resultado isolado de um engine).
+- **`zbarDecoder.js`** usa `@undecaf/zbar-wasm` (ver
+  [licença e versão](#zbar-wasm-versão-licença-e-carregamento) abaixo),
+  carregado só sob demanda.
+
+### `?nfeScannerDebug=1` — como ativar
+
+`scannerDebug.js` ativa o painel por **query string** (`?nfeScannerDebug=1`),
+nunca por `import.meta.env.DEV` — o teste decisivo (NF real, celular físico)
+precisa acontecer no deploy HTTPS (Vercel), não só em desenvolvimento local.
+Sem a flag, nenhuma UI nova aparece e nenhum código do benchmark é sequer
+baixado (`NfeScannerBenchmark.jsx` é `React.lazy` a partir de
+`NfeReaderPage.jsx`, gated pela mesma flag) — custo zero para quem não está
+testando. Com a flag, um link discreto "Diagnóstico do scanner" aparece no
+cabeçalho da tela de Leitura automática.
+
+Exemplo: `https://<seu-deploy>.vercel.app/?nfeScannerDebug=1#/leitura-automatica`
+
+### Modo A — frame capturado
+
+Abre uma única câmera (mesma configuração de produção: 1280×720 ideal,
+`facingMode: environment`, sem áudio — `buildConstraints`, exportado de
+`liveScanner.js`, reaproveitado sem cópia). "Capturar frame para teste"
+congela UM frame e submete a **mesma imagem**, em sequência (nunca em
+paralelo), a nativo → ZXing → ZBar, depois ao pipeline de produção completo.
+Mostra o frame congelado (para inspecionar foco/blur/inclinação/enquadramento
+a olho) com dimensões, luminosidade média e um contraste aproximado
+(`imageStats.js` — deliberadamente NÃO um "score de qualidade" inventado, só
+dois números simples de comparação).
+
+### Modo B — teste ao vivo (10s por engine)
+
+Três botões, um engine por vez — nunca dois decodificando simultaneamente
+(CPU/bateria/temperatura, e comparação injusta). Para no primeiro sucesso ou
+em 10s. `benchmarkLiveRunner.js` controla um único laço de captura+decode
+reaproveitado pelos três engines (mesma câmera, mesmo intervalo entre
+tentativas — 100ms, igual ao `SCAN_DELAY_MS` de produção) — por isso
+"tentativas" é uma métrica genuinamente comparável aqui: diferente da API
+interna de cada engine (que não expõe esse número de forma equivalente entre
+si), é o próprio harness que conta, igualmente, para os três.
+
+### "Copiar diagnóstico"
+
+Monta um texto (`benchmarkReport.js`, puro/testável) com browser, plataforma,
+viewport, resolução de câmera, orientação, engine automático atual, e
+disponibilidade/detecção/validade/tempo por engine (Modo A e, se já rodado,
+Modo B). **Nunca inclui** a chave completa, CNPJ, pedido, valor ou
+fornecedor — só métricas técnicas, para poder ser colado e compartilhado sem
+expor dado fiscal.
+
+### Confirmado: sem fallback automático entre nativo e ZXing na mesma sessão
+
+Investigado lendo `startLiveScan` (`liveScanner.js`): a escolha de engine
+(`isNativeCode128Supported()`) acontece **uma única vez**, antes de abrir a
+câmera, e vale para toda a sessão de leitura — se o nativo estiver disponível
+mas não conseguir ler a NF em 10s, o ZXing **não** assume no meio da mesma
+sessão (só reabrindo o scanner, o que não muda a escolha, já que a
+disponibilidade do nativo não muda entre uma abertura e outra). Isto é um
+risco real caso o nativo se mostre pior que o ZXing numa NF real — mas esta
+tarefa é só de diagnóstico: **nenhuma mudança foi feita no scanner de
+produção**. O benchmark (Modo A/B) é exatamente a ferramenta para descobrir
+se esse risco se confirma antes de decidir mudar `startLiveScan`.
+
+### `@undecaf/zbar-wasm` — versão, licença e carregamento
+
+- **Versão instalada:** `0.11.0` (a mais recente no momento desta tarefa).
+- **Licença declarada pelo pacote:** LGPL-2.1+ (arquivo `LICENSE` do pacote
+  publicado no npm; repositório
+  [`undecaf/zbar-wasm`](https://github.com/undecaf/zbar-wasm), fork mantido
+  de `samsam2310/zbar.wasm`). Isto é só documentação técnica — **não** é uma
+  decisão jurídica; qualquer implicação de usar uma dependência LGPL num
+  produto deve passar por revisão jurídica própria antes de ir para produção
+  de verdade (aqui ela está isolada como ferramenta de diagnóstico, carregada
+  como módulo WASM separado via `import()`, nunca linkada estaticamente no
+  bundle principal).
+- **Carregamento:** `zbarDecoder.js` só importa o pacote dentro de um
+  `import()` dinâmico, memoizado (`loadZbar()`) — o binário (`zbar.wasm`,
+  ~239kB) e o glue JS (~13kB) só são baixados quando o engine ZBar é
+  realmente usado (painel de benchmark aberto **e** ZBar testado/capturado).
+  Nunca faz parte do bundle inicial da aplicação — ver
+  [Impacto no bundle](#impacto-no-bundle) abaixo.
+- **API usada:** `scanImageData(imageData)`, filtrando o resultado por
+  `typeName === 'ZBAR_CODE128'` — o ZBar detecta vários formatos (QR, EAN,
+  DataMatrix...), mas só CODE128 é aceito, igual aos outros dois engines.
+
+#### Bug real encontrado e corrigido: `zbar.wasm` 404 em desenvolvimento
+
+Ao testar o painel pela primeira vez, o ZBar falhava com
+`WebAssembly.instantiate(): expected magic word ... found 3c 21 64 6f` — que é
+`<!do` em ASCII, ou seja: o navegador recebeu **HTML** (a própria
+`index.html` do app) em vez do binário `.wasm`. Causa raiz, confirmada
+inspecionando as requisições de rede: o pacote calcula a URL do `.wasm` com
+`new URL('zbar.wasm', import.meta.url)`, relativo ao próprio módulo — mas o
+pré-empacotamento de dependências do Vite em dev (`node_modules/.vite/deps/`)
+copia só o JS gerado, não esse `.wasm` irmão. A URL calculada apontava para
+`/node_modules/.vite/deps/zbar.wasm`, que não existe ali; o servidor de dev
+caiu no fallback padrão de SPA (serve `index.html` para qualquer rota não
+encontrada) — daí o HTML disfarçado de erro de WASM.
+
+**Correção:** `vite.config.js` (novo arquivo — o projeto não tinha nenhum até
+agora) exclui `@undecaf/zbar-wasm` do pré-empacotamento
+(`optimizeDeps.exclude`), fazendo o Vite servir o pacote direto de
+`node_modules` em dev, onde o `.wasm` está de fato ao lado do `.mjs`.
+Verificado depois da correção: a requisição passa a ser
+`GET /node_modules/@undecaf/zbar-wasm/dist/zbar.wasm` →
+`200 application/wasm`. **A build de produção nunca teve esse problema** — o
+`vite build` já resolvia corretamente a URL do asset via sua própria análise
+de `new URL(..., import.meta.url)`, gerando um arquivo hasheado
+(`dist/assets/zbar-*.wasm`) servido com o content-type certo — verificado
+tanto pelo conteúdo de `dist/assets/` quanto por uma checagem de rede real
+contra `vite preview`.
+
+### Impacto no bundle
+
+Medido com `npm run build`, comparando antes/depois desta tarefa:
+
+| Chunk | Antes | Depois | Observação |
+|---|---|---|---|
+| `index-*.js` (bundle principal) | 259.093 bytes | 259.114 bytes | +21 bytes — irrelevante |
+| `NfeReaderPage-*.js` | 993.491 bytes | 994.562 bytes | +~1kB — só o `React.lazy()` e a checagem da flag |
+| `NfeScannerBenchmark-*.js` | — | 14.828 bytes | **novo, chunk separado**, só baixado com o painel aberto |
+| `index-*.mjs` (glue do ZBar) | — | 12.938 bytes | **novo, chunk separado**, só baixado quando ZBar é usado |
+| `zbar-*.wasm` | — | 238.653 bytes | **novo, asset separado**, idem |
+| CSS global | 55.164 bytes | 57.526 bytes | +2.362 bytes — estilos do painel (CSS não é code-split pelo Vite; ficam na folha global mesmo sem o painel ser aberto) |
+
+Conclusão: o bundle inicial da aplicação (o que todo usuário baixa sempre)
+cresce em torno de **1kB de JS + 2,3kB de CSS** — o restante (~266kB de
+JS/WASM do ZBar + o painel) só é baixado por quem realmente abrir
+`?nfeScannerDebug=1` e usar o benchmark.
+
+### Fixtures — matriz comparativa (`testFixtures/validate-decoder-benchmark.mjs`)
+
+Mesmo conjunto de fixtures de `testFixtures/README.md`, rodado nos três
+engines em Nível A (decoder cru, mesma imagem, sem recorte/rotação/deskew) e
+no pipeline de produção completo (Nível B). Resultado medido nesta máquina
+(headless Chromium com `--use-fake-device-for-media-stream`; nativo aparece
+"indisponível" porque este ambiente/versão de Chromium não expôs suporte a
+`code_128` no `BarcodeDetector` — diferente do Android Chrome real, onde ele
+existe):
+
+| fixture | nativo | ZXing (cru) | ZBar (cru) |
+|---|---|---|---|
+| clean.png | indisponível | OK 22ms | OK 35ms |
+| tight-margin.png | indisponível | OK 3ms | OK 3ms |
+| zero-margin.png | indisponível | OK 2ms | OK 3ms |
+| rotated-90deg.png | indisponível | **não detectou** 6ms | OK 3ms |
+| low-res.png | indisponível | OK 2ms | OK 2ms |
+| low-contrast.png | indisponível | OK 3ms | OK 4ms |
+| tilted-2deg.png | indisponível | OK 7ms | OK 10ms |
+| tilted-6deg.png | indisponível | **não detectou** 7ms | OK 11ms |
+| tilted-10deg.png | indisponível | OK 5ms | OK 11ms |
+| tight-margin-tilted-4deg.png | indisponível | **não detectou** 7ms | OK 19ms |
+| **Resumo** | 0/10 | **7/10**, ~6ms médios | **10/10**, ~10ms médios |
+
+Achado que surpreendeu: o ZBar **cru** (sem nenhum recorte/rotação manual)
+decodificou 10/10, incluindo rotação de 90° e inclinações que o ZXing cru
+não decodificou sem ajuda do pipeline de estágios — sugere que o ZBar já tem
+alguma tolerância a rotação/inclinação embutida no próprio algoritmo. Isto
+**não** é ainda motivo para trocar o engine de produção: são fixtures
+sintéticas e limpas, sem o ruído de uma foto real de celular (compressão,
+blur, luz) — só uma pista forte o bastante para valer a pena confirmar com a
+NF real. `tilted-10deg.png`, que falhava consistentemente sem o estágio de
+deskew (ver `testFixtures/README.md`), decodificou no nível cru desta rodada
+— reforça a nota já existente ali de que o efeito de reamostragem em cada
+ângulo específico não é perfeitamente previsível, não uma contradição.
+
+Para reproduzir: `npm run dev` num terminal, depois
+`node src/features/nfeReader/testFixtures/validate-decoder-benchmark.mjs`
+(mesmo pré-requisito de `playwright-core` de `validate-fixtures.mjs`).
+
+### Dynamsoft Barcode Reader — referência comercial (não instalado)
+
+Pesquisado para servir de referência profissional num teste futuro
+separado — **não instalado** neste projeto, nem no bundle principal nem no
+benchmark:
+
+- Pacote atual: `dynamsoft-barcode-reader-bundle` (o antigo
+  `dynamsoft-javascript-barcode` está descontinuado).
+- Suporta CODE128 (e vários outros formatos), leitura via câmera do navegador
+  embutida no próprio SDK.
+- Licença de teste: um trial embutido de 24h funciona sem nenhuma
+  configuração; para um teste mais longo, dá para pedir uma licença de trial
+  de 30 dias pelo portal deles (extensível a até 60 dias no total).
+- Exige contexto seguro (HTTPS) — mesma exigência de `getUserMedia` que o
+  resto deste módulo já tem.
+- **Como testar sem comprometer este repositório:** um projeto separado
+  (fora deste repo, ou numa branch descartável nunca mergeada), instalando o
+  pacote e pedindo a licença de trial pelo portal da Dynamsoft — a chave de
+  licença **nunca** deve ser commitada (nem em `.env` versionado, nem em
+  código). Objetivo do teste: mesma NF, mesmo celular, mesmo navegador, igual
+  ao Modo A/B deste benchmark — se o Dynamsoft ler de cara onde
+  nativo/ZXing/ZBar não leem, é evidência forte de que o problema está no
+  stack gratuito/configuração atual; se nem ele ler, o problema provavelmente
+  está na foto/impressão/física do código, não no decoder.
+
 ## Log de diagnóstico
 
 Todo o pipeline loga no console do navegador com prefixo `[NFe]` — fluxo
@@ -585,29 +836,52 @@ então esse código só é baixado por quem efetivamente abrir a tela "Leitura
 automática (beta)" — o restante do app (fluxo de `Novo recebimento`, etc.) não
 paga esse custo.
 
+Dentro do módulo, `NfeScannerBenchmark.jsx` é, por sua vez, um segundo nível
+de `React.lazy` a partir de `NfeReaderPage.jsx` — e `@undecaf/zbar-wasm` (o
+maior peso do benchmark, JS+WASM) só é baixado dentro dele via `import()`
+dinâmico em `zbarDecoder.js`. Ver
+[Impacto no bundle](#impacto-no-bundle) para os números medidos.
+
 ## Testes
 
-`npm test` roda `node --test src/features/nfeReader/*.test.mjs` — sem
-navegador, sem dependência de teste adicional (usa o test runner nativo do
-Node). `chaveNFe.test.mjs` cobre: validação do DV de uma chave real, extração
-de todos os campos interpretados, `findValidNfeKeys` com a chave formatada
-com espaços/hífens/quebras de linha, rejeição de sequências de 44 dígitos com
-DV inválido, deduplicação de chaves repetidas no mesmo texto, e rejeição de
-uma chave com DV adulterado via `interpretarChave`. `analysisBuilder.test.mjs`
-cobre `analyzeNfeKey`/`buildAnalysisFromKey`: chave válida preenchendo os
-campos derivados dela, ausência de invenção de pedido/valor/data quando não há
-texto (caso do scanner), rejeição de chave com DV inválido sem lançar, aceite
-de chave formatada com espaços, e propagação correta de `fontesCruzadas`/
+`npm test` roda `node --test src/features/nfeReader/*.test.mjs
+src/features/nfeReader/decoders/*.test.mjs` — sem navegador, sem dependência
+de teste adicional (usa o test runner nativo do Node). `chaveNFe.test.mjs`
+cobre: validação do DV de uma chave real, extração de todos os campos
+interpretados, `findValidNfeKeys` com a chave formatada com espaços/hífens/
+quebras de linha, rejeição de sequências de 44 dígitos com DV inválido,
+deduplicação de chaves repetidas no mesmo texto, e rejeição de uma chave com
+DV adulterado via `interpretarChave`. `analysisBuilder.test.mjs` cobre
+`analyzeNfeKey`/`buildAnalysisFromKey`: chave válida preenchendo os campos
+derivados dela, ausência de invenção de pedido/valor/data quando não há texto
+(caso do scanner), rejeição de chave com DV inválido sem lançar, aceite de
+chave formatada com espaços, e propagação correta de `fontesCruzadas`/
 `origensChave`. `decodeDiagnostics.test.mjs` cobre a classificação de
 desfecho (`classifyDecodedText`) e o contador (`createDiagnosticsCounter`).
 
+Do benchmark de decoders (ver [seção acima](#benchmark-de-decoders-diagnóstico)):
+`decoders/decoderTypes.test.mjs` cobre `buildDecodeResult`/`maskValue`/
+`unavailableResult` — mascaramento correto, classificação de chave válida/
+inválida/tamanho errado, propagação de erro técnico sem inventar tempo.
+`imageStats.test.mjs` cobre `computeLuminanceStats` com imagens sintéticas
+(branco puro, preto puro, metade/metade). `cameraCapabilities.test.mjs` cobre
+`summarizeCameraState` com capabilities completas, ausentes (tudo "N/D", nunca
+um valor inventado) e o caso de zoom `0` (não confundido com "ausente").
+`benchmarkReport.test.mjs` cobre o texto de "Copiar diagnóstico", incluindo
+uma checagem explícita de que nenhuma chave de 44 dígitos ou termo fiscal
+proibido (CNPJ/pedido/valor/fornecedor) aparece no texto gerado.
+`scannerDebug.test.mjs` cobre a flag em vários formatos de query string e o
+caso sem `window`.
+
 Mas testes de lógica pura não provam que o **decoder** consegue interpretar
-pixels de verdade — para isso, `testFixtures/` tem um script Playwright
-repetível (imagem → barcode → chave, contra o `readCode128FromCanvas` real,
-não uma simulação) — ver [testFixtures/README.md](testFixtures/README.md).
-Não faz parte de `npm test` (precisa de navegador + servidor de dev
-rodando), mas é a forma de reproduzir "essa imagem decodifica?" sem precisar
-de celular físico toda vez.
+pixels de verdade — para isso, `testFixtures/` tem dois scripts Playwright
+repetíveis: `validate-fixtures.mjs` (pipeline de produção,
+`readCode128FromCanvas`) e `validate-decoder-benchmark.mjs` (os três engines
+isolados, Nível A/B) — ver [testFixtures/README.md](testFixtures/README.md) e
+a [matriz comparativa](#fixtures--matriz-comparativa-testfixturesvalidate-decoder-benchmarkmjs)
+acima. Nenhum dos dois faz parte de `npm test` (precisam de navegador +
+servidor de dev rodando), mas são a forma de reproduzir "essa imagem
+decodifica, em qual engine?" sem precisar de celular físico toda vez.
 
 O restante do pipeline (renderização de PDF, ZXing/nativo ao vivo via
 câmera, tesseract.js) depende de APIs de navegador (`Canvas`, `Worker`,
@@ -668,6 +942,16 @@ rápido:
   tracks. Não substitui teste em aparelho físico Android/iOS — ver
   ["Testes que precisam de dispositivo físico"](../../../README.md#como-testar-manualmente)
   no README raiz.
+- **O benchmark de decoders (`?nfeScannerDebug=1`) só compara — não decide.**
+  Esta tarefa deliberadamente não trocou qual engine o scanner de produção
+  usa (`startLiveScan`, `liveScanner.js`); a matriz de fixtures (ver
+  [Benchmark de decoders](#benchmark-de-decoders-diagnóstico)) é evidência de
+  laboratório, não o teste decisivo — que continua sendo a mesma NF real, no
+  mesmo celular, testada nos três engines (Modo A/B) antes de qualquer
+  mudança em produção. `BarcodeDetector` nativo apareceu "indisponível" nos
+  testes automatizados desta máquina (Chromium headless) — isso é uma
+  limitação do ambiente de teste, não uma afirmação sobre Android Chrome
+  real, onde o suporte existe.
 
 ## Conexão futura (não feita)
 

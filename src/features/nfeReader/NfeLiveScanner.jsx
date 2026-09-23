@@ -37,7 +37,8 @@ function hintForStage(stage, torchAvailable, isPortrait) {
   return torchAvailable ? 'Deixe o código inteiro visível e use a lanterna.' : 'Aproxime a câmera com cuidado, sem cortar as laterais.'
 }
 
-function describeError(err) {
+/** Exportada para reuso pelo painel de benchmark (NfeScannerBenchmark.jsx) — mesma mensagem amigável para os mesmos erros de getUserMedia, uma única fonte. */
+export function describeError(err) {
   if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
     return 'Permissão da câmera negada. Libere o acesso à câmera nas configurações do navegador ou use "Selecionar arquivo".'
   }

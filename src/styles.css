@@ -3529,6 +3529,173 @@ button {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Ação discreta — só existe com ?nfeScannerDebug=1 na URL (ver scannerDebug.js). Deliberadamente
+   sem destaque visual: é uma ferramenta de teste, não um recurso do produto. */
+.nfe-debug-link {
+  align-self: flex-start;
+  margin-left: auto;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--ink-500);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nfe-debug-link:hover {
+  color: var(--ink-700);
+}
+
+/* Painel de benchmark de decoders — tela cheia, mobile-first, dados densos (não é um viewfinder puro
+   como .nfe-scanner-overlay, então segue os tokens claro/escuro normais do app em vez do visual escuro
+   fixo da câmera ao vivo). "Não precisa ficar bonito, mas deve ser legível/funcional/fácil de testar
+   segurando uma nota. Botões grandes. Sem animações desnecessárias." */
+.nfe-benchmark-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-background);
+  color: var(--ink-900);
+}
+
+.nfe-benchmark-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px max(12px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-card);
+  flex: 0 0 auto;
+}
+
+.nfe-benchmark-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 14px max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.nfe-benchmark-section {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  padding: 14px;
+}
+
+.nfe-benchmark-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.nfe-benchmark-hint {
+  margin: 0 0 10px;
+  color: var(--ink-600);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.nfe-benchmark-video {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  margin-bottom: 10px;
+}
+
+.nfe-benchmark-facts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.nfe-benchmark-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border-subtle, var(--border-default));
+}
+
+.nfe-benchmark-facts dt {
+  color: var(--ink-600);
+}
+
+.nfe-benchmark-facts dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Botões grandes — pedido explícito ("fácil de testar segurando uma nota"), não o padrão compacto do resto do app. */
+.nfe-benchmark-btn-lg {
+  min-height: 48px;
+  width: 100%;
+  font-size: 14px;
+}
+
+.nfe-benchmark-live-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.nfe-benchmark-frame-preview {
+  margin-top: 12px;
+}
+
+.nfe-benchmark-canvas {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  margin-bottom: 8px;
+}
+
+.nfe-benchmark-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.nfe-benchmark-result-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-subtle, var(--surface));
+  font-size: 12.5px;
+}
+
+.nfe-benchmark-result-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-700);
+}
+
+.nfe-benchmark-result-error {
+  color: #c0392b;
+}
+
+.nfe-benchmark-copy-status {
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--ink-600);
+  font-size: 12.5px;
+}
+
 /* Tema: tokens semânticos mantêm o claro atual e concentram as superfícies do escuro. */
 html[data-theme="dark"] {
   color: #f4f7fb;

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { Suspense, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Camera,
@@ -18,6 +18,13 @@ import { analyzeNfeFile, analyzeNfeKey, CONFIDENCE } from './extractor.js'
 import { saveSupplier } from './supplierCatalog.js'
 import { formatFileSize } from '../../ui.jsx'
 import NfeLiveScanner from './NfeLiveScanner.jsx'
+import { isScannerDebugEnabled } from './scannerDebug.js'
+
+// Import dinâmico: o painel de benchmark (e a dependência ZBar/WASM que ele
+// carrega sob demanda) nunca fazem parte do bundle inicial da aplicação —
+// só é baixado se `?nfeScannerDebug=1` estiver na URL E o usuário realmente
+// abrir o painel. Ver scannerDebug.js/README do módulo.
+const NfeScannerBenchmark = React.lazy(() => import('./NfeScannerBenchmark.jsx'))
 
 /**
  * Disponibilidade de "Tirar foto"/"Escanear código de barras" é decidida por
@@ -41,6 +48,11 @@ const CAN_TAKE_PHOTO = CAMERA_SUPPORTED && TOUCH_CAPABLE
 // O scanner ao vivo é nossa própria UI de câmera (não depende de capture) — funciona em qualquer
 // dispositivo com câmera, com ou sem touch (ex.: notebook com webcam).
 const CAN_SCAN_BARCODE = CAMERA_SUPPORTED
+
+// Calculado uma vez: a query string não muda durante a sessão de uma SPA de
+// rota por hash. Sem a flag, nenhum item novo aparece na tela — ver
+// scannerDebug.js.
+const SCANNER_DEBUG_ENABLED = isScannerDebugEnabled()
 
 const CONFIDENCE_META = {
   [CONFIDENCE.ALTA]: { label: 'Alta confiança', icon: CheckCircle2, className: 'nfe-badge-alta' },
@@ -109,6 +121,7 @@ export default function NfeReaderPage({ pushToast }) {
   const [copied, setCopied] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [benchmarkOpen, setBenchmarkOpen] = useState(false)
 
   const metaByKey = useMemo(() => {
     if (!analysis) return {}
@@ -229,6 +242,11 @@ export default function NfeReaderPage({ pushToast }) {
             "Novo recebimento" e não grava nada automaticamente.
           </p>
         </div>
+        {SCANNER_DEBUG_ENABLED ? (
+          <button className="nfe-debug-link" type="button" onClick={() => setBenchmarkOpen(true)}>
+            Diagnóstico do scanner
+          </button>
+        ) : null}
       </header>
 
       <div className="info-strip">
@@ -409,6 +427,12 @@ export default function NfeReaderPage({ pushToast }) {
       ) : null}
 
       <NfeLiveScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onKeyFound={handleScannedKey} />
+
+      {SCANNER_DEBUG_ENABLED && benchmarkOpen ? (
+        <Suspense fallback={null}>
+          <NfeScannerBenchmark open={benchmarkOpen} onClose={() => setBenchmarkOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

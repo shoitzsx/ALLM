@@ -84,6 +84,26 @@ Variáveis de ambiente opcionais: `NFE_DEV_SERVER_URL` (padrão
 `C:/Program Files/Google/Chrome/Application/chrome.exe` no Windows — ajuste
 para o caminho do Chrome/Chromium na sua máquina).
 
+## Matriz comparativa entre engines (`validate-decoder-benchmark.mjs`)
+
+Mesmo conjunto de fixtures acima, mas rodado nos três decoders do benchmark
+de diagnóstico (`BarcodeDetector` nativo, ZXing, ZBar — ver
+[`decoders/`](../decoders/) e a seção
+["Benchmark de decoders"](../README.md#benchmark-de-decoders-diagnóstico) do
+README do módulo) em vez de só no pipeline de produção. Mesmo pré-requisito
+de `npm run dev` + `playwright-core`:
+
+```bash
+node src/features/nfeReader/testFixtures/validate-decoder-benchmark.mjs
+```
+
+Imprime uma matriz `fixture × engine` para o Nível A (decoder cru, sem
+recorte/rotação/deskew) e uma lista para o Nível B (pipeline de produção
+completo) — não decide "o melhor engine", só imprime o que foi medido. Os
+números obtidos nesta rodada estão documentados no README do módulo, seção
+"Benchmark de decoders" (inclui o achado de que o ZBar cru decodificou 10/10
+das fixtures, incluindo casos que o ZXing cru sozinho não decodificou).
+
 ## O que isto NÃO substitui
 
 Câmera real, autofoco, distância, iluminação, reflexo e o comportamento de

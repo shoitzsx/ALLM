@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-vendor-assets.mjs",
-    "test": "node --test src/features/nfeReader/*.test.mjs",
+    "test": "node --test src/features/nfeReader/*.test.mjs src/features/nfeReader/decoders/*.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "api": "node backend/server.mjs",
     "api:dev": "node --watch backend/server.mjs",
@@ -13,6 +13,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@undecaf/zbar-wasm": "^0.11.0",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "lucide-react": "^0.468.0",
