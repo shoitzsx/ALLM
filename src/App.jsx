@@ -5,7 +5,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
-  Box,
   Boxes,
   Building2,
   CalendarDays,
@@ -18,10 +17,8 @@ import {
   CircleDashed,
   ClipboardCheck,
   ClipboardList,
-  Clock3,
   Download,
   Eye,
-  FileCheck2,
   FileClock,
   FilePlus2,
   FileSpreadsheet,
@@ -30,9 +27,7 @@ import {
   History,
   Image as ImageIcon,
   LayoutDashboard,
-  Menu,
   MoreHorizontal,
-  PackageCheck,
   PackageOpen,
   Paperclip,
   Plus,
@@ -41,11 +36,9 @@ import {
   Search,
   ShieldCheck,
   Trash2,
-  TrendingUp,
   Truck,
   Upload,
   UserRound,
-  WifiOff,
   X,
 } from 'lucide-react'
 import {
@@ -296,10 +289,6 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="environment-card">
-            <span>MVP local ativo</span>
-            <p>Os dados desta demonstração ficam salvos neste navegador.</p>
-          </div>
           <div className="sidebar-user">
             <Avatar name={currentUser?.nome || currentUser?.name} />
             <span className="sidebar-user-copy">
@@ -307,6 +296,12 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
               <span>{currentUser?.perfil || currentUser?.role}</span>
             </span>
           </div>
+          <span
+            className="env-badge"
+            title="Os dados ficam somente nesta sessão do navegador e são perdidos ao atualizar a página."
+          >
+            <CircleDashed size={11} /> Ambiente de validação
+          </span>
         </div>
       </aside>
 
@@ -393,11 +388,10 @@ function AppShell({ route, pendingCount, currentUser, children, onToast }) {
   )
 }
 
-function PageHeader({ eyebrow, title, description, children }) {
+function PageHeader({ title, description, children }) {
   return (
     <header className="page-header">
       <div className="page-header-copy">
-        <div className="eyebrow">{eyebrow}</div>
         <h1>{title}</h1>
         {description ? <p>{description}</p> : null}
       </div>
@@ -406,16 +400,16 @@ function PageHeader({ eyebrow, title, description, children }) {
   )
 }
 
-function KpiCard({ icon: Icon, value, label, tone = '', trend }) {
+function KpiItem({ icon: Icon, value, label, tone = '', meta }) {
   return (
-    <article className={`kpi-card ${tone ? `kpi-${tone}` : ''}`}>
-      <div className="kpi-top">
-        <span className="kpi-icon"><Icon size={18} /></span>
-        {trend ? <span className="kpi-trend"><TrendingUp size={12} />{trend}</span> : null}
+    <div className={`kpi-item ${tone ? `kpi-${tone}` : ''}`}>
+      <span className="kpi-icon"><Icon size={16} /></span>
+      <div className="kpi-copy">
+        <p className="kpi-label">{label}</p>
+        <div className="kpi-value">{value}</div>
+        {meta ? <p className="kpi-meta">{meta}</p> : null}
       </div>
-      <div className="kpi-value">{value}</div>
-      <p className="kpi-label">{label}</p>
-    </article>
+    </div>
   )
 }
 
@@ -432,28 +426,19 @@ function DashboardPage({ store }) {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Visão operacional"
-        title="Bom dia, Marcos"
+        title="Visão geral"
         description="Acompanhe os recebimentos e resolva o que precisa de atenção hoje."
       >
-        <button className="period-control" type="button">
-          <CalendarDays size={15} /> Agosto de 2026 <ChevronDown size={13} />
-        </button>
         <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
           <Plus size={17} /> Novo recebimento
         </button>
       </PageHeader>
 
-      <div className="demo-notice">
-        <WifiOff size={15} />
-        <span><strong>Ambiente de validação:</strong> alterações e novos registros são mantidos localmente neste navegador.</span>
-      </div>
-
-      <section className="kpi-grid" aria-label="Indicadores do período">
-        <KpiCard icon={PackageOpen} value={metrics.totalRecebimentos} label="Recebimentos no período" trend="+12%" />
-        <KpiCard icon={Boxes} value={metrics.materiaisHoje} label="Materiais recebidos hoje" tone="blue" trend={`${metrics.recebimentosHoje} registros`} />
-        <KpiCard icon={FileClock} value={metrics.documentacaoPendente} label="Documentações pendentes" tone="amber" />
-        <KpiCard icon={AlertTriangle} value={metrics.divergenciasAbertas} label="Divergências abertas" tone="red" />
+      <section className="kpi-strip" aria-label="Indicadores gerais">
+        <KpiItem icon={PackageOpen} value={metrics.totalRecebimentos} label="Total de recebimentos" />
+        <KpiItem icon={Boxes} value={metrics.materiaisHoje} label="Materiais recebidos hoje" tone="blue" meta={`${metrics.recebimentosHoje} recebimento(s) hoje`} />
+        <KpiItem icon={FileClock} value={metrics.documentacaoPendente} label="Documentações pendentes" tone="amber" />
+        <KpiItem icon={AlertTriangle} value={metrics.divergenciasAbertas} label="Divergências abertas" tone="red" />
       </section>
 
       <section className="dashboard-grid">
@@ -462,7 +447,7 @@ function DashboardPage({ store }) {
             <header className="panel-header">
               <div>
                 <h2>Recebimentos por status</h2>
-                <p>Distribuição dos registros ativos no período</p>
+                <p>Distribuição dos registros ativos por status</p>
               </div>
               <button className="panel-link" type="button" onClick={() => navigate(ROUTES.receipts)}>
                 Ver todos <ChevronRight size={14} />
@@ -522,14 +507,6 @@ function DashboardPage({ store }) {
         </div>
 
         <div className="dashboard-column">
-          <article className="quick-action">
-            <h3>Material chegando?</h3>
-            <p>Abra um registro, fotografe os volumes e mantenha tudo no mesmo protocolo.</p>
-            <button className="btn" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
-              <Plus size={16} /> Registrar agora
-            </button>
-          </article>
-
           <article className="panel">
             <header className="panel-header">
               <div>
@@ -622,11 +599,7 @@ function ReceiptsPage({ store, initialQuery }) {
 
   return (
     <div className="page">
-      <PageHeader
-        eyebrow="Consulta centralizada"
-        title="Recebimentos"
-        description="Pesquise pedidos, notas, materiais e fornecedores em um único lugar."
-      >
+      <PageHeader title="Recebimentos">
         <button className="btn btn-secondary" type="button" onClick={() => downloadCsv(filtered)}>
           <FileSpreadsheet size={16} /> Exportar Excel
         </button>
@@ -880,7 +853,6 @@ function NewReceiptPage({ store, pushToast }) {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="Registro de entrada"
         title="Novo recebimento"
         description="Registre os dados no ritmo da operação. A NF poderá ser anexada depois."
       />
@@ -1360,7 +1332,7 @@ function PendingPage({ receipts }) {
 
   return (
     <div className="page">
-      <PageHeader eyebrow="Fila operacional" title="Pendências" description="Cada cartão mostra o próximo passo necessário para o recebimento avançar.">
+      <PageHeader title="Pendências" description="Cada cartão mostra o próximo passo necessário para o recebimento avançar.">
         <button className="btn btn-secondary" type="button" onClick={() => navigate(ROUTES.receipts)}><ClipboardList size={16} /> Ver todos</button>
         <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}><Plus size={16} /> Novo recebimento</button>
       </PageHeader>

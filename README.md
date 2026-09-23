@@ -10,7 +10,7 @@ O MVP esta pronto para validacao funcional em navegador. Ele roda localmente, se
 
 Ja inclui:
 
-- Dashboard com indicadores do periodo, status, pendencias e divergencias.
+- Dashboard com indicadores gerais, status, pendencias e divergencias.
 - Consulta de recebimentos em formato parecido com a planilha atual.
 - Pesquisa por palavra-chave, filtros, ordenacao, paginacao e exportacao CSV compativel com Excel.
 - Cadastro guiado em quatro etapas.
@@ -20,7 +20,7 @@ Ja inclui:
 - Controle de status: Em digitacao, Aguardando documentacao, Em conferencia, Divergencia identificada e Conferido/Finalizado.
 - Tela de detalhes com dados gerais, itens, anexos, fotos, divergencias, historico e acoes.
 - Tela de pendencias operacionais.
-- Persistencia local no navegador usando `localStorage`.
+- Estado mantido em memoria no navegador durante a sessao (ver "MVP volatil" abaixo); `localStorage` e usado apenas para lembrar o usuario demonstrativo selecionado e, no modulo de leitura de NF-e, o catalogo de fornecedores.
 
 Fora do MVP:
 

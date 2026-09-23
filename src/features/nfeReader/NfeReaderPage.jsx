@@ -182,8 +182,7 @@ export default function NfeReaderPage({ pushToast }) {
     <div className="page">
       <header className="page-header">
         <div className="page-header-copy">
-          <div className="eyebrow">Módulo experimental</div>
-          <h1>Leitura automática de NF-e (beta)</h1>
+          <h1>Leitura automática de NF-e <span className="beta-tag">Beta</span></h1>
           <p>
             Extrai dados da Nota Fiscal por texto do PDF e código de barras, sem OCR. Não altera o fluxo de
             "Novo recebimento" e não grava nada automaticamente.
