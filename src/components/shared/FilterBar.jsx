@@ -37,7 +37,7 @@ export function FilterBar({
           {STATUS_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.shortLabel}</option>)}
         </select>
         <label className="filter-toggle">
-          <input type="checkbox" checked={filters.nfPendente} onChange={(event) => setFilter('nfPendente', event.target.checked)} />
+          <input type="checkbox" checked={Boolean(filters.nfPendente)} onChange={(event) => setFilter('nfPendente', event.target.checked || '')} />
           NF pendente
         </label>
         <button className="btn btn-secondary" type="button" onClick={() => setFiltersOpen((open) => !open)}>

@@ -398,7 +398,7 @@ function ReceiptsPage({ store, initialQuery }) {
     responsavel: '',
     periodoInicio: '',
     periodoFim: '',
-    nfPendente: false,
+    nfPendente: '',
   })
   const [sortDirection, setSortDirection] = useState('desc')
 
@@ -418,7 +418,7 @@ function ReceiptsPage({ store, initialQuery }) {
   }, [store.receipts, filters, sortDirection])
 
   const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }))
-  const clearFilters = () => setFilters({ search: '', status: '', tipo: '', fornecedor: '', responsavel: '', periodoInicio: '', periodoFim: '', nfPendente: false })
+  const clearFilters = () => setFilters({ search: '', status: '', tipo: '', fornecedor: '', responsavel: '', periodoInicio: '', periodoFim: '', nfPendente: '' })
   const activeCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length
 
   return (
