@@ -1,390 +1,394 @@
-# ALM - Recebimento de Materiais
+# ALM
 
-MVP responsivo para registrar, acompanhar e consultar recebimentos de materiais do Almoxarifado. A aplicacao substitui o controle espalhado entre planilha, e-mail, grupo de WhatsApp, documentos digitalizados e pastas de rede por uma interface unica para cadastro, consulta, anexos, divergencias e historico.
+## Sistema de Recebimentos de Almoxarifado
 
-Este projeto foi criado a partir do levantamento do Projeto ALM e da versao 2 do prompt funcional.
+![React](https://img.shields.io/badge/React-18-149eca?logo=react&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
+![Google Sheets API](https://img.shields.io/badge/Persist%C3%AAncia-Google%20Sheets-34a853?logo=googlesheets&logoColor=white)
 
-## Status Atual
+Aplicação web para gestão de recebimentos de materiais, acompanhamento operacional, persistência estruturada e leitura automática de NF-e.
 
-O MVP esta pronto para validacao funcional em navegador. Ele roda localmente, sem servidor corporativo, banco de dados externo ou login real.
+### Equipe
 
-Ja inclui:
+Lucas Izaias
+Marcelo Paidoz
+Goran Henrique
+Matteus Kobner
 
-- Dashboard com indicadores gerais, status, pendencias e divergencias.
-- Consulta de recebimentos em formato parecido com a planilha atual.
-- Pesquisa por palavra-chave, filtros, ordenacao, paginacao e exportacao CSV compativel com Excel.
-- Cadastro guiado em quatro etapas.
-- Multiplos itens por recebimento/pedido.
-- Upload demonstrativo de fotos e documentos.
-- NF/documento com obrigatoriedade condicional: pode ficar pendente na criacao, mas e exigida para finalizacao.
-- Controle de status: Em digitacao, Aguardando documentacao, Em conferencia, Divergencia identificada e Conferido/Finalizado.
-- Tela de detalhes com dados gerais, itens, anexos, fotos, divergencias, historico e acoes.
-- Tela de pendencias operacionais.
-- Recebimentos carregados da API na abertura; `localStorage` é usado apenas para lembrar o usuário demonstrativo selecionado e, no módulo de leitura de NF-e, o catálogo de fornecedores.
+---
 
-Fora do MVP:
+## Visão geral
 
-- Login corporativo real.
-- API/backend.
-- Banco de dados corporativo.
-- Armazenamento definitivo de arquivos.
-- Integracao com ERP.
-- OCR/leitura automatica de Nota Fiscal.
-- Auditoria imutavel em servidor.
+Em um almoxarifado, o recebimento de materiais costuma passar por planilhas soltas, e-mails, grupos de WhatsApp, fotos avulsas e pastas de rede. Cada etapa do processo — o que chegou, quando chegou, se a nota fiscal acompanhou a entrega, se houve divergência — acaba registrada em um lugar diferente, sem uma trilha única que qualquer pessoa da equipe consiga seguir depois.
 
-## Como Instalar
+O ALM centraliza esse processo em uma única aplicação web, acessível por desktop, tablet ou celular, que guia o operador do primeiro registro até a finalização da conferência, mantém um histórico auditável de cada mudança e reduz digitação manual através da leitura automática da chave de acesso da Nota Fiscal eletrônica.
 
-Pre-requisito:
+O sistema serve à equipe de Almoxarifado (quem recebe e confere o material no dia a dia), à Suprimentos (quem acompanha pendências e divergências) e à Administração (quem precisa de visibilidade sobre o processo como um todo).
 
-- Node.js 18 ou superior.
-- Git, caso o projeto seja compartilhado via repositorio.
+---
 
-No Windows PowerShell, dentro da pasta do projeto:
+## Funcionalidades
 
-```powershell
-npm.cmd install
-npm.cmd run dev
+Levantadas diretamente do código atual em `main`:
+
+- **Dashboard** com indicadores gerais, distribuição por status e itens que precisam de atenção.
+- **Cadastro guiado de recebimento** em quatro etapas (Identificação, Itens, Evidências, Revisão).
+- **Rascunhos** — um recebimento pode ser salvo incompleto ("Salvar e continuar depois") e retomado depois.
+- **Envio para conferência**, com validação completa dos dados obrigatórios nesse momento.
+- **Múltiplos itens** por recebimento, com alerta de divergência entre quantidade solicitada e recebida.
+- **Evidências e anexos** — fotos do material e documentos (NF, DACTE, pedido de compra, certificados), com prévia de imagem.
+- **Controle de status** com cinco estados, transições controladas por regra de negócio e por perfil de usuário.
+- **Registro e resolução de divergências**, vinculadas ou não a um item específico.
+- **Histórico de status e trilha de auditoria** por recebimento.
+- **Busca, filtros, ordenação, paginação e exportação para CSV**.
+- **Persistência via API própria**, com confirmação do backend antes de qualquer mensagem de sucesso.
+- **Leitura automática de NF-e** — extração da chave de acesso a partir de PDF, imagem ou fotografia.
+- **Painel de diagnóstico técnico** do leitor de NF-e, isolado da experiência normal do usuário.
+- **Interface responsiva**, com componentes próprios para desktop e para celular/tablet.
+- **Tema claro e escuro**, com alternância manual e persistência da preferência.
+
+---
+
+## Leitura automática de NF-e
+
+Na tela `Leitura automática de NF-e`, existem hoje duas formas de trazer uma NF-e para o sistema:
+
+- **Selecionar arquivo** — PDF do DANFE, ou uma imagem (JPG/PNG) já existente.
+- **Fotografar código** — a aplicação abre a câmera do próprio aparelho e captura uma foto dedicada à leitura do código de barras.
+
+O fluxo, confirmado diretamente no código (`src/features/nfeReader/`):
+
+```text
+Arquivo ou fotografia
+        ↓
+Análise (leitura da chave de acesso)
+        ↓
+Validação (dígito verificador)
+        ↓
+Revisão (campos editáveis, com selo de confiança)
+        ↓
+Confirmar dados
+        ↓
+Novo recebimento — pré-preenchido com os campos confiáveis
+        ↓
+Usuário complementa os campos restantes
+        ↓
+Salvar rascunho ou enviar para conferência
 ```
 
-Em Git Bash, CMD, Linux ou macOS:
+**Importante: a leitura da NF-e não salva um recebimento automaticamente.** "Confirmar dados" nunca chama a criação de um recebimento no backend — ele leva os dados extraídos até o formulário de "Novo recebimento", onde o usuário continua no controle: revisa, completa o que falta e decide quando salvar, exatamente como em qualquer outro cadastro.
+
+### Quais campos são pré-preenchidos
+
+Confirmado em `analysisBuilder.js` (`buildReliableReceiptPrefill`): só são levados automaticamente ao formulário os campos com correspondência confiável com a chave de acesso ou com o catálogo local de fornecedores:
+
+| Campo | Como é obtido |
+|---|---|
+| Número da NF | Derivado matematicamente da chave de acesso |
+| Série | Derivado matematicamente da chave de acesso |
+| CNPJ do fornecedor | Derivado matematicamente da chave de acesso |
+| Fornecedor | Só quando o CNPJ já está associado a um nome no catálogo local (preenchido manualmente em uma confirmação anterior) |
+
+**Pedido de compra, data de emissão e valor total continuam manuais.** Quando aparecem na tela de revisão, vêm de heurísticas de texto sobre o PDF (regex sobre o texto extraído), nunca com confiança alta, e por isso nunca são levados automaticamente para o cadastro.
+
+### Pipeline técnico
+
+```text
+PDF / Fotografia
+        ↓
+Texto embutido do PDF (quando disponível — se achar chave válida, para aqui)
+        ↓
+Imagem (canvas no navegador)
+        ↓
+ZBar (WebAssembly)
+        ↓
+ZXing (se o ZBar não encontrar)
+        ↓
+Pipeline robusto (recorte, contraste, margem artificial, correção de inclinação)
+        ↓
+OCR — Tesseract.js (último recurso, só se nenhum decoder de barras encontrar nada)
+        ↓
+Normalização da chave (remove tudo que não é dígito)
+        ↓
+Validação (dígito verificador, módulo 11)
+        ↓
+Campos derivados da chave
+        ↓
+Revisão
+```
+
+Cada etapa só é tentada se a anterior não resolveu — um PDF digital comum, com a chave já como texto selecionável, resolve na primeira etapa e nunca aciona os decodificadores de imagem nem o OCR.
+
+### Tecnologias de leitura
+
+| Tecnologia | Papel |
+|---|---|
+| **BarcodeDetector** | API nativa do navegador para leitura de código de barras, usada como atalho quando suportada (suporte não é universal). |
+| **ZBar** (`@undecaf/zbar-wasm`) | Engine de leitura via WebAssembly — primeira tentativa em fotografias estáticas. |
+| **ZXing** (`@zxing/browser`/`@zxing/library`) | Biblioteca de leitura de código de barras, usada como reforço e no pipeline robusto. |
+| **Tesseract.js** | OCR — reconhecimento óptico de caracteres, último recurso. |
+
+A diferença importa: um **decodificador de código de barras** (BarcodeDetector, ZXing, ZBar) lê o padrão de barras; **OCR** lê os números impressos por extenso. São mecanismos diferentes, não intercambiáveis.
+
+### Por que fotografia, e não scanner contínuo
+
+Em teste físico real, a captura por fotografia se mostrou confiável de ponta a ponta, enquanto a leitura contínua pela câmera (quadro a quadro, em tempo real) não se mostrou consistente em todos os aparelhos testados. Por isso, a interface de produção oferece a fotografia como ação principal de leitura de código de barras: ela entrega uma imagem estática de maior qualidade, permite processamento mais robusto sobre uma imagem parada, reduz a dependência de APIs de câmera específicas de cada navegador e funciona bem em dispositivos móveis.
+
+O scanner de leitura contínua (`NfeLiveScanner.jsx`) continua implementado e funcionando no código — ele é mantido para diagnóstico e desenvolvimento (ver [Painel de diagnóstico](#painel-de-diagnóstico-de-nf-e)), mas não é a ação principal oferecida na interface de produção.
+
+### Validação da chave de acesso
+
+Encontrar 44 dígitos não é suficiente para aceitar uma sequência como chave de NF-e. Em qualquer fonte — texto do PDF, código de barras ou OCR — a chave passa por: normalização (remove tudo que não é dígito) → confirmação de que restam 44 dígitos → recálculo do dígito verificador (módulo 11) → só então é aceita. Essa validação é centralizada em um único ponto do código (`chaveNFe.js`) e reaproveitada por todas as fontes, reduzindo a chance de um código de barras de outro produto ou um texto qualquer ser aceito como se fosse a chave da nota.
+
+---
+
+## Arquitetura
+
+```mermaid
+flowchart TD
+    A[Usuário<br/>desktop / tablet / celular] --> B[React + Vite]
+    B --> C[Módulo de leitura de NF-e<br/>PDF, código de barras e OCR — no navegador]
+    B --> D[API própria — Node.js<br/>/api/v1]
+    C --> D
+    D --> E[Validação e regras de negócio]
+    E --> F[(Google Sheets)]
+```
+
+Em texto: o frontend fala apenas com a API própria; a API valida os dados, controla permissões por perfil e só então grava no Google Sheets. **O frontend nunca acessa a planilha diretamente.** O módulo de leitura de NF-e roda inteiramente no navegador e só entrega ao restante da aplicação um conjunto de campos já validados, que seguem o mesmo caminho de qualquer outro dado digitado manualmente.
+
+### Frontend
+
+- **React 18** para componentização e estado de tela.
+- **Vite 6** como build tool e servidor de dev, com carregamento sob demanda (`React.lazy`) para o módulo de NF-e e suas dependências mais pesadas.
+- Layout responsivo, com componentes próprios para desktop (barra lateral) e para mobile (navegação inferior, cartões no lugar de tabela).
+- Tema claro/escuro com alternância manual e preferência salva.
+
+### Backend
+
+Servidor HTTP em **Node.js**, sem framework adicional, expondo uma API REST em `/api/v1`. Responsável por:
+
+- Validar os dados antes de gravar (campos obrigatórios, formato de data, CNPJ, quantidades), retornando o detalhe de qual campo falhou.
+- Aceitar rascunhos incompletos, mas exigir dados completos no envio para conferência.
+- Controlar permissões por perfil de usuário nas transições de status.
+- Registrar histórico de status e trilha de auditoria por recebimento.
+- Persistir anexos (bytes em `backend/uploads/`, metadados na planilha).
+
+No ambiente de desenvolvimento, a identidade é simulada por um cabeçalho HTTP (`X-User-Id`), alternando entre usuários de demonstração — isso não substitui um login corporativo real; é o mecanismo usado para exercitar as regras de permissão por perfil.
+
+### Google Sheets
+
+Cada entidade do domínio (recebimentos, itens, divergências, histórico de status, auditoria, anexos, usuários) tem sua própria aba na planilha, criada automaticamente se ainda não existir. A comunicação com o Google Sheets fica isolada em uma única camada (`backend/integrations/googleSheets.mjs`) — o restante da API só conhece um repositório de dados, não a planilha em si. Isso permite trocar a persistência no futuro (por exemplo, para um banco relacional) alterando apenas essa camada, sem mudar o frontend nem os contratos HTTP.
+
+### Persistência confiável
+
+A interface aguarda a confirmação real do backend antes de mostrar qualquer mensagem de sucesso. Criar um recebimento ou mudar seu status só é considerado concluído depois que a API confirma a gravação; se a chamada falhar, o registro criado de forma otimista na tela é desfeito, e o usuário vê uma mensagem de erro específica. Isso evita mostrar sucesso quando o dado não foi realmente persistido e evita registros fantasmas — que existem na tela, mas não na fonte de dados real.
+
+---
+
+## Tecnologias
+
+| Tecnologia | Papel |
+|---|---|
+| React 18 | Interface do frontend |
+| Vite 6 | Build e servidor de desenvolvimento |
+| lucide-react | Ícones da interface |
+| pdfjs-dist | Leitura de PDF no navegador (extração de texto e renderização) |
+| @zxing/browser / @zxing/library | Leitura de código de barras |
+| @undecaf/zbar-wasm | Leitura de código de barras via WebAssembly |
+| tesseract.js | OCR — fallback de leitura da chave de NF-e |
+| Node.js (HTTP nativo) | Servidor da API própria |
+| googleapis | Cliente oficial do Google, usado para o Google Sheets |
+| dotenv | Carregamento de variáveis de ambiente no backend |
+
+---
+
+## Estrutura do projeto
+
+```text
+src/
+  App.jsx              # telas, navegação, formulários
+  data.js               # modelo de domínio, status, regras auxiliares
+  store.js               # estado da aplicação e sincronização com a API
+  api.js                  # cliente HTTP do frontend
+  ui.jsx                   # componentes visuais reutilizáveis
+  layout/                   # navegação (rotas por hash), sidebar, mobile nav
+  features/nfeReader/        # módulo de leitura automática de NF-e (isolado)
+backend/
+  server.mjs             # ponto de entrada da API
+  config/                 # leitura de variáveis de ambiente
+  services/                # regras de negócio
+  repositories/             # acesso a dados (Google Sheets)
+  integrations/              # integração com a API do Google
+  uploads/                    # bytes dos anexos enviados
+docs/                # documentação de apresentação do projeto
+public/               # assets estáticos (inclui recursos de pdf.js/tesseract copiados no install)
+```
+
+---
+
+## Executando localmente
+
+Pré-requisito: Node.js 18 ou superior.
 
 ```bash
+git clone <url-do-repositório>
+cd ALLM
 npm install
 npm run dev
 ```
 
-Depois de iniciar, abra o endereco informado no terminal. Normalmente sera algo como:
+`npm install` também roda `postinstall` (`scripts/copy-vendor-assets.mjs`), que copia os recursos de `pdfjs-dist` necessários para o módulo de leitura de NF-e funcionar corretamente.
 
-```text
-http://localhost:5173/
-```
+A aplicação abre em `http://localhost:5173/` (ou outra porta, se essa estiver ocupada — use sempre a URL exibida no terminal).
 
-Se a porta estiver ocupada, o Vite pode usar outra porta. Use sempre a URL que aparecer no terminal.
+### Backend (API + Google Sheets)
 
-`npm install` também roda automaticamente (`postinstall`) `scripts/copy-pdfjs-assets.mjs`, que copia os recursos do `pdfjs-dist` (wasm de JBIG2/OpenJPEG, cmaps, fontes padrão e perfis ICC) para `public/pdfjs/`. Esses arquivos são necessários para o módulo `Leitura automática (beta)` conseguir abrir PDFs digitalizados corretamente — se `public/pdfjs/` sumir por algum motivo, rode `node scripts/copy-pdfjs-assets.mjs` de novo.
-
-## Backend/API (Google Sheets)
-
-A pasta `backend/` persiste os dados estruturados em uma planilha do Google Sheets. As rotas HTTP continuam isoladas da integração: `server.mjs` chama o repository, o repository organiza as entidades e `integrations/googleSheets.mjs` executa apenas leituras e escritas de linhas. Isso mantém a troca futura para PostgreSQL localizada, sem alterar o frontend ou os contratos HTTP.
-
-Endpoints principais:
-
-- `GET/POST /api/v1/recebimentos`
-- `GET/PATCH /api/v1/recebimentos/:id`
-- `GET/POST/PATCH/DELETE /api/v1/recebimentos/:id/itens`
-- `GET/POST/DELETE /api/v1/recebimentos/:id/anexos`
-- `GET/POST /api/v1/recebimentos/:id/divergencias`
-- `POST /api/v1/recebimentos/:id/divergencias/:divergenciaId/resolver`
-- `POST /api/v1/recebimentos/:id/divergencias/:divergenciaId/reabrir`
-- `POST /api/v1/recebimentos/:id/status`
-- `GET /api/v1/recebimentos/:id/historico/status`
-- `GET /api/v1/recebimentos/:id/historico/auditoria`
-- `GET/POST/PATCH /api/v1/usuarios`
-- `GET /api/v1/auth/me`
-- `GET /api/v1/catalogos`
-- `GET /api/v1/dashboard`
-
-No ambiente de desenvolvimento, a identidade é simulada pelo header `X-User-Id` (`USR-001` a `USR-004`). Isso **não substitui login corporativo**; é apenas o mecanismo temporário para exercitar as permissões reais no servidor.
-
-Para executar:
+Em outro terminal:
 
 ```bash
 npm run api
 ```
 
-Antes, crie `backend/.env` a partir de `.env.example` e informe somente credenciais de uma service account com acesso de edição à planilha:
+O frontend (`src/api.js`, `src/store.js`) opera em modo API-first: o estado inicial é carregado do servidor e as mutações são sincronizadas por chamada. Se a API estiver indisponível na carga inicial, o fallback é uma lista vazia — nunca dados de demonstração.
 
-```dotenv
+### Build de produção
+
+```bash
+npm run build      # gera a pasta dist/
+npm run preview    # serve a build de produção localmente, para testes
+```
+
+---
+
+## Configuração
+
+Crie `backend/.env` a partir de `.env.example` (raiz do projeto). Variáveis usadas pelo backend, confirmadas em `backend/config/env.mjs` — **apenas os nomes**, nunca valores reais devem ser versionados:
+
+```env
+# Frontend — URL da API
+VITE_API_URL=
+
+# Backend — credenciais da conta de serviço do Google (obrigatórias)
 GOOGLE_SHEETS_SPREADSHEET_ID=
 GOOGLE_SERVICE_ACCOUNT_EMAIL=
 GOOGLE_PRIVATE_KEY=
+
+# Backend — opcionais (têm valor padrão se ausentes)
+PORT=
+HOST=
+CORS_ORIGIN=
+ALM_UPLOAD_DIR=
 ```
 
-As abas `Recebimentos`, `Itens`, `Divergencias`, `HistoricoStatus`, `Auditoria`, `Anexos` e `Usuarios` são criadas automaticamente quando ausentes. Nunca exponha essas variáveis com prefixo `VITE_` nem versione um `credentials.json`. Os bytes dos anexos continuam em `backend/uploads/`; apenas seus metadados são persistidos na aba `Anexos`.
+`GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` são obrigatórias — o backend não inicia sem elas. Nunca use o prefixo `VITE_` nessas variáveis (isso as exporia ao bundle do frontend), e nunca versione o `.env` nem um `credentials.json` da conta de serviço.
 
-Em outro terminal:
+### Configurando o Google Sheets (alto nível)
 
-```bash
-npm run dev
-```
+1. Crie uma conta de serviço no Google Cloud e gere uma chave.
+2. Compartilhe a planilha de destino com o e-mail dessa conta de serviço, com permissão de edição.
+3. Preencha `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` no `backend/.env`.
+4. As abas necessárias (`Recebimentos`, `Itens`, `Divergencias`, `HistoricoStatus`, `Auditoria`, `Anexos`, `Usuarios`) são criadas automaticamente na primeira execução, se ainda não existirem.
 
-A aplicação React usa `src/api.js` e o `store.js` opera em modo API-first: o estado inicial é carregado do servidor e as mutações são sincronizadas em fila por recebimento. Se a API estiver indisponível na carga inicial, o fallback seguro é uma lista vazia — nunca dados de demonstração.
+---
 
-Arquivos enviados são gravados em `backend/uploads/` e seus metadados ficam associados ao recebimento. Para produção, essa camada deve ser substituída por storage corporativo/objeto e PostgreSQL.
+## Scripts
 
-## Como Gerar a Versao de Producao
+| Script | Descrição |
+|---|---|
+| `npm run dev` | Sobe o servidor de desenvolvimento do frontend (Vite) |
+| `npm test` | Roda a suíte de testes (`node --test`) da lógica de NF-e |
+| `npm run build` | Gera a build de produção em `dist/` |
+| `npm run preview` | Serve a build de produção localmente |
+| `npm run api` | Sobe o servidor da API (backend) |
+| `npm run api:dev` | Sobe a API com reinício automático (`node --watch`) |
 
-Para compilar:
+---
 
-```bash
-npm run build
-```
+## Testes
 
-Para testar a versao compilada:
-
-```bash
-npm run preview
-```
-
-A pasta gerada sera:
+Resultado obtido executando a suíte no momento deste documento:
 
 ```text
-dist/
+$ npm test
+ℹ tests 56
+ℹ pass 56
+ℹ fail 0
+
+$ npm run build
+✓ built em ~6s, sem erros
 ```
 
-Essa pasta contem os arquivos estaticos finais, mas ainda nao resolve backend, login, banco ou arquivos corporativos.
+Cobertura por área, sem depender de câmera, navegador completo ou rede:
 
-## Como Usar a Aplicacao
+- **Validação de NF-e** — cálculo do dígito verificador (módulo 11) da chave de acesso.
+- **Decoders** — classificação de cada tentativa de leitura de código de barras e os adaptadores usados no painel de diagnóstico.
+- **Captura** — cálculo do teto de redução de fotos grandes e feature detection de `ImageCapture`.
+- **Handoff / pré-preenchimento** — montagem do resultado de análise e a regra de que só campos de alta confiança chegam ao formulário de recebimento.
 
-1. Acesse o dashboard para ver os indicadores principais.
-2. Entre em `Recebimentos` para consultar a lista geral.
-3. Use a busca e os filtros para localizar por pedido, NF, fornecedor, item, responsavel, tipo, status ou periodo.
-4. Clique em uma linha para abrir os detalhes do recebimento.
-5. Use `Novo recebimento` para cadastrar um novo processo.
-6. Preencha dados gerais, itens, fotos/documentos e revise antes de salvar.
-7. Caso a NF ainda nao tenha chegado, deixe como pendente.
-8. Quando tudo estiver correto, mova o status ate `Conferido/Finalizado`.
-9. Em caso de problema, registre uma divergencia no detalhe do recebimento.
-10. Use `Exportar` para gerar arquivo CSV que abre no Excel.
+Fluxos que dependem de APIs de navegador reais (câmera, Canvas, renderização de PDF, navegação entre telas) são validados por scripts Playwright dedicados, documentados em [`src/features/nfeReader/testFixtures/README.md`](src/features/nfeReader/testFixtures/README.md).
 
-## Fluxo de Trabalho Representado
+---
 
-O processo desenhado no MVP segue esta logica:
+## Deploy
 
-```text
-Criar recebimento
--> informar pedido, fornecedor, tipo e data
--> adicionar itens recebidos
--> anexar fotos e documentos
--> registrar observacoes/divergencias
--> acompanhar pendencias
--> conferir
--> finalizar
-```
+O projeto é construído com Vite (`npm run build`), gerando arquivos estáticos em `dist/`. Existe uma versão publicada, hospedada na Vercel, usada para validação funcional e testes em dispositivo físico. O backend (API própria + integração com Google Sheets) roda como um processo Node.js separado do frontend estático.
 
-Fluxo de status:
+---
 
-```text
-Em digitacao
--> Aguardando documentacao
--> Em conferencia
--> Divergencia identificada
--> Conferido/Finalizado
-```
+## Painel de diagnóstico de NF-e
 
-A NF/documento pode ficar pendente no primeiro cadastro, porque no processo real ela nem sempre chega no mesmo momento do material.
+Existe um modo de diagnóstico técnico do leitor de NF-e, ativado por uma query string (`?nfeScannerDebug=1`) na URL da tela de leitura automática. Sem essa flag, nenhum botão ou link extra aparece, e nenhum código relacionado ao painel é baixado pelo navegador.
 
-## Estrutura dos Arquivos
+O painel compara, sobre a mesma imagem ou frame de câmera, a disponibilidade e o resultado de cada engine de leitura (BarcodeDetector, ZXing, ZBar), tempo de decodificação e resolução usada — nunca expõe uma chave de NF-e completa, CNPJ, fornecedor ou qualquer outro dado fiscal. Detalhes completos: [`src/features/nfeReader/README.md`](src/features/nfeReader/README.md#benchmark-de-decoders-diagnóstico).
 
-Arquivos principais:
+---
 
-- `src/App.jsx`: telas, navegacao, formularios e interacoes da aplicacao.
-- `src/data.js`: dados de exemplo, listas controladas, status, filtros, metricas e regras auxiliares.
-- `src/store.js`: estado da aplicacao, persistencia local, criacao/alteracao de recebimentos e historico.
-- `src/ui.jsx`: componentes visuais reutilizaveis.
-- `src/styles.css`: estilos responsivos da interface.
-- `src/features/nfeReader/`: modulo experimental de leitura automatica de NF-e (beta), isolado do fluxo principal — veja a secao dedicada acima.
-- `src/main.jsx`: ponto de entrada React.
-- `package.json`: scripts e dependencias.
-- `README.md`: este guia.
+## Privacidade
 
-Pastas geradas:
+A leitura de PDF, a decodificação de código de barras (BarcodeDetector, ZXing, ZBar) e o OCR (Tesseract.js) rodam inteiramente no navegador do usuário — nenhum frame de vídeo ou fotografia é enviado a um servidor como parte do processo de **leitura** da NF-e.
 
-- `node_modules/`: dependencias instaladas. Nao deve ser editada manualmente.
-- `dist/`: versao compilada gerada por `npm run build`.
+Isso é diferente da **persistência do recebimento**: depois que o usuário revisa e confirma os dados (extraídos ou digitados manualmente), essas informações são enviadas para a API própria e gravadas no Google Sheets — como em qualquer sistema de cadastro. A autenticação atual (cabeçalho `X-User-Id`) é um mecanismo de demonstração, não um login corporativo real; as credenciais da integração com o Google ficam apenas em variáveis de ambiente do backend, nunca em código versionado ou expostas ao frontend.
 
-## Divisao Sugerida Para o Time
+---
 
-Lucas:
+## Decisões de engenharia
 
-- Coordenar o escopo funcional e validar se o fluxo bate com o processo real do Almoxarifado.
-- Testar cadastro, consulta, filtros, exportacao e telas em computador/celular.
-- Priorizar o que entra no MVP e o que fica para fase 2.
-- Consolidar feedback dos usuarios.
+- **Feature detection, nunca identificação de navegador/aparelho** — a aplicação verifica se uma API existe e funciona, nunca tenta adivinhar o dispositivo.
+- **Fallbacks sequenciais** na leitura de código de barras, nunca em paralelo (evita gastar CPU/bateria decodificando o mesmo frame duas vezes).
+- **Captura de foto com fallback automático** — tenta a API de maior qualidade primeiro, cai para o seletor de câmera nativo se ela não existir ou falhar.
+- **Validação da chave centralizada** em um único ponto do código, reaproveitada por todas as fontes de leitura.
+- **Backend intermediando o Google Sheets** — o frontend nunca escreve diretamente na planilha.
+- **Confirmação real de persistência** antes de qualquer mensagem de sucesso na interface.
+- **Carregamento sob demanda (`lazy loading`)** do módulo de NF-e e do painel de diagnóstico, para não pesar o carregamento inicial da aplicação.
 
-Marcelo:
+### Evolução do scanner
 
-- Trabalhar na parte de backend/API.
-- Desenhar endpoints para recebimentos, itens, anexos, divergencias, historico e usuarios.
-- Substituir o `localStorage` por chamadas reais para servidor.
-- Preparar validacoes de negocio no backend.
+Caso a operação venha a exigir, no futuro, leitura contínua de código de barras em nível industrial (por exemplo, esteira de alto volume), SDKs comerciais especializados como Dynamsoft Barcode Reader ou Scandit Barcode Scanner SDK podem ser considerados. Essa avaliação não faz parte do escopo atual do projeto.
 
-Goran Henrique:
+---
 
-- Cuidar do banco de dados e modelagem.
-- Criar tabelas para recebimentos, itens, anexos, divergencias, usuarios, status e auditoria.
-- Pensar em indices para busca por pedido, NF, fornecedor, item, status e periodo.
-- Planejar migracao dos registros historicos da pasta de rede.
+## Escopo atual e evolução
 
-Kobner:
+O projeto está em desenvolvimento ativo e possui uma versão publicada, usada para validação funcional. Alguns caminhos naturais de continuidade:
 
-- Focar em seguranca, arquivos e infraestrutura.
-- Definir autenticacao, perfis de acesso e permissoes.
-- Planejar armazenamento seguro dos anexos, backup e politica de exclusao.
-- Preparar ambiente de homologacao/publicacao interna.
+- Persistência em banco de dados relacional, caso o volume de dados venha a justificar a migração.
+- Autenticação corporativa real, no lugar do mecanismo de usuário de demonstração atual.
+- Novas integrações (por exemplo, consulta a um ERP para validar o pedido de compra).
+- Novos indicadores no dashboard, conforme o uso real apontar o que é mais relevante.
+- Scanner de código de barras de nível industrial, se a operação exigir (ver [Evolução do scanner](#evolução-do-scanner)).
 
-Essa divisao pode mudar conforme a experiencia de cada um, mas separa bem produto, backend, dados e infraestrutura.
+---
 
-## Modelo de Dados Inicial
+## Documentação
 
-Entidades principais para a proxima fase:
+- [`src/features/nfeReader/README.md`](src/features/nfeReader/README.md) — documentação técnica completa do módulo de leitura de NF-e.
+- [`docs/ALM_Apresentacao_Projeto.md`](docs/ALM_Apresentacao_Projeto.md) — apresentação estendida do projeto.
+- [`docs/ALM_Apresentacao_Projeto.html`](docs/ALM_Apresentacao_Projeto.html) — versão HTML autocontida do documento acima.
+- [`docs/ALM_Apresentacao_Executiva.html`](docs/ALM_Apresentacao_Executiva.html) — apresentação executiva (HTML autocontido).
 
-- `usuarios`: nome, e-mail, perfil, status.
-- `recebimentos`: pedido, NF/documento, fornecedor, tipo, data, responsavel, status, observacoes.
-- `recebimento_itens`: recebimento, item, descricao, quantidade, unidade, quantidade solicitada, quantidade recebida.
-- `anexos`: recebimento, tipo, nome, caminho/URL, tamanho, usuario, data.
-- `divergencias`: recebimento, tipo, descricao, status, responsavel, data, resolucao.
-- `historico_status`: recebimento, status anterior, novo status, usuario, data, comentario.
-- `auditoria`: entidade, acao, usuario, data, antes/depois.
+---
 
-## Regras Importantes
+## Licença
 
-- Todo recebimento deve ter responsavel. No MVP ele e preenchido automaticamente pelo usuario demonstrativo.
-- Unidade e tipo de recebimento devem vir de listas controladas.
-- NF/documento nao bloqueia a criacao, mas bloqueia a finalizacao.
-- Recebimento com divergencia aberta nao deve ser finalizado sem tratamento.
-- Remocao definitiva de informacoes importantes deve exigir permissao administrativa na versao corporativa.
-- Toda mudanca relevante deve gerar historico.
-
-## Proximas Fases
-
-Fase 1 - Validacao do MVP:
-
-- Rodar com dados simulados.
-- Apresentar para Almoxarifado e Suprimentos.
-- Ajustar campos, nomes, filtros e status.
-- Validar se o fluxo no celular resolve o uso atual do WhatsApp.
-
-Fase 2 - Backend e Banco:
-
-- Criar API.
-- Criar banco de dados.
-- Migrar estado local para persistencia real.
-- Implementar usuarios e permissoes.
-- Implementar upload real de arquivos.
-
-Fase 3 - Homologacao:
-
-- Testar com usuarios reais.
-- Importar parte do historico da pasta de rede.
-- Validar performance, seguranca, backup e restauracao.
-- Ajustar relatorios e dashboard.
-
-Fase 4 - Evolucoes:
-
-- Integracao com ERP para consulta de pedidos.
-- OCR de Nota Fiscal.
-- Notificacoes automaticas.
-- Protocolos de recebimento em PDF.
-- Melhorias em auditoria e trilhas de aprovacao.
-
-## Comandos Uteis
-
-Instalar dependencias:
-
-```bash
-npm install
-```
-
-Rodar localmente:
-
-```bash
-npm run dev
-```
-
-Compilar:
-
-```bash
-npm run build
-```
-
-Visualizar compilado:
-
-```bash
-npm run preview
-```
-
-No PowerShell, se o comando `npm` for bloqueado por politica de execucao, use:
-
-```powershell
-npm.cmd run dev
-```
-
-## Observacoes Para Compartilhar
-
-Este projeto ainda e uma prova funcional. Ele serve para demonstrar o fluxo, validar a experiencia e orientar a construcao da versao corporativa. Para uso real, os pontos mais importantes sao backend, banco, login, armazenamento seguro de anexos e auditoria em servidor.
-
-
-## Leitura automática de NF-e (beta) — módulo experimental
-
-Tela isolada em `Leitura automática (beta)` no menu lateral (`src/features/nfeReader/`), separada do fluxo de `Novo recebimento`. Objetivo: validar se dá para extrair dados de Notas Fiscais reais da empresa antes de mexer no cadastro que já está em uso. Ninguém é obrigado a usar — quem continuar cadastrando manualmente não é afetado.
-
-Documentação técnica completa do pipeline (diagrama, o que cada arquivo faz, algoritmo da chave, por que o ZXing roda sem `TRY_HARDER`, assets self-hosted, limitações conhecidas): [`src/features/nfeReader/README.md`](src/features/nfeReader/README.md).
-
-Em aparelho com câmera (e toque, no caso da foto) — celular, tablet, notebook com webcam —, além do upload, a etapa 1 ganha mais duas entradas lado a lado — **Tirar foto** (câmera traseira, gera o mesmo tipo de arquivo do upload) e **Escanear código de barras** (câmera ao vivo, sem passar por arquivo nenhum). A disponibilidade é decidida por capacidade do aparelho (`getUserMedia`/toque), não pela largura da janela — um tablet em landscape continua vendo as duas opções. No desktop comum (mouse, sem câmera) só "Selecionar arquivo" aparece. Detalhes completos do scanner ao vivo (decoder nativo/ZXing, quiet zone, "Capturar e analisar", diagnóstico, encerramento da câmera, lanterna/troca de câmera, exigência de HTTPS): [seção dedicada](src/features/nfeReader/README.md#entradas-em-celulartablet-foto-e-scanner-ao-vivo) no README do módulo.
-
-**Benchmark de diagnóstico (`?nfeScannerDebug=1`):** ferramenta separada para comparar, de forma controlada, os três mecanismos de leitura de código de barras (`BarcodeDetector` nativo, ZXing, ZBar/WASM) sobre a mesma imagem/câmera — não muda qual engine o scanner normal usa. Só existe com a query string na URL; sem ela, nada aparece e nenhum código extra é baixado. Detalhes completos (arquitetura, licença do ZBar, matriz de fixtures, impacto no bundle): [seção dedicada](src/features/nfeReader/README.md#benchmark-de-decoders-diagnóstico) no README do módulo.
-
-O que ela faz, 100% no navegador, em ordem de custo (cada etapa só entra em cena se a anterior não achou uma chave válida):
-
-1. Upload de um PDF (DANFE), foto (JPG/PNG) da NF ou leitura do código de barras pela câmera ao vivo, com um botão explícito **Analisar nota** para arquivo/foto (o scanner ao vivo analisa assim que encontra uma chave válida, sem clique adicional) — nada roda automaticamente ao só selecionar o arquivo.
-2. Se for PDF, tenta extrair o texto embutido (`pdfjs-dist`). Se achar uma chave de 44 dígitos válida (dígito verificador módulo 11 — `src/features/nfeReader/chaveNFe.js`, função `findValidNfeKeys`, tolerante a espaço/ponto/hífen/quebra de linha entre os dígitos), usa ela direto e **para por aqui** — não renderiza página nem aciona leitor de código de barras/OCR.
-3. Sem chave no texto → renderiza a 1ª página em ~300 DPI (ou usa a foto direto) e tenta ler um código de barras CODE_128 com `@zxing/browser`/`@zxing/library`, testando vários recortes da página (topo 25%/35%, topo direito/esquerdo, metade superior, página inteira), cada um em versão original e com contraste ajustado, nas 4 rotações — tudo com canvases DOM próprios, sem depender da rotação automática interna do ZXing.
-4. Código de barras também não achou → tenta OCR com `tesseract.js` sobre a mesma imagem, restrito a dígitos, como último recurso para digitalizações ruins.
-5. Se texto e código de barras encontrarem a mesma chave (caso raro, já que o texto quando encontrado pula o código de barras), marca confiança mais alta indicando as duas origens.
-6. Interpreta a chave (UF, ano/mês, CNPJ, série, número da NF) e cruza o CNPJ com um catálogo local de fornecedores (`localStorage`, isolado neste módulo — o resto do app continua volátil).
-7. Heurísticas fracas por regex (`textHeuristics.js`) tentam achar data de emissão, valor total e pedido de compra no texto — sempre com confiança "conferir" ou "baixa", nunca "alta".
-8. Tela de revisão com todos os campos editáveis e selo de confiança (alta / conferir / baixa / não encontrado). Editar um campo mostra um indicador "corrigido manualmente".
-9. **Confirmar dados** gera o JSON final no formato do modelo de recebimento (`numeroNf`, `serieNf`, `cnpjFornecedor`, `fornecedor`, `pedido`, `dataRecebimento`) mais um objeto `referenciaNfe` separado (`chaveAcesso`, `ufEmitente`, `anoMesEmissao`, `dataEmissao`, `valorTotal`) — candidatos a campo novo, **não gravados** no backend. Um botão copia o JSON.
-
-Quando nem texto, nem código de barras, nem OCR conseguirem localizar uma chave válida (digitalização realmente ruim), o pipeline degrada para "não encontrado" em vez de travar; todo o log de cada tentativa (`[NFe] ...`) fica no console do navegador, e o usuário sempre pode preencher manualmente.
-
-**Sobre o OCR (`tesseract.js`):** o worker e o núcleo WASM ficam self-hosted em `public/tesseract/` (copiados de `node_modules` no `npm install`, sem CDN — mesmo esquema usado para os recursos do `pdf.js` em `public/pdfjs/`). O dado de idioma treinado (`eng.traineddata.gz`, algumas dezenas de MB) é a única peça que continua vindo do CDN oficial do tesseract.js na primeira vez que o OCR roda em cada navegador — é o padrão recomendado pela própria lib, já que auto-hospedar um pacote de idioma inteiro só para reconhecer dígitos não compensa. Depois da primeira vez, o navegador guarda esse arquivo em cache (IndexedDB) e não baixa de novo. Por isso o fallback de OCR **precisa de internet na primeira execução por navegador**; as outras etapas (texto do PDF, código de barras) continuam 100% offline. O núcleo do tesseract.js também deixa `dist/`/`public/` bem mais pesado (~44 MB) — isolado nesta tela via `React.lazy`, então só é baixado por quem realmente abrir "Leitura automática (beta)".
-
-Fora de escopo, de propósito, nesta fase:
-
-- OCR de página inteira / interpretação completa do documento (Document AI e afins) — o OCR aqui é só um fallback estreito para a chave de 44 dígitos, restrito a dígitos e a duas regiões da página.
-- Integração com Google Drive.
-- Alteração no `backend/server.mjs` ou no modelo de dados do recebimento — os campos de `referenciaNfe` são só sugestão.
-- Gravação automática em um recebimento (`api.createRecebimento` não é chamado por este módulo).
-- Garantir leitura de código de barras/OCR em digitalizações ruins — a meta é degradar bem, não vencer qualquer digitalização.
-- OCR contínuo sobre o vídeo do scanner ao vivo — pesado demais para celular; o scanner é estritamente leitura de código de barras, OCR continua só no pipeline de arquivo/foto.
-
-Conexão futura (não feita agora): a lógica de `src/features/nfeReader/extractor.js` foi isolada exatamente para que, quando o app estiver pronto para usar isso de verdade, a Etapa 3 (Evidências) do wizard `Novo recebimento` possa chamar `analyzeNfeFile()` ao anexar a Nota Fiscal e pré-preencher `numeroNf`/`serieNf`/`fornecedor`/`cnpjFornecedor`, sem reescrever nada do pipeline.
-
-### Como testar manualmente
-
-1. Rode `npm run dev` e abra `Leitura automática (beta)` no menu.
-2. **PDF digital com texto** (a maioria dos DANFEs gerados por sistema): selecione o arquivo, clique em Analisar nota. Espera-se a chave encontrada via "texto do PDF", NF/série/CNPJ com selo verde (alta confiança) — e o log do console mostrando que código de barras e OCR nem foram tentados.
-3. **PDF escaneado ou foto sem texto embutido, mas com código de barras legível**: o texto fica vazio/insuficiente, a página é renderizada e o código de barras é achado em uma das combinações de recorte/rotação — acompanhe o console (`[NFe] Tentando CODE_128 - ...`) para ver as tentativas.
-4. **Digitalização ruim** (sem texto, código de barras ilegível, mas a chave ainda aparece impressa/legível na imagem): o pipeline cai para OCR — no console aparece `[NFe] Código de barras não resolveu — tentando OCR como último recurso.`. Na primeira vez que isso roda no navegador, é preciso estar com internet (baixa o pacote de idioma do tesseract.js uma única vez).
-5. **Arquivo sem chave legível em lugar nenhum**: o resumo da revisão indica que nenhuma chave válida foi localizada (depois de tentar texto, código de barras e OCR); preencha os campos e confirme normalmente — sem travar.
-6. Preencha o Fornecedor manualmente uma vez para um CNPJ novo e confirme — na próxima análise de uma nota do mesmo CNPJ, o Fornecedor deve vir pré-preenchido do catálogo local com selo verde.
-7. Clique em Confirmar dados e depois em Copiar para validar o JSON final.
-8. `npm test` roda os testes de `src/features/nfeReader/*.test.mjs` (matemática da chave e montagem do resultado) sem precisar de navegador.
-9. **Foto e scanner aparecem por capacidade do aparelho, não pela largura da janela**: num aparelho com câmera e toque (celular, tablet — incluindo tablet em landscape), "Tirar foto" e "Escanear código de barras" aparecem ao lado de "Selecionar arquivo"; num desktop comum (mouse, sem câmera) só "Selecionar arquivo" aparece. Redimensionar a janela sozinho não muda isso — é a câmera/toque do aparelho que decide, não os pixels da tela.
-10. **Tirar foto**: em um celular real, toca em "Tirar foto" deve preferir abrir a câmera traseira (não é garantido pelo navegador); a foto resultante aparece na lista de arquivo igual a um upload normal, e "Analisar nota" funciona do mesmo jeito.
-11. **Abrir o scanner solicita permissão de câmera** — em um navegador que já negou a permissão antes, deve aparecer a mensagem "Permissão da câmera negada..." com a opção de usar "Selecionar arquivo" em vez de travar a tela.
-12. **Enquadramento com margem**: a moldura do scanner não deve ir até a borda da tela — deixe espaço em branco visível nas laterais do código de barras real ao enquadrar (não encoste o celular até cortar o começo/fim do código); a dica inicial deve dizer "Enquadre o código inteiro e deixe espaço nas laterais."
-13. **Scanner com uma chave de NF-e real** (uma nota impressa em mãos, ou o DANFE aberto em outra tela): aponte a câmera para o código de barras — ao decodificar, a tela deve mostrar "Chave da NF-e localizada", vibrar (se o aparelho suportar) e fechar sozinha, levando para a Etapa 2 já preenchida. Observe a linha animada varrendo a moldura enquanto não encontra.
-14. **Scanner com outro código de barras** (código de produto, etiqueta, código de outra nota) — não deve travar nem aceitar: a leitura continua até achar um CODE_128 que seja uma chave de NF-e válida (44 dígitos, dígito verificador correto).
-15. **Dicas por tempo**: sem encontrar nada, observe a dica mudar por volta de 3s ("Mantenha o código centralizado e estável.") e de novo por volta de 7s — em celular na vertical (portrait), deve sugerir "Para facilitar a leitura, tente girar o celular."; girando para paisagem, ou se a lanterna existir, a dica muda de novo.
-16. **"Capturar e analisar"**: deixe o scanner sem encontrar nada por ~6s — um botão "Capturar e analisar" deve aparecer. Aponte para o código de barras (ou para uma folha em branco, para testar o caminho de falha) e toque nele: deve mostrar "Analisando imagem capturada…", e depois ou achar a chave (mesmo fluxo de sucesso) ou mostrar uma mensagem específica (ex.: "Nenhum código de barras foi detectado...") e retomar a leitura contínua sozinho.
-17. **Fotografar só o código de barras, sem os números**: tire uma foto (ou use "Capturar e analisar") de uma imagem que tenha só as barras, sem os 44 dígitos impressos visíveis — a mensagem de OCR deve orientar a incluir os números, não dizer genericamente "não conseguiu", já que o OCR lê dígitos, não barras.
-18. **Câmera desliga de verdade**: abra o scanner, depois toque "Cancelar" — em um celular, o indicador de câmera ativa do sistema operacional (ponto/ícone na barra de status) deve sumir. Repita saindo da tela (voltar), trocando de aba/app (a câmera deve pausar e retomar sozinha ao voltar) e depois de usar "Capturar e analisar".
-19. **HTTPS**: testar o scanner em um celular físico contra o Vite dev server pelo IP da rede local (`http://192.168.x.x:5173`) falha ao abrir a câmera — isso é o navegador bloqueando `getUserMedia` fora de contexto seguro, não um bug do scanner. Use `localhost` (só funciona no mesmo computador) ou um deploy de preview em HTTPS para testar em aparelho físico.
-20. **Painel de diagnóstico (dev)**: rodando `npm run dev`, uma faixa no rodapé do scanner mostra resolução real da câmera, tempo até ficar pronta e contagem de tentativas por tipo de falha — só aparece em desenvolvimento (`import.meta.env.DEV`), nunca numa build de produção (`npm run build` + `npm run preview`, confirme que a faixa não aparece).
-21. **Navegador com `BarcodeDetector` nativo (Chrome/Edge/Android Chrome)**: o console deve mostrar `[NFe][scanner] usando BarcodeDetector nativo...`; em Safari/iOS (ou qualquer navegador sem suporte), deve mostrar `[NFe][scanner] BarcodeDetector nativo indisponível — usando ZXing` — os dois caminhos precisam decodificar igual, só a velocidade muda.
-22. **Validação repetível de imagem → chave, sem precisar do celular**: `node src/features/nfeReader/testFixtures/validate-fixtures.mjs` (com o dev server rodando e `playwright-core` instalado — ver [testFixtures/README.md](src/features/nfeReader/testFixtures/README.md)) roda o decoder real contra fixtures sintéticas de CODE_128, incluindo casos de margem apertada e inclinação.
-23. **Benchmark de decoders sem a flag**: abra `Leitura automática (beta)` sem `?nfeScannerDebug=1` na URL — nenhum link "Diagnóstico do scanner" deve aparecer no cabeçalho, e a aba de rede não deve mostrar nenhum request relacionado a `NfeScannerBenchmark`/`zbar`.
-24. **Benchmark de decoders com a flag**: abra `.../#/leitura-automatica` com `?nfeScannerDebug=1` antes do `#` (ex.: `http://localhost:5173/?nfeScannerDebug=1#/leitura-automatica`) — o link "Diagnóstico do scanner" aparece; ao clicar, abre um painel de tela cheia pedindo a câmera.
-25. **Modo A do benchmark**: com o painel aberto, aponte para um código de barras real e toque "Capturar frame para teste" — deve mostrar o frame congelado (com dimensões/luminosidade/contraste), depois um resultado para BarcodeDetector nativo, ZXing e ZBar (disponibilidade, detecção, validade da chave, tempo), e por fim o resultado do "Pipeline atual (produção)".
-26. **Modo B do benchmark**: toque em "Testar ZXing" (ou outro engine) — os outros dois botões devem ficar desabilitados enquanto ele roda (nunca dois ao mesmo tempo), um cronômetro/contador deve avançar, e o teste deve parar sozinho ao achar uma chave válida ou aos 10s.
-27. **Copiar diagnóstico**: depois de rodar o Modo A (e opcionalmente o B), toque "Copiar diagnóstico" e cole em outro lugar — deve conter browser/plataforma/viewport/resolução/engine automático/resultados por engine, e **nunca** uma chave completa de 44 dígitos, CNPJ, pedido, valor ou fornecedor.
-28. **Matriz de fixtures nos três engines**: `node src/features/nfeReader/testFixtures/validate-decoder-benchmark.mjs` (mesmo pré-requisito do item 22) — imprime a matriz `fixture × engine` no console, para os Níveis A e B.
-
-## Persistência via Google Sheets — sem dados mock
-
-O MVP inicia sem recebimentos fictícios. Os dados criados são enviados à API e persistidos no Google Sheets; ao atualizar/recarregar, o frontend os carrega novamente pela API.
-
-Não é utilizado `localStorage` nem `sessionStorage` para persistir recebimentos. O backend não usa `backend/data.json` nem um banco em memória como fonte de verdade.
+Este projeto não possui, até o momento, uma licença de código aberto definida.

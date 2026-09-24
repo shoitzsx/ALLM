@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ALM — Apresentação Executiva</title>
+<style>
+  :root {
+    --navy-900: #0f1a3d;
+    --navy-800: #14224d;
+    --brand: #2447c9;
+    --brand-dark: #1a35a0;
+    --brand-bg: #eef1ff;
+    --ink-900: #1a2237;
+    --ink-700: #3c4560;
+    --ink-500: #6b7390;
+    --ink-300: #b6bccf;
+    --border: #e2e5ef;
+    --surface: #ffffff;
+    --surface-alt: #f5f6fb;
+    --amber: #a5670c;
+    --amber-bg: #fdf3df;
+    --green: #1c7a4d;
+    --green-bg: #e6f5ec;
+    --red: #b3261e;
+    --red-bg: #fbeaea;
+    --radius: 12px;
+    --max-width: 960px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink-900);
+    background: var(--surface-alt);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    background: linear-gradient(135deg, var(--navy-900), var(--navy-800) 55%, var(--brand-dark));
+    color: #fff;
+    padding: 60px 24px 40px;
+    text-align: center;
+  }
+  .hero .tag {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px;
+    padding: 5px 14px;
+    margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 46px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .hero h2 { font-size: 19px; font-weight: 500; margin: 0 0 20px; color: #cfd8ff; }
+  .hero p.subtitle { max-width: 640px; margin: 0 auto; color: #b9c4f2; font-size: 15px; }
+
+  .team-strip {
+    max-width: var(--max-width);
+    margin: -26px auto 0;
+    padding: 0 24px;
+  }
+  .team-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 14px 32px rgba(20, 34, 77, 0.1);
+    padding: 18px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 28px;
+  }
+  .team-card .team-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-500);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .team-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 1;
+  }
+  .team-pill {
+    background: var(--brand-bg);
+    color: var(--brand-dark);
+    border: 1px solid #d6ddfb;
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .wrap { max-width: var(--max-width); margin: 0 auto; padding: 0 24px 90px; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 22px;
+    padding: 22px 26px;
+  }
+  nav.toc strong { display: block; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-500); }
+  nav.toc ol { columns: 2; column-gap: 28px; margin: 0; padding-left: 20px; font-size: 13.5px; }
+  nav.toc li { margin-bottom: 6px; break-inside: avoid; }
+  nav.toc a { color: var(--brand-dark); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section { margin-top: 50px; }
+  section > h2 {
+    font-size: 25px;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--navy-800);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  section > h2 .num { color: var(--brand); font-variant-numeric: tabular-nums; }
+  h3 { font-size: 17px; margin: 26px 0 10px; color: var(--navy-800); }
+  p { margin: 0 0 14px; color: var(--ink-700); }
+  ul, ol.plain { margin: 0 0 14px; padding-left: 22px; color: var(--ink-700); }
+  li { margin-bottom: 6px; }
+  strong { color: var(--ink-900); }
+  code {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.9em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  a { color: var(--brand-dark); }
+
+  .lede { font-size: 17.5px; color: var(--ink-900); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin: 18px 0;
+  }
+
+  pre {
+    background: var(--navy-900);
+    color: #dbe3ff;
+    padding: 18px 20px;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.55;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  pre.terminal { background: #0c1224; color: #9fe3ae; }
+  pre.terminal .dim { color: #7d88ac; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 22px; font-size: 13.5px; background: var(--surface); }
+  table th, table td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
+  table th { background: var(--surface-alt); color: var(--navy-800); font-weight: 600; }
+  table tr:nth-child(even) td { background: #fbfbfd; }
+  .table-wrap { overflow-x: auto; }
+
+  .info-box {
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    background: var(--brand-bg);
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 13.5px;
+    color: var(--ink-700);
+  }
+  .info-box.warn { background: var(--amber-bg); border-color: #f0dcb0; }
+  .info-box.good { background: var(--green-bg); border-color: #bfe3cd; }
+
+  /* ---------- cards grid ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 18px 0; }
+  .grid .card { margin: 0; }
+  .grid .card h4 { margin: 0 0 8px; font-size: 15px; color: var(--navy-800); display: flex; align-items: center; gap: 8px; }
+  .grid .card p { margin: 0; font-size: 13.5px; }
+  .chip { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--brand-dark); background: var(--brand-bg); border-radius: 5px; padding: 2px 7px; }
+
+  /* ---------- flow diagram (vertical steps) ---------- */
+  .flow { display: flex; flex-direction: column; align-items: stretch; margin: 20px 0; }
+  .flow-step {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-left: 5px solid var(--brand);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 14px;
+    color: var(--ink-900);
+  }
+  .flow-step strong { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .flow-step span.sub { font-size: 12.5px; color: var(--ink-500); }
+  .flow-arrow { text-align: center; color: var(--ink-300); font-size: 20px; line-height: 1.2; margin: 2px 0; }
+  .flow-step.alt { border-left-color: var(--amber); }
+  .flow-step.end { border-left-color: var(--green); }
+
+  /* ---------- horizontal pipeline (wraps) ---------- */
+  .pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 18px 0; }
+  .pipe-box {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    padding: 9px 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--navy-800);
+    white-space: nowrap;
+  }
+  .pipe-box.opt { border-style: dashed; color: var(--ink-500); font-weight: 500; }
+  .pipe-arrow { color: var(--ink-300); font-size: 16px; }
+
+  /* ---------- architecture diagram ---------- */
+  .arch { display: flex; flex-direction: column; gap: 4px; margin: 20px 0; }
+  .arch-layer {
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .arch-layer .sub { display: block; font-size: 12px; font-weight: 400; margin-top: 3px; opacity: .85; }
+  .arch-layer.user { background: var(--navy-900); color: #fff; }
+  .arch-layer.frontend { background: var(--brand); color: #fff; }
+  .arch-layer.module { background: var(--brand-bg); color: var(--brand-dark); border: 1.5px dashed #c3cdf7; font-weight: 500; font-size: 13px; }
+  .arch-layer.api { background: var(--navy-800); color: #fff; }
+  .arch-layer.rules { background: var(--surface-alt); color: var(--ink-700); border: 1.5px solid var(--border); font-weight: 500; }
+  .arch-layer.data { background: var(--green); color: #fff; }
+  .arch-down { text-align: center; color: var(--ink-300); font-size: 18px; }
+
+  /* status flow chips */
+  .status-flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+  .status-chip { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--ink-700); }
+  .status-chip.warn { background: var(--amber-bg); color: var(--amber); border-color: #f0dcb0; }
+  .status-sep { color: var(--ink-300); }
+
+  /* Q&A */
+  .qa { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 10px; }
+  .qa .q { font-weight: 700; color: var(--navy-800); margin-bottom: 6px; font-size: 14px; }
+  .qa .a { font-size: 13.5px; color: var(--ink-700); margin: 0; }
+
+  /* 60s summary */
+  .summary60 {
+    background: linear-gradient(135deg, var(--navy-900), var(--brand-dark));
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 30px 32px;
+    margin: 20px 0;
+  }
+  .summary60 .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #b9c4f2; font-weight: 700; margin-bottom: 10px; }
+  .summary60 p { color: #e7ebff; font-size: 15.5px; margin: 0; font-style: italic; }
+
+  footer.doc-footer {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 30px 24px 50px;
+    color: var(--ink-500);
+    font-size: 12.5px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 32px; }
+    .hero h2 { font-size: 16px; }
+    nav.toc ol { columns: 1; }
+    .team-card { flex-direction: column; align-items: flex-start; }
+    section > h2 { font-size: 20px; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .hero { background: var(--navy-900) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { display: none; }
+    section { margin-top: 26px; page-break-inside: avoid; }
+    .card, .qa, .flow-step, .pipe-box, .arch-layer { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <span class="tag">Apresentação executiva</span>
+  <h1>ALM</h1>
+  <h2>Sistema de Recebimentos de Almoxarifado</h2>
+  <p class="subtitle">Gestão de recebimentos, leitura automática de NF-e e integração operacional.</p>
+</div>
+
+<div class="team-strip">
+  <div class="team-card">
+    <span class="team-label">Equipe do projeto</span>
+    <div class="team-names">
+      <span class="team-pill">Lucas Izaias</span>
+      <span class="team-pill">Marcelo Paidoz</span>
+      <span class="team-pill">Goran Henrique</span>
+      <span class="team-pill">Matteus Kobner</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<nav class="toc">
+  <strong>Sumário</strong>
+  <ol>
+    <li><a href="#problema">O problema</a></li>
+    <li><a href="#solucao">A solução</a></li>
+    <li><a href="#funciona">Como o sistema funciona</a></li>
+    <li><a href="#fluxo">Fluxo de recebimento</a></li>
+    <li><a href="#nfe">Leitura automática de NF-e</a></li>
+    <li><a href="#pipeline">Pipeline da NF-e</a></li>
+    <li><a href="#mecanismos">Por que vários mecanismos de leitura</a></li>
+    <li><a href="#foto">Por que usamos foto</a></li>
+    <li><a href="#validacao">Validação da chave</a></li>
+    <li><a href="#local">Processamento local</a></li>
+    <li><a href="#arquitetura">Arquitetura</a></li>
+    <li><a href="#frontend">Frontend</a></li>
+    <li><a href="#backend">Backend</a></li>
+    <li><a href="#persistencia">Persistência confiável</a></li>
+    <li><a href="#sheets">Google Sheets</a></li>
+    <li><a href="#qualidade">Qualidade</a></li>
+    <li><a href="#diagnostico">Painel técnico de diagnóstico</a></li>
+    <li><a href="#decisoes">Decisões de engenharia</a></li>
+    <li><a href="#alternativas">Alternativas comerciais</a></li>
+    <li><a href="#adequada">Por que a solução é adequada</a></li>
+    <li><a href="#comparacao">Comparação</a></li>
+    <li><a href="#valor">Valor para o almoxarifado</a></li>
+    <li><a href="#maturidade">Maturidade do projeto</a></li>
+    <li><a href="#evolucao">Possibilidades de evolução</a></li>
+    <li><a href="#conclusao">Conclusão</a></li>
+    <li><a href="#resumo60">ALM em 60 segundos</a></li>
+    <li><a href="#perguntas">Perguntas técnicas</a></li>
+  </ol>
+</nav>
+
+<section id="problema">
+  <h2><span class="num">1.</span> O problema</h2>
+  <p class="lede">O recebimento de materiais em um almoxarifado costuma depender de vários registros paralelos que não conversam entre si.</p>
+  <p>Uma parte da informação fica em planilhas — muitas vezes cópias diferentes, mantidas por pessoas diferentes. Outra parte circula por mensagens de WhatsApp ou e-mail, quando alguém precisa avisar que um material chegou ou que falta a nota fiscal. Fotos do material e dos documentos ficam soltas em pastas de rede ou no aparelho de quem recebeu. O resultado é que, para responder uma pergunta simples — "esse pedido já chegou?", "essa nota está pendente?", "quem mexeu nesse registro por último?" — é preciso cruzar várias fontes manualmente.</p>
+  <p>Esse formato gera três efeitos concretos na operação:</p>
+  <ul>
+    <li><strong>Falta de rastreabilidade</strong> — não existe um histórico único mostrando quem alterou o quê e quando em um recebimento.</li>
+    <li><strong>Retrabalho</strong> — os mesmos dados (fornecedor, número da nota, itens) acabam sendo digitados mais de uma vez, em lugares diferentes.</li>
+    <li><strong>Dependência de memória e de pessoas específicas</strong> — quando quem lançou a informação não está disponível, o restante da equipe tem dificuldade em retomar o processo de onde ele parou.</li>
+  </ul>
+  <p>Nenhum desses pontos é incomum — é o padrão de qualquer operação que ainda não centralizou seu registro de recebimento em uma única ferramenta.</p>
+</section>
+
+<section id="solucao">
+  <h2><span class="num">2.</span> A solução</h2>
+  <p class="lede">O ALM centraliza o recebimento de materiais em uma plataforma web única, acessível por desktop, tablet ou celular.</p>
+  <p>Em vez de espalhar a informação entre planilha, mensagem e pasta de rede, o ALM trata o recebimento como um registro só, que atravessa quatro momentos bem definidos:</p>
+  <div class="flow">
+    <div class="flow-step"><strong>Recebimento</strong><span class="sub">cadastro guiado do que chegou — pedido, fornecedor, itens, evidências</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>Validação</strong><span class="sub">regras de negócio aplicadas tanto na interface quanto no backend, antes de qualquer gravação</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>Acompanhamento</strong><span class="sub">status visível para toda a equipe — em digitação, aguardando documentação, em conferência, divergência, finalizado</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step end"><strong>Persistência</strong><span class="sub">gravação confirmada, com histórico de status e trilha de auditoria por registro</span></div>
+  </div>
+  <p>Cada etapa fica visível para qualquer pessoa da equipe — não só para quem criou o registro — o que é justamente o que faltava no processo anterior.</p>
+</section>
+
+<section id="funciona">
+  <h2><span class="num">3.</span> Como o sistema funciona</h2>
+  <p>Em alto nível, o ALM é uma aplicação em três camadas, confirmadas diretamente na estrutura do código-fonte:</p>
+  <div class="pipeline">
+    <div class="pipe-box">Frontend (React + Vite)</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-box">API própria (Node.js)</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-box">Regras de negócio</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-box">Google Sheets</div>
+  </div>
+  <p><strong>O frontend nunca grava diretamente na planilha.</strong> Essa é uma decisão de arquitetura central do projeto: toda escrita passa pela API própria (<code>backend/server.mjs</code>), que valida os dados, controla permissões por perfil de usuário e registra a operação, antes de qualquer linha chegar à planilha. A camada que efetivamente conversa com o Google Sheets (<code>backend/integrations/googleSheets.mjs</code>) fica isolada — o restante do sistema não sabe, e não precisa saber, que a persistência é feita dessa forma. Isso significa que trocar Google Sheets por um banco de dados relacional no futuro exigiria alterar apenas essa camada de integração, sem tocar no frontend nem nos contratos da API.</p>
+</section>
+
+<section id="fluxo">
+  <h2><span class="num">4.</span> Fluxo de recebimento</h2>
+  <p>O cadastro de um recebimento segue um wizard guiado de quatro etapas:</p>
+  <div class="grid">
+    <div class="card"><h4><span class="chip">1</span> Identificação</h4><p>Pedido de compra, fornecedor, CNPJ (validado quando informado), tipo de recebimento e data.</p></div>
+    <div class="card"><h4><span class="chip">2</span> Itens</h4><p>Um ou mais materiais, com descrição, quantidade solicitada e recebida — divergência de quantidade já é sinalizada nessa etapa.</p></div>
+    <div class="card"><h4><span class="chip">3</span> Evidências</h4><p>Fotos do material e documentos. A nota fiscal pode ficar pendente aqui — o sistema não bloqueia o cadastro por isso.</p></div>
+    <div class="card"><h4><span class="chip">4</span> Revisão</h4><p>Resumo de tudo o que foi preenchido, com atalho para editar qualquer etapa anterior antes de confirmar.</p></div>
+  </div>
+  <p>A partir da revisão existem dois caminhos: <strong>"Salvar e continuar depois"</strong> grava o recebimento como rascunho (o backend aceita campos incompletos nesse caso), e <strong>"Enviar para conferência"</strong> exige os dados obrigatórios completos e move o recebimento para <strong>Aguardando documentação</strong> ou <strong>Em conferência</strong>.</p>
+  <p>Controle de status, do início ao fim:</p>
+  <div class="status-flow">
+    <span class="status-chip">Em digitação</span><span class="status-sep">→</span>
+    <span class="status-chip">Aguardando documentação</span><span class="status-sep">→</span>
+    <span class="status-chip">Em conferência</span><span class="status-sep">→</span>
+    <span class="status-chip warn">Divergência identificada</span><span class="status-sep">→</span>
+    <span class="status-chip">Conferido / Finalizado</span>
+  </div>
+  <p>Um ponto importante acontece aqui e não na tela: a interface <strong>só mostra a mensagem de sucesso depois que o backend confirma a gravação</strong>. Se a criação do recebimento falhar no servidor, o registro criado de forma otimista na tela é desfeito, e o usuário vê um erro específico em vez de um "sucesso" que na verdade não aconteceu (seção 14).</p>
+</section>
+
+<section id="nfe">
+  <h2><span class="num">5.</span> Leitura automática de NF-e</h2>
+  <p class="lede">Hoje, ao cadastrar um recebimento, o usuário pode trazer os dados da NF-e de duas formas: <strong>selecionar arquivo</strong> (PDF do DANFE ou imagem já existente) ou <strong>fotografar código</strong> (a aplicação abre a câmera do próprio aparelho e captura uma foto dedicada à leitura do código de barras).</p>
+  <p>Depois que a chave de acesso é reconhecida, o comportamento é direto:</p>
+  <div class="flow">
+    <div class="flow-step"><strong>1. Reconhecimento</strong><span class="sub">a chave é extraída e validada matematicamente (seção 9)</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>2. Revisão</strong><span class="sub">o usuário vê os campos encontrados, com selo de confiança, e pode corrigir qualquer um antes de prosseguir</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>3. Confirmar dados</strong><span class="sub">os campos com correspondência confiável (número da NF, série, CNPJ e, quando já conhecido, o fornecedor) são levados para "Novo recebimento", já pré-preenchidos</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step end"><strong>4. Novo recebimento</strong><span class="sub">o usuário revisa, completa os campos que não têm correspondência confiável com a chave (pedido, itens) e decide quando salvar</span></div>
+  </div>
+  <p><strong>O cadastro não é salvo automaticamente.</strong> "Confirmar dados" nunca chama a criação de um recebimento no backend — ele só leva os dados extraídos até o formulário de "Novo recebimento", onde o usuário continua no controle: revisa, completa o que falta e decide, do mesmo jeito que em qualquer outro cadastro, quando salvar como rascunho ou enviar para conferência.</p>
+  <div class="info-box">Só os campos com correspondência matemática real com a chave de acesso — número da NF, série e CNPJ do emitente — ou com uma correspondência já conhecida no catálogo local de fornecedores são pré-preenchidos. Pedido de compra, data de emissão e valor total, quando aparecem na tela de revisão, vêm de heurísticas de texto sobre o PDF, nunca com confiança alta, e por isso nunca são levados automaticamente para o cadastro — continuam para preenchimento manual, exatamente como em um cadastro digitado do zero.</div>
+</section>
+
+<section id="pipeline">
+  <h2><span class="num">6.</span> Pipeline da NF-e</h2>
+  <p>Do arquivo (ou fotografia) até os dados preenchidos na tela, o caminho é este, confirmado diretamente no código-fonte (<code>src/features/nfeReader/</code>):</p>
+  <div class="pipeline">
+    <div class="pipe-box">PDF / Fotografia</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box opt">Texto do PDF (se houver)</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">ZBar</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">ZXing</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Pipeline robusto</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box opt">OCR (último recurso)</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Normalização</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Validação (módulo 11)</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Campos da NF-e</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Revisão</div><span class="pipe-arrow">→</span>
+    <div class="pipe-box">Novo recebimento</div>
+  </div>
+  <p>Cada etapa só é tentada se a anterior não resolveu. Um PDF digital comum, que já traz a chave como texto selecionável, resolve na primeira etapa e nunca aciona os decodificadores de imagem nem o OCR — isso mantém o caso comum rápido e reserva o processamento mais pesado só para os casos que realmente precisam dele. Quando é necessário decodificar uma imagem, a ordem de tentativa é <strong>ZBar primeiro</strong>, depois <strong>ZXing</strong>, e só então o <strong>pipeline robusto</strong> (recorte, contraste, margem artificial, correção de pequena inclinação) — na fotografia, que é o caminho validado fisicamente (seção 8), essa ordem já resolve a grande maioria dos casos sem precisar do OCR.</p>
+</section>
+
+<section id="mecanismos">
+  <h2><span class="num">7.</span> Por que existem vários mecanismos de leitura</h2>
+  <p>O módulo usa quatro tecnologias diferentes, e elas não fazem a mesma coisa:</p>
+  <div class="grid">
+    <div class="card"><h4>BarcodeDetector</h4><p>API nativa do navegador para leitura de código de barras. Usada como atalho quando o navegador suporta — o suporte não é universal (Safari/iOS historicamente não implementa), por isso o sistema nunca depende só dela.</p></div>
+    <div class="card"><h4>ZXing</h4><p>Biblioteca open source de leitura de código de barras. Mecanismo adicional, usado tanto numa tentativa rápida quanto no pipeline robusto, com recorte e correção de rotação/inclinação.</p></div>
+    <div class="card"><h4>ZBar (WebAssembly)</h4><p>Engine de leitura compilada para WASM. Primeira tentativa em fotografias estáticas — no conjunto de fixtures de teste do projeto, decodificou corretamente 10 de 10 casos, contra 7 de 10 do ZXing sozinho, incluindo casos com rotação e leve inclinação.</p></div>
+    <div class="card"><h4>Tesseract.js (OCR)</h4><p>Reconhecimento óptico de caracteres. Lê os 44 números impressos por extenso, não as barras — é o último recurso, só acionado se nenhum decodificador de código de barras encontrar nada.</p></div>
+  </div>
+  <p>A diferença conceitual entre as duas categorias importa: <strong>decodificador de código de barras</strong> (BarcodeDetector, ZXing, ZBar) lê o padrão de linhas pretas e brancas; <strong>OCR</strong> lê caracteres visíveis. Uma foto que mostre só as barras, sem os números escritos, pode falhar no OCR mesmo com o código de barras perfeito — e o sistema informa isso de forma específica ao usuário, em vez de uma mensagem genérica de "não foi possível ler".</p>
+</section>
+
+<section id="foto">
+  <h2><span class="num">8.</span> Por que usamos foto</h2>
+  <p>A captura por fotografia foi priorizada como a ação principal de leitura de código de barras na interface de produção, e essa foi uma decisão tomada com base em teste físico em aparelho real, não em suposição.</p>
+  <p>A fotografia oferece uma imagem estática de maior qualidade que um frame de vídeo ao vivo, o que permite um processamento mais robusto (recorte, contraste, correção de inclinação) sobre uma única imagem parada, em vez de tentar decodificar quadro a quadro em tempo real. Isso também reduz a dependência de APIs específicas de navegador — a captura de foto de alta qualidade usa <code>ImageCapture</code> quando disponível, com fallback automático para o seletor de câmera nativo do sistema operacional quando essa API não existe ou falha — e funciona de forma consistente entre diferentes dispositivos, incluindo aparelhos onde nem toda API de câmera de última geração está presente.</p>
+  <p>O scanner de leitura contínua pela câmera (que decodifica quadro a quadro, em tempo real) foi implementado e continua funcionando internamente, e permanece citado neste documento como mecanismo experimental e de diagnóstico interno — acessível pelo painel técnico (seção 17) — mas não é a ação oferecida ao usuário na interface de produção, justamente porque a fotografia foi a que se mostrou confiável no teste físico.</p>
+</section>
+
+<section id="validacao">
+  <h2><span class="num">9.</span> Validação da chave</h2>
+  <p>Encontrar uma sequência de 44 números não é suficiente para considerá-la a chave de acesso de uma NF-e. Em qualquer uma das fontes possíveis — texto do PDF, código de barras ou OCR — a sequência passa pelo mesmo processo antes de ser aceita:</p>
+  <div class="flow">
+    <div class="flow-step"><strong>Normalização</strong><span class="sub">remove tudo que não é dígito (espaços, pontos, hífens, quebras de linha)</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>Estrutura</strong><span class="sub">confere se restam exatamente 44 dígitos</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><strong>Dígito verificador</strong><span class="sub">recalcula o 44º dígito a partir dos 43 anteriores</span></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step end"><strong>Módulo 11</strong><span class="sub">só é aceita se o cálculo bater com o dígito informado</span></div>
+  </div>
+  <p>Essa validação é centralizada em um único ponto do código e reaproveitada por todas as fontes — o critério do que conta como "chave válida" nunca diverge entre um caminho e outro. Um código de barras de outro produto, uma etiqueta de transportadora ou um texto qualquer com 44 números não é aceito como se fosse a chave da nota.</p>
+</section>
+
+<section id="local">
+  <h2><span class="num">10.</span> Processamento local</h2>
+  <p>A leitura de PDF, a decodificação de código de barras (BarcodeDetector, ZXing, ZBar) e o OCR (Tesseract.js) rodam inteiramente no navegador do usuário — usando Canvas, WebAssembly e as APIs de câmera do próprio navegador. Nenhum frame de vídeo ou fotografia é enviado a um servidor como parte do processo de <strong>leitura</strong> da NF-e.</p>
+  <p>Isso é diferente da <strong>persistência dos dados do recebimento</strong>: depois que o usuário revisa e confirma os dados extraídos (ou digitados manualmente), essas informações são enviadas para a API própria do ALM e gravadas na planilha do Google Sheets. Ou seja, a imagem em si não sai do aparelho durante a leitura, mas os dados que o usuário decide salvar no recebimento seguem para o backend, como em qualquer sistema de cadastro.</p>
+</section>
+
+<section id="arquitetura">
+  <h2><span class="num">11.</span> Arquitetura</h2>
+  <div class="arch">
+    <div class="arch-layer user">Usuário<span class="sub">desktop, tablet ou celular</span></div>
+    <div class="arch-down">↓</div>
+    <div class="arch-layer frontend">React + Vite<span class="sub">interface, wizard de cadastro, consulta, dashboard</span></div>
+    <div class="arch-down">↓</div>
+    <div class="arch-layer module">Módulo de leitura de NF-e (frontend)<span class="sub">PDF, código de barras e OCR — 100% no navegador</span></div>
+    <div class="arch-down">↓</div>
+    <div class="arch-layer api">API própria — Node.js (/api/v1)<span class="sub">HTTP puro, sem framework adicional</span></div>
+    <div class="arch-down">↓</div>
+    <div class="arch-layer rules">Validação, regras de negócio e permissões por perfil</div>
+    <div class="arch-down">↓</div>
+    <div class="arch-layer data">Google Sheets<span class="sub">persistência estruturada, via googleapis</span></div>
+  </div>
+  <p>O módulo de NF-e é destacado no diagrama como um bloco dentro do próprio frontend — ele processa a imagem localmente e só entrega ao restante da aplicação um conjunto de campos já validados, que seguem o mesmo caminho (API → validação → Google Sheets) que qualquer outro dado digitado manualmente no cadastro.</p>
+</section>
+
+<section id="frontend">
+  <h2><span class="num">12.</span> Frontend</h2>
+  <p>A interface é construída em <strong>React 18</strong>, com <strong>Vite 6</strong> como build tool e servidor de desenvolvimento — o Vite também é usado para carregamento sob demanda (<em>lazy loading</em>): o módulo de leitura de NF-e e suas dependências mais pesadas (pdf.js, ZBar/WASM, Tesseract) só são baixados quando o usuário realmente abre essa tela, não no carregamento inicial da aplicação.</p>
+  <p>A aplicação foi construída para funcionar igualmente bem em três contextos:</p>
+  <div class="grid">
+    <div class="card"><h4>Desktop</h4><p>Barra lateral de navegação fixa, barra superior com busca global e informações do usuário.</p></div>
+    <div class="card"><h4>Tablet</h4><p>Os mesmos componentes se reorganizam a partir de breakpoints específicos, sem perder funcionalidade.</p></div>
+    <div class="card"><h4>Mobile</h4><p>Componentes próprios substituem os de desktop: cabeçalho mobile, navegação inferior e cartões no lugar de tabela para listas.</p></div>
+  </div>
+  <p>Para telas estreitas, a aplicação não apenas encolhe a mesma tela: troca a tabela de recebimentos por uma lista de cartões pensada para toque, e a navegação lateral por uma barra inferior — o padrão mais comum em aplicativos mobile. A interface tem <strong>tema claro e escuro</strong>, com alternância manual e persistência da preferência do usuário, e respeita a preferência do sistema por menos animação.</p>
+</section>
+
+<section id="backend">
+  <h2><span class="num">13.</span> Backend</h2>
+  <p>O backend é um servidor HTTP em <strong>Node.js</strong>, sem framework adicional, que expõe uma API REST em <code>/api/v1</code>. Ele é responsável por:</p>
+  <div class="grid">
+    <div class="card"><h4>Validação</h4><p>Campos obrigatórios, formato de data, CNPJ, tipo de recebimento, unidade e quantidades — com o detalhe de qual campo falhou propagado até a mensagem mostrada ao usuário.</p></div>
+    <div class="card"><h4>Regras de negócio</h4><p>Rascunhos são aceitos incompletos; envio ao fluxo de conferência exige os dados completos. Transições de status seguem regras específicas por etapa.</p></div>
+    <div class="card"><h4>Persistência</h4><p>Cada entidade (recebimentos, itens, divergências, histórico, auditoria, anexos, usuários) tem sua aba própria no Google Sheets, criada automaticamente se ainda não existir.</p></div>
+    <div class="card"><h4>Tratamento de erro</h4><p>Erros de validação e de regra de negócio são propagados com mensagem específica — nunca um erro genérico sem contexto.</p></div>
+    <div class="card"><h4>Rascunho e status</h4><p>Cinco estados controlados (Em digitação, Aguardando documentação, Em conferência, Divergência identificada, Conferido/Finalizado), com transições restritas por perfil.</p></div>
+    <div class="card"><h4>Auditoria</h4><p>Histórico de status e trilha de auditoria por recebimento — quem alterou o quê e quando.</p></div>
+  </div>
+  <p>Permissões por perfil também são aplicadas no backend, não só na interface: o perfil "Consulta" não altera dados; os demais perfis têm regras específicas sobre quais transições de status podem executar — por exemplo, Suprimentos atua apenas em "Em conferência" e "Divergência identificada", e apenas o Administrador pode forçar uma transição fora do fluxo padrão.</p>
+</section>
+
+<section id="persistencia">
+  <h2><span class="num">14.</span> Persistência confiável</h2>
+  <p>Um dos pontos mais relevantes da engenharia do ALM não aparece na tela — está em como a interface trata a resposta do backend:</p>
+  <ul>
+    <li>A interface <strong>aguarda a confirmação real do backend</strong> antes de mostrar qualquer mensagem de sucesso.</li>
+    <li>Criar um recebimento ou mudar seu status só é considerado concluído depois que a API confirma que a gravação na planilha aconteceu.</li>
+    <li>Se a chamada falhar, o registro criado de forma otimista na tela é desfeito (ou o erro é propagado a quem chamou) — o usuário vê uma mensagem de erro específica, nunca um "sucesso" falso.</li>
+  </ul>
+  <p>Por que isso é melhor do que simplesmente disparar a gravação e seguir em frente (<em>fire-and-forget</em>): sem essa espera, seria possível a tela dizer "recebimento criado" e a linha correspondente nunca ter chegado à planilha — um registro fantasma, que existe na tela do usuário mas não na fonte de dados real, é pior do que nenhum registro, porque passa uma confiança falsa. Em um sistema que substitui controle manual, a garantia de que "o que está na tela é o que está gravado" é o requisito mínimo para a equipe confiar na ferramenta.</p>
+</section>
+
+<section id="sheets">
+  <h2><span class="num">15.</span> Google Sheets</h2>
+  <p>O Google Sheets é usado hoje como camada de persistência estruturada porque oferece uma integração simples, uma visualização dos dados acessível para qualquer pessoa da equipe sem depender de uma ferramenta técnica adicional, e boa adequação ao escopo e volume atuais do projeto.</p>
+  <p>Vale destacar que essa escolha não é uma limitação exposta ao resto da aplicação: <strong>o frontend não depende diretamente da planilha</strong> — ele fala apenas com a API própria do ALM, que por sua vez isola toda a comunicação com o Google Sheets em uma única camada de integração. Trocar essa persistência por um banco de dados relacional no futuro é uma mudança concentrada nessa camada, sem exigir alterações no frontend nem nos contratos da API.</p>
+</section>
+
+<section id="qualidade">
+  <h2><span class="num">16.</span> Qualidade</h2>
+  <p>Resultado obtido executando a suíte de testes e o build de produção no momento deste documento:</p>
+  <pre class="terminal">$ npm test
+<span class="dim">ℹ tests 56
+ℹ pass 56
+ℹ fail 0</span>
+
+$ npm run build
+<span class="dim">✓ 1886 modules transformed
+✓ built in 5.82s</span></pre>
+  <p>Os testes cobrem, entre outros pontos, os grupos principais da lógica que pode ser verificada de forma determinística, sem depender de câmera, navegador completo ou rede:</p>
+  <div class="grid">
+    <div class="card"><h4>Validação de NF-e</h4><p>Cálculo do dígito verificador (módulo 11) da chave de acesso, incluindo chaves formatadas e propositalmente inválidas.</p></div>
+    <div class="card"><h4>Decoders</h4><p>Classificação de cada tentativa de leitura de código de barras (não encontrado, formato errado, dígito verificador inválido, válido) e os adaptadores usados no painel de diagnóstico.</p></div>
+    <div class="card"><h4>Captura</h4><p>Cálculo do teto de redução de fotos grandes e feature detection de <code>ImageCapture</code>, sem depender de user-agent.</p></div>
+    <div class="card"><h4>Pipeline / pré-preenchimento</h4><p>Montagem do resultado de análise e a regra de que só campos de confiança alta (número da NF, série, CNPJ, fornecedor via catálogo) chegam ao pré-preenchimento do formulário de recebimento.</p></div>
+  </div>
+  <p>Fluxos que dependem de APIs de navegador reais — câmera, decodificação de imagem em Canvas, renderização de PDF, navegação entre telas — não rodam no <code>node --test</code> padrão. Esses caminhos são validados por scripts dedicados baseados em Playwright, que abrem um navegador real e exercitam o fluxo de ponta a ponta contra o servidor de desenvolvimento, incluindo a confirmação de que nenhuma chamada de gravação ocorre antes do usuário decidir salvar.</p>
+</section>
+
+<section id="diagnostico">
+  <h2><span class="num">17.</span> Painel técnico de diagnóstico</h2>
+  <p>Existe uma URL específica, que ativa um painel de diagnóstico do leitor de NF-e — ela não aparece de nenhuma forma na navegação normal do sistema:</p>
+  <pre>https://allm.vercel.app/?nfeScannerDebug=1#/leitura-automatica</pre>
+  <p>Sem o parâmetro <code>?nfeScannerDebug=1</code> na URL, nenhum botão, link ou funcionalidade extra é exibido, e nenhum código relacionado ao painel chega a ser baixado pelo navegador. O painel permite comparar, sobre a mesma imagem ou o mesmo frame de câmera:</p>
+  <ul>
+    <li>Qual engine está sendo usado automaticamente pelo sistema em produção, naquele navegador.</li>
+    <li>Disponibilidade de cada engine (BarcodeDetector nativo, ZXing, ZBar) no aparelho atual.</li>
+    <li>Resultado de leitura por engine — detectou algo, e o que foi detectado é uma chave válida.</li>
+    <li>Tempo de decodificação de cada tentativa, em milissegundos, e a resolução usada.</li>
+    <li>Comparação entre frame de vídeo ao vivo e foto capturada, quando a API de foto de alta qualidade está disponível.</li>
+    <li>Exportação de um resumo técnico, sem nenhum dado fiscal — a chave nunca é exportada por inteiro.</li>
+  </ul>
+  <p>Esse painel permite investigar um problema de leitura sem alterar a experiência do funcionário que usa o sistema no dia a dia, e sem precisar adivinhar qual engine estava em uso — foi essa mesma ferramenta, combinada a teste físico em aparelho real, que embasou a decisão de priorizar a captura por fotografia sobre o scanner ao vivo (seção 8).</p>
+</section>
+
+<section id="decisoes">
+  <h2><span class="num">18.</span> Decisões de engenharia</h2>
+  <div class="grid">
+    <div class="card"><h4>Feature detection</h4><p>A aplicação nunca pergunta "isso é um iPhone?" — ela pergunta "esta API existe e funciona neste navegador?". Evita que a lógica quebre quando um navegador novo aparece.</p></div>
+    <div class="card"><h4>Fallbacks sequenciais</h4><p>Se um decodificador não encontra a chave, o próximo assume — sequencialmente, nunca ao mesmo tempo, evitando desperdiçar CPU/bateria decodificando o mesmo frame em paralelo.</p></div>
+    <div class="card"><h4>ImageCapture com fallback</h4><p>A captura tenta primeiro a API que entrega imagem de maior qualidade; se não existir ou falhar, cai automaticamente para o seletor de câmera nativo, sem travar a tela.</p></div>
+    <div class="card"><h4>Limite de tamanho de foto</h4><p>A imagem só é reduzida se ultrapassar um teto de segurança de memória (4096px no maior lado) — nunca reduzida cegamente para uma resolução baixa fixa.</p></div>
+    <div class="card"><h4>ZBar antes de ZXing</h4><p>Ordem definida por evidência medida no próprio projeto (seção 7), não por suposição.</p></div>
+    <div class="card"><h4>OCR só como último recurso</h4><p>Nunca roda continuamente sobre vídeo — seria pesado demais para celular — e nunca é a primeira tentativa.</p></div>
+    <div class="card"><h4>Validação centralizada</h4><p>Nenhum decodificador implementa sua própria checagem de "isso é uma NF-e válida"; o cálculo do dígito verificador é único e reaproveitado por todas as fontes.</p></div>
+    <div class="card"><h4>Diagnóstico isolado</h4><p>Painel de benchmark carregado sob demanda, só com a query string explícita — quem usa o sistema no dia a dia nunca baixa esse código.</p></div>
+    <div class="card"><h4>Lazy loading do módulo de NF-e</h4><p>O módulo inteiro (e suas dependências pesadas — pdf.js, ZBar/WASM, Tesseract) só é carregado quando o usuário abre a tela de leitura automática.</p></div>
+  </div>
+</section>
+
+<section id="alternativas">
+  <h2><span class="num">19.</span> Alternativas comerciais</h2>
+  <p>Os dois SDKs comerciais mais relevantes para leitura de código de barras via web são o <strong>Dynamsoft Barcode Reader</strong> e o <strong>Scandit Barcode Scanner SDK</strong>. Ambos são produtos especializados, com algoritmos proprietários otimizados para cenários difíceis — códigos danificados, em movimento, com desfoque ou a certa distância — além de controles avançados de câmera integrados ao próprio SDK.</p>
+  <p><strong>Dynamsoft Barcode Reader</strong> — segundo o site oficial do fabricante, é comercializado por assinatura anual, com licenciamento flexível (por servidor, por uso ou por licença gerenciada). Segundo um revendedor autorizado (ComponentSource), o preço de entrada da versão mais recente (11.4, fevereiro de 2026) girava em torno de US$ 1.469 — valor de referência de revenda, não uma tabela oficial pública; o fabricante recomenda contato direto com o time comercial para cotação.</p>
+  <p><strong>Scandit Barcode Scanner SDK</strong> — segundo a documentação oficial de suporte da Scandit, o licenciamento do Web SDK é baseado em "dispositivos ativos por ano": um dispositivo que usou o SDK ao menos uma vez no período de faturamento conta como um único ativo, independentemente do número de leituras realizadas. A empresa não publica uma tabela de preços detalhada — é necessário contato comercial.</p>
+  <p>O valor de vantagem central é o mesmo nos dois casos: algoritmos altamente otimizados, testados em produção por muitos clientes, com suporte comercial e SLA quando aplicável — o tipo de garantia que faz sentido para uma operação industrial de grande volume com scanner ao vivo contínuo. O custo, também nos dois casos, é do mesmo tipo: licenciamento recorrente, dependência de um fornecedor externo e integração proprietária, já que a lógica de leitura fica dentro do SDK fechado do fabricante.</p>
+</section>
+
+<section id="adequada">
+  <h2><span class="num">20.</span> Por que a solução do ALM é adequada</h2>
+  <p>A arquitetura atual resolve o requisito principal — ler a chave de acesso de uma NF-e a partir de PDF ou fotografia — sem exigir licença comercial de scanner, mantendo controle total do pipeline de leitura. Isso se traduz em vantagens concretas para o estágio atual do projeto:</p>
+  <ul>
+    <li><strong>Funciona sem custo recorrente de licença</strong>, o que evita um compromisso financeiro contínuo antes de o volume de uso justificar esse investimento.</li>
+    <li><strong>Permite diagnóstico real</strong>, através do painel técnico (seção 17), sem depender de suporte de um fornecedor externo para investigar um problema de leitura.</li>
+    <li><strong>Permite evolução</strong> — adicionar, remover ou reordenar um mecanismo de leitura é uma decisão de engenharia interna, não uma negociação de contrato.</li>
+    <li><strong>Integra diretamente ao processo de recebimento</strong>, alimentando os mesmos campos usados no cadastro manual, sem um fluxo paralelo.</li>
+    <li><strong>Funciona na web e em dispositivos móveis reais</strong>, validado fisicamente em iPhone, sem exigir instalação de aplicativo.</li>
+  </ul>
+  <p>Isso não significa afirmar que a solução atual é superior a um SDK comercial industrial em todos os cenários — um SDK especializado continua sendo a opção correta para operações de scanner ao vivo contínuo em alto volume (seção 22). Significa que, para o requisito atual do ALM, a arquitetura escolhida é a mais adequada considerando custo, controle e capacidade de evolução.</p>
+</section>
+
+<section id="comparacao">
+  <h2><span class="num">21.</span> Comparação</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Critério</th><th>Solução atual do ALM</th><th>Dynamsoft</th><th>Scandit</th></tr>
+    <tr><td>Licenciamento</td><td>Gratuita — bibliotecas open source (ZXing, ZBar) + API nativa do navegador</td><td>Comercial, assinatura anual</td><td>Comercial, por dispositivo ativo/ano</td></tr>
+    <tr><td>Controle do código</td><td>Total — pipeline próprio, auditável e modificável</td><td>Nenhum — lógica proprietária/fechada</td><td>Nenhum — lógica proprietária/fechada</td></tr>
+    <tr><td>Customização</td><td>Total, por ser código próprio</td><td>Limitada às opções expostas pelo SDK</td><td>Limitada às opções expostas pelo SDK</td></tr>
+    <tr><td>Uso web</td><td>Sim, nativo (navegador)</td><td>Sim, com SDK dedicado para web</td><td>Sim, com SDK dedicado para web</td></tr>
+    <tr><td>Leitura de Code 128</td><td>Sim (ZXing, ZBar, BarcodeDetector)</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Leitura por foto (imagem estática)</td><td>Sim — pipeline dedicado com múltiplos fallbacks</td><td>Sim, otimizado para cenários difíceis</td><td>Sim, otimizado para cenários difíceis</td></tr>
+    <tr><td>Scanner ao vivo</td><td>Implementado; hoje não exposto como ação principal na produção</td><td>Sim, com otimizações comerciais de captura contínua</td><td>Sim, referência de mercado em captura contínua</td></tr>
+    <tr><td>Suporte empresarial</td><td>Não (projeto próprio)</td><td>Sim, contratual</td><td>Sim, contratual</td></tr>
+    <tr><td>Dependência de fornecedor</td><td>Nenhuma — bibliotecas open source substituíveis</td><td>Alta — renovação de licença necessária</td><td>Alta — renovação de licença necessária</td></tr>
+    <tr><td>Integração com o restante do sistema</td><td>Direta — mesmos módulos, mesma validação de chave</td><td>Exigiria camada de integração própria</td><td>Exigiria camada de integração própria</td></tr>
+    <tr><td>Uso indicado</td><td>Validar e operar a leitura de NF-e sem custo recorrente, com controle total do comportamento</td><td>Desempenho de leitura de nível industrial, com suporte comercial</td><td>Desempenho de leitura de nível industrial, com suporte comercial</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="valor">
+  <h2><span class="num">22.</span> Valor para o almoxarifado</h2>
+  <div class="grid">
+    <div class="card"><h4>Centralização</h4><p>Um único lugar para registrar, consultar e acompanhar o recebimento, no lugar de planilha, e-mail, WhatsApp e pastas de rede.</p></div>
+    <div class="card"><h4>Menos digitação</h4><p>A leitura automática da chave de NF-e evita digitar número, série e CNPJ manualmente quando a leitura funciona.</p></div>
+    <div class="card"><h4>Padronização</h4><p>Os mesmos campos, o mesmo fluxo de status e as mesmas regras para toda a equipe, em vez de cada pessoa registrar do seu próprio jeito.</p></div>
+    <div class="card"><h4>Rastreabilidade</h4><p>Histórico de status e trilha de auditoria mostrando quem alterou o quê e quando, por recebimento.</p></div>
+    <div class="card"><h4>Redução de retrabalho potencial</h4><p>Dados digitados uma vez alimentam o restante do fluxo, em vez de serem relançados em lugares diferentes.</p></div>
+    <div class="card"><h4>Acesso mobile</h4><p>Consulta e cadastro funcionam em celular real, sem depender de estar na frente de um computador específico.</p></div>
+    <div class="card"><h4>Persistência confirmada</h4><p>O que está na tela reflete o que foi realmente salvo, graças à confirmação do backend antes de qualquer sucesso.</p></div>
+    <div class="card"><h4>Leitura de NF-e</h4><p>Uma etapa a menos de digitação manual no fluxo de recebimento, validada fisicamente em aparelho real.</p></div>
+  </div>
+</section>
+
+<section id="maturidade">
+  <h2><span class="num">23.</span> Maturidade do projeto</h2>
+  <p>O ALM não é apenas uma interface — é um sistema que combina, de forma coerente, várias camadas de engenharia:</p>
+  <div class="grid">
+    <div class="card"><p><strong>Frontend</strong> responsivo, com componentização e tema claro/escuro.</p></div>
+    <div class="card"><p><strong>Backend</strong> próprio, com validação e regras de negócio.</p></div>
+    <div class="card"><p><strong>Integração</strong> com Google Sheets via API oficial, autenticada por conta de serviço.</p></div>
+    <div class="card"><p><strong>Persistência</strong> confirmada, com rollback em caso de falha.</p></div>
+    <div class="card"><p><strong>Regras de negócio</strong> e permissões por perfil de usuário.</p></div>
+    <div class="card"><p><strong>Processamento de imagem</strong> no navegador (Canvas, WebAssembly).</p></div>
+    <div class="card"><p><strong>Leitura de código de barras</strong> com múltiplos mecanismos e fallback sequencial.</p></div>
+    <div class="card"><p><strong>OCR</strong> como último recurso de leitura.</p></div>
+    <div class="card"><p><strong>Testes automatizados</strong> para a lógica crítica (56 testes).</p></div>
+    <div class="card"><p><strong>Responsividade</strong> real, testada em desktop, tablet e celular.</p></div>
+    <div class="card"><p><strong>Deploy</strong> real, acessível pela web.</p></div>
+    <div class="card"><p><strong>Diagnóstico</strong> técnico dedicado, isolado da experiência do usuário.</p></div>
+  </div>
+</section>
+
+<section id="evolucao">
+  <h2><span class="num">24.</span> Possibilidades de evolução</h2>
+  <p>O projeto está em um estado funcional e testado para o escopo atual. Os pontos abaixo são caminhos naturais de continuidade, não lacunas que impedem o uso hoje:</p>
+  <ul>
+    <li><strong>Banco de dados relacional</strong>, caso o volume de dados venha a justificar a migração — a camada de integração já foi isolada para tornar essa troca concentrada.</li>
+    <li><strong>Novas integrações</strong>, como consulta automática a um ERP para validar o pedido de compra informado.</li>
+    <li><strong>Novos indicadores</strong> no dashboard, à medida que o uso real apontar quais métricas são mais relevantes.</li>
+    <li><strong>SDK industrial de leitura de código de barras</strong> (Dynamsoft ou Scandit), se a operação vier a exigir scanner ao vivo de desempenho industrial.</li>
+    <li><strong>Novas automações</strong> no fluxo de recebimento, como pré-preenchimento direto a partir da própria etapa de anexos.</li>
+  </ul>
+</section>
+
+<section id="conclusao">
+  <h2><span class="num">25.</span> Conclusão</h2>
+  <p>O ALM é uma solução funcional e tecnicamente estruturada para digitalizar o processo de recebimento de um almoxarifado. Ele combina processo de negócio real, frontend responsivo, backend próprio com regras de validação e permissão, persistência integrada a uma ferramenta corporativa comum, tratamento de erro explícito, processamento de imagem no navegador, leitura de código de barras com múltiplos mecanismos de fallback, testes automatizados para a lógica crítica e uma ferramenta própria de diagnóstico técnico.</p>
+  <p>As escolhas técnicas do projeto equilibram funcionalidade, custo, compatibilidade, manutenibilidade e confiabilidade — cada decisão documentada e justificada, não tomada por acaso ou por simplicidade excessiva. O resultado é um sistema pequeno na superfície, mas com profundidade de engenharia real por baixo, resolvendo um problema concreto sem introduzir complexidade ou custo que o projeto ainda não precisa.</p>
+</section>
+
+<section id="resumo60">
+  <h2><span class="num">26.</span> Resumo executivo</h2>
+  <div class="summary60">
+    <div class="label">ALM em 60 segundos</div>
+    <p>"O ALM é um sistema que organiza o recebimento de materiais do almoxarifado, que hoje é feito de um jeito espalhado — parte em planilha, parte em WhatsApp, parte em papel. Com o ALM, a pessoa cadastra o recebimento em poucos passos, anexa foto e nota fiscal, e o sistema acompanha o status até a conferência ser finalizada, com histórico de tudo o que aconteceu. A parte que mais se destaca é a leitura automática da Nota Fiscal: em vez de digitar número, série e CNPJ na mão, dá para fotografar o código de barras e o sistema lê e leva os dados para o cadastro — testado em celular real. Por trás, os dados ficam guardados numa planilha do Google, através de uma API própria que só confirma sucesso depois que o dado realmente foi salvo. E o sistema funciona tanto no computador quanto no celular, sem precisar instalar nada."</p>
+  </div>
+</section>
+
+<section id="perguntas">
+  <h2><span class="num">27.</span> Perguntas que o projeto está preparado para responder</h2>
+
+  <div class="qa"><div class="q">Por que Google Sheets?</div><p class="a">É a persistência adotada para esta fase do projeto — acessível para a equipe, sem exigir infraestrutura de banco de dados própria. A integração fica isolada em uma única camada, então trocar por um banco relacional no futuro não exige alterar o frontend nem os contratos da API.</p></div>
+
+  <div class="qa"><div class="q">Por que ZBar e ZXing, e não só um dos dois?</div><p class="a">Eles têm comportamentos diferentes na prática: no conjunto de imagens de teste do projeto, o ZBar sozinho leu 10 de 10 casos e o ZXing sozinho leu 7 de 10, incluindo casos com rotação que só o ZBar resolveu de cara. O sistema tenta o mais forte primeiro e usa o outro como reforço, sequencialmente.</p></div>
+
+  <div class="qa"><div class="q">Por que fotografia, e não scanner ao vivo?</div><p class="a">Porque, em teste físico real, a captura por fotografia se mostrou confiável, e a leitura contínua pela câmera não — especialmente em iPhone/Safari. O scanner ao vivo continua implementado e acessível pelo painel de diagnóstico, mas deixou de ser a ação principal oferecida ao usuário.</p></div>
+
+  <div class="qa"><div class="q">Por que não Dynamsoft ou Scandit?</div><p class="a">Porque o escopo atual não exige o nível de desempenho de scanner ao vivo industrial que esses SDKs otimizam, e o custo recorrente de licença não se justifica ainda. A arquitetura foi desenhada para permitir a troca por um SDK comercial no futuro, caso a necessidade apareça, sem reescrever o módulo inteiro.</p></div>
+
+  <div class="qa"><div class="q">Como a NF-e é validada?</div><p class="a">A chave de acesso tem 44 dígitos, e o último é um dígito verificador calculado por uma fórmula padrão (módulo 11) sobre os outros 43. O sistema recalcula esse dígito e só aceita a chave se o cálculo bater — vale para texto de PDF, código de barras e OCR, sempre pela mesma função de validação.</p></div>
+
+  <div class="qa"><div class="q">O que ocorre quando o backend falha?</div><p class="a">A interface não mostra sucesso enquanto o backend não confirmar. Se a criação de um recebimento falhar no servidor, o registro otimista criado na tela é desfeito; se uma mudança de status falhar, o erro específico é mostrado ao usuário, em vez de uma mensagem genérica.</p></div>
+
+  <div class="qa"><div class="q">Nada é salvo automaticamente após ler a NF-e?</div><p class="a">Correto. "Confirmar dados" leva os campos confiáveis até o formulário de "Novo recebimento" já pré-preenchido, mas não chama a criação do recebimento no backend — o usuário continua responsável por revisar, completar o que falta e decidir quando salvar como rascunho ou enviar para conferência.</p></div>
+
+  <div class="qa"><div class="q">Como funciona no celular?</div><p class="a">A interface inteira é responsiva, com navegação inferior e cartões no lugar de tabela. A leitura de NF-e foi pensada primeiro para celular: a captura por fotografia usa a câmera do aparelho e foi testada fisicamente em iPhone.</p></div>
+</section>
+
+</div>
+
+<footer class="doc-footer">
+  ALM — Sistema de Recebimentos de Almoxarifado · Documento de apresentação executiva
+</footer>
+
+</body>
+</html>
