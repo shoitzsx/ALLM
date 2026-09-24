@@ -29,7 +29,7 @@ import { isScannerDebugEnabled } from './scannerDebug.js'
 const NfeScannerBenchmark = React.lazy(() => import('./NfeScannerBenchmark.jsx'))
 
 /**
- * Disponibilidade de "Tirar foto"/"Escanear código de barras" é decidida por
+ * Disponibilidade de "Tirar foto"/"Fotografar código" é decidida por
  * CAPACIDADE do dispositivo, não pela largura da viewport — um tablet em
  * landscape (1024px, 1180px...) tem câmera e toque como qualquer outro
  * tablet, só porque a janela é larga não deixa de ser um aparelho com câmera.
@@ -47,8 +47,11 @@ const TOUCH_CAPABLE =
 // "Tirar foto" dispara o app de câmera nativo via capture="environment" — só faz sentido nessa forma em
 // aparelho de toque com câmera (num desktop com webcam, capture não abre "câmera", cai no seletor comum).
 const CAN_TAKE_PHOTO = CAMERA_SUPPORTED && TOUCH_CAPABLE
-// O scanner ao vivo é nossa própria UI de câmera (não depende de capture) — funciona em qualquer
-// dispositivo com câmera, com ou sem touch (ex.: notebook com webcam).
+// "Fotografar código" (NfePhotoCapture.jsx) é nossa própria UI de câmera — funciona em qualquer
+// dispositivo com câmera, com ou sem touch (ex.: notebook com webcam). Nome mantido genérico
+// (não "CAN_TAKE_PHOTO_CODE") porque também gatinha o scanner ao vivo internamente preservado
+// (NfeLiveScanner) para quando ele voltar a ter uma entrada pública — ver comentário mais abaixo,
+// perto de onde "Escanear código de barras" foi removido da interface de produção.
 const CAN_SCAN_BARCODE = CAMERA_SUPPORTED
 
 // Calculado uma vez: a query string não muda durante a sessão de uma SPA de
@@ -125,15 +128,14 @@ export default function NfeReaderPage({ pushToast }) {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false)
   const [benchmarkOpen, setBenchmarkOpen] = useState(false)
-  // Decisão de arquitetura por CAPACIDADE, não por user-agent: existe o
-  // BarcodeDetector nativo e ele suporta code_128? Determina se "Escanear
-  // código de barras" abre o live fast path (rápido, mas só existe em
-  // Chromium/Android Chrome) ou se "Fotografar código" vira a ação
-  // principal (universal — funciona em qualquer navegador com câmera,
-  // incluindo Safari/iOS, onde o live scanner sozinho se mostrou pouco
-  // confiável em teste físico real — ver README). `null` enquanto a checagem
-  // assíncrona não resolve — os botões dependentes dela ficam ocultos até lá
-  // para não piscar entre os dois estados.
+  // Existe o BarcodeDetector nativo e ele suporta code_128? Testado fisicamente em
+  // iPhone/Safari e Android/Chrome e considerado pouco confiável por enquanto (ver README) — por
+  // isso a interface de produção não usa mais este valor para decidir entre "Escanear código de
+  // barras" e "Fotografar código" (essa ação some da UI de produção independente do resultado
+  // aqui). Mantido só para alimentar `fastPathMode` do NfeLiveScanner abaixo — implementação
+  // preservada, não removida, para reabilitar a entrada pública depois da apresentação. O
+  // benchmark de diagnóstico (?nfeScannerDebug=1, NfeScannerBenchmark.jsx) faz sua própria
+  // checagem independente, não depende deste estado.
   const [nativeAvailable, setNativeAvailable] = useState(null)
 
   useEffect(() => {
@@ -206,11 +208,18 @@ export default function NfeReaderPage({ pushToast }) {
     }
   }
 
-  /** Chave já validada pelo scanner ao vivo ou pela captura de foto — mesmo formato de resultado, sem arquivo envolvido. */
-  const handleScannedKey = (chave) => {
+  /**
+   * Chave já validada pelo scanner ao vivo ou pela captura de foto — mesmo
+   * formato de resultado, sem arquivo envolvido. `origem` identifica qual das
+   * duas produziu a chave, para a tela de revisão não dizer "scanner ao vivo"
+   * quando a origem real foi "Fotografar código" (só o scanner ao vivo passa
+   * `chave` sozinho e usa o padrão de `analyzeNfeKey`; NfePhotoCapture sempre
+   * informa a própria origem — ver `onKeyFound` em NfePhotoCapture.jsx).
+   */
+  const handleScannedKey = (chave, origem) => {
     setFile(null)
     setErrorMessage('')
-    const result = analyzeNfeKey(chave)
+    const result = analyzeNfeKey(chave, origem)
     applyAnalysisResult(result)
   }
 
@@ -349,31 +358,23 @@ export default function NfeReaderPage({ pushToast }) {
               </label>
             ) : null}
 
-            {/* Ação por CAPACIDADE (isNativeCode128Supported, feature detection — nunca user-agent), não por
-                aparelho: com BarcodeDetector nativo, "Escanear código de barras" abre o live fast path (rápido,
-                timeout curto — ver NfeLiveScanner.jsx); sem ele, "Fotografar código" vira a ação principal e o
-                live scanner (ZXing) fica como opção secundária/experimental — ver README. `nativeAvailable`
-                começa `null` enquanto a checagem assíncrona resolve, para não piscar entre os dois estados. */}
-            {CAN_SCAN_BARCODE && nativeAvailable === true ? (
-              <button className="nfe-source-action" type="button" onClick={() => setScannerOpen(true)}>
-                <ScanBarcode size={16} />
-                <span>Escanear código de barras</span>
-              </button>
-            ) : null}
-
-            {CAN_SCAN_BARCODE && nativeAvailable === false ? (
+            {/* Scanner ao vivo (NfeLiveScanner) escondido da interface de produção — testado fisicamente
+                (iPhone/Safari e Android/Chrome) e considerado pouco confiável por enquanto, mesmo quando o
+                BarcodeDetector nativo está disponível. "Fotografar código" (testada com sucesso no iPhone,
+                ver README) é a única ação de câmera dedicada à leitura do código de barras agora, independente
+                de capacidade do navegador — CAN_SCAN_BARCODE só verifica se existe câmera. A implementação do
+                scanner ao vivo continua intacta (NfeLiveScanner.jsx, liveScanner.js, nativeBarcodeDetector.js,
+                zbarReader.js, decoders/) e segue acessível pelo painel de diagnóstico (?nfeScannerDebug=1,
+                NfeScannerBenchmark.jsx) — só esta entrada pública foi removida. Para reabilitar: repor aqui o
+                botão condicionado por `nativeAvailable` (mantido abaixo, ainda alimentando `fastPathMode` do
+                NfeLiveScanner) como antes. */}
+            {CAN_SCAN_BARCODE ? (
               <button className="nfe-source-action" type="button" onClick={() => setPhotoCaptureOpen(true)}>
                 <Camera size={16} />
                 <span>Fotografar código</span>
               </button>
             ) : null}
           </div>
-
-          {CAN_SCAN_BARCODE && nativeAvailable === false ? (
-            <button className="nfe-debug-link nfe-source-experimental" type="button" onClick={() => setScannerOpen(true)}>
-              Tentar scanner ao vivo (experimental)
-            </button>
-          ) : null}
 
           {file ? (
             <div className="file-list">

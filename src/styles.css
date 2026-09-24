@@ -3547,25 +3547,6 @@ button {
   color: var(--ink-700);
 }
 
-/* Link discreto para o scanner ao vivo experimental (ZXing), mostrado só quando o BarcodeDetector
-   nativo não está disponível e "Fotografar código" já é a ação principal — mesmo estilo textual/
-   sutil do link de diagnóstico, mas em fluxo de bloco normal (não dentro de um cabeçalho flex). */
-.nfe-source-experimental {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 4px 0;
-  border: none;
-  background: none;
-  color: var(--ink-500);
-  font-size: 12px;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.nfe-source-experimental:hover {
-  color: var(--ink-700);
-}
-
 /* Tela "Fotografar código" (NfePhotoCapture.jsx) — reaproveita o visual escuro de viewfinder de
    .nfe-scanner-overlay/.nfe-scanner-stage (mesmo componente-mãe), só a moldura muda: horizontal e
    larga (o código de barras do DANFE é comprido e deitado), não a caixa quase quadrada do scanner

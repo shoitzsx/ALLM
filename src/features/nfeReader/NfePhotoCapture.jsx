@@ -149,7 +149,10 @@ export default function NfePhotoCapture({ open, onClose, onKeyFound, onFallbackT
         setState(STATE.FOUND)
         navigator.vibrate?.(100)
         window.setTimeout(() => {
-          onKeyFound(result.chaveInterpretada.chave)
+          // Origem explícita: sem isto, `handleScannedKey` (NfeReaderPage.jsx)
+          // recai no padrão de `analyzeNfeKey` ("scanner ao vivo, código de
+          // barras") — errado para esta tela, que não é o scanner ao vivo.
+          onKeyFound(result.chaveInterpretada.chave, 'foto do código de barras')
           onClose()
         }, 550)
       } else {

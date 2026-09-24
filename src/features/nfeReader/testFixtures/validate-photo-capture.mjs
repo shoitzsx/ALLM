@@ -11,21 +11,32 @@
  *   2. `npm install --no-save playwright-core` (se ainda não instalado).
  *   3. `node src/features/nfeReader/testFixtures/validate-photo-capture.mjs`
  *
- * Cobre (ver README, seção "Live fast path vs. Fotografar código"):
- *   1. Sem BarcodeDetector nativo → "Fotografar código" é a ação principal,
- *      "Escanear código de barras" não aparece, "Tentar scanner ao vivo
- *      (experimental)" aparece.
- *   2. Com BarcodeDetector nativo (mockado) → "Escanear código de barras" é
- *      a ação principal, "Fotografar código" não aparece como principal.
- *   3. Live fast path expira sem achar a chave (nativo mockado para nunca
- *      detectar nada) → fecha sozinho e abre "Fotografar código" automaticamente.
- *   4. ImageCapture indisponível → clicar "Fotografar código" aciona o input
+ * Cobre (ver README, seção "Live fast path vs. Fotografar código" — e o
+ * commit "[nfe] hide live scanner from production UI": o scanner ao vivo foi
+ * escondido da interface de produção, testado fisicamente como pouco
+ * confiável; "Fotografar código" é agora a única ação pública de câmera,
+ * independente de BarcodeDetector existir):
+ *   1. Sem BarcodeDetector nativo → "Fotografar código" aparece, "Escanear
+ *      código de barras" e o link experimental não aparecem.
+ *   2. Com BarcodeDetector nativo (mockado) → MESMO ASSIM "Fotografar
+ *      código" aparece e "Escanear código de barras" continua ausente — a
+ *      ocultação não depende de capacidade (requisito explícito da tarefa
+ *      que escondeu o scanner ao vivo).
+ *   3. ImageCapture indisponível → clicar "Fotografar código" aciona o input
  *      de câmera nativo (file chooser) em vez de mostrar a tela de preview.
- *   5. `takePhoto()` lança em tempo de execução → mesmo fallback (file
+ *   4. `takePhoto()` lança em tempo de execução → mesmo fallback (file
  *      chooser), sem crash.
- *   6. Pipeline de foto sem regressão: ImageCapture mockado devolvendo uma
+ *   5. Pipeline de foto sem regressão: ImageCapture mockado devolvendo uma
  *      fixture sintética real (clean.png) → a análise encontra a mesma chave
- *      que o pipeline de arquivo já encontra para essa fixture.
+ *      que o pipeline de arquivo já encontra para essa fixture, com a origem
+ *      corretamente identificada como "foto do código de barras" (nunca
+ *      "scanner ao vivo" — ver NfePhotoCapture.jsx/NfeReaderPage.jsx).
+ *
+ * O cenário de timeout do live fast path (NfeLiveScanner `fastPathMode`)
+ * deixou de ser testável por aqui: a implementação continua intacta
+ * (preservada de propósito para reabilitar depois), mas sem um botão público
+ * que abra o scanner ao vivo, não há mais como chegar lá pela UI. Validação
+ * deste comportamento específico fica para quando a entrada pública voltar.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -115,53 +126,40 @@ async function main() {
   // categoria de flakiness de ferramenta já observada em rodadas anteriores
   // (contextos rápidos demais sobre um dispositivo fake compartilhado).
 
-  // --- Cenário 1: sem nativo — Fotografar código é a ação principal -------
+  // --- Cenário 1: sem nativo — Fotografar código é a única ação de câmera -
   {
     const browser = await launch()
     const { context, page } = await openPage(browser, { mockNative: false })
     await page.waitForTimeout(300) // tempo para isNativeCode128Supported() resolver
     const hasPhotoBtn = await page.locator('button:has-text("Fotografar código")').count()
     const hasScanBtn = await page.locator('button:has-text("Escanear código de barras")').count()
-    const hasExperimental = await page.locator('button:has-text("Tentar scanner ao vivo (experimental)")').count()
+    const hasExperimental = await page.locator('button:has-text("Tentar scanner ao vivo")').count()
     report('Cenário 1: sem nativo → "Fotografar código" aparece', hasPhotoBtn === 1)
     report('Cenário 1: sem nativo → "Escanear código de barras" não aparece', hasScanBtn === 0)
-    report('Cenário 1: sem nativo → link experimental aparece', hasExperimental === 1)
+    report('Cenário 1: sem nativo → link experimental não aparece (removido da produção)', hasExperimental === 0)
     await context.close()
     await browser.close()
   }
 
-  // --- Cenário 2: com nativo mockado — Escanear é a ação principal --------
+  // --- Cenário 2: com nativo mockado — scanner ao vivo continua oculto ----
+  // Requisito explícito: a ocultação do scanner ao vivo não depende de
+  // capacidade — mesmo com BarcodeDetector disponível, "Fotografar código"
+  // continua sendo a única ação de câmera pública.
   {
     const browser = await launch()
     const { context, page } = await openPage(browser, { mockNative: true, nativeAlwaysEmpty: true })
     await page.waitForTimeout(300)
     const hasScanBtn = await page.locator('button:has-text("Escanear código de barras")').count()
-    const hasPhotoBtnPrimary = await page.locator('.nfe-source-actions button:has-text("Fotografar código")').count()
-    report('Cenário 2: com nativo → "Escanear código de barras" aparece', hasScanBtn === 1)
-    report('Cenário 2: com nativo → "Fotografar código" NÃO é ação principal', hasPhotoBtnPrimary === 0)
+    const hasExperimental = await page.locator('button:has-text("Tentar scanner ao vivo")').count()
+    const hasPhotoBtn = await page.locator('.nfe-source-actions button:has-text("Fotografar código")').count()
+    report('Cenário 2: com nativo → "Escanear código de barras" continua ausente', hasScanBtn === 0)
+    report('Cenário 2: com nativo → link experimental continua ausente', hasExperimental === 0)
+    report('Cenário 2: com nativo → "Fotografar código" continua aparecendo', hasPhotoBtn === 1)
     await context.close()
     await browser.close()
   }
 
-  // --- Cenário 3: live fast path expira → abre Fotografar código sozinho --
-  {
-    const browser = await launch()
-    const { context, page } = await openPage(browser, { mockNative: true, nativeAlwaysEmpty: true })
-    await page.waitForTimeout(300)
-    await page.click('button:has-text("Escanear código de barras")')
-    await page.waitForSelector('.nfe-scanner-overlay', { timeout: 5000 })
-    const openedPhotoScreen = await page
-      .waitForSelector('[aria-label="Fotografar código da NF-e"]', { timeout: 6000 })
-      .then(() => true)
-      .catch(() => false)
-    const scannerStillOpen = (await page.locator('.nfe-scanner-overlay[aria-label="Escanear código de barras da NF-e"]').count()) > 0
-    report('Cenário 3: timeout do fast path abre "Fotografar código" automaticamente', openedPhotoScreen)
-    report('Cenário 3: o scanner ao vivo fechou sozinho (não ficou os dois abertos)', !scannerStillOpen)
-    await context.close()
-    await browser.close()
-  }
-
-  // --- Cenário 4: ImageCapture indisponível → cai para input nativo -------
+  // --- Cenário 3: ImageCapture indisponível → cai para input nativo -------
   {
     const browser = await launch()
     const { context, page } = await openPage(browser, { mockNative: false, imageCaptureMode: 'unavailable' })
@@ -170,13 +168,13 @@ async function main() {
     await page.click('.nfe-source-actions >> button:has-text("Fotografar código")')
     const chooser = await fileChooserPromise
     const previewShown = (await page.locator('[aria-label="Fotografar código da NF-e"]').count()) > 0
-    report('Cenário 4: ImageCapture indisponível aciona o seletor de arquivo nativo', Boolean(chooser))
-    report('Cenário 4: nunca mostra a tela de preview quebrada', !previewShown)
+    report('Cenário 3: ImageCapture indisponível aciona o seletor de arquivo nativo', Boolean(chooser))
+    report('Cenário 3: nunca mostra a tela de preview quebrada', !previewShown)
     await context.close()
     await browser.close()
   }
 
-  // --- Cenário 5: takePhoto() lança → cai para input nativo, sem crash ----
+  // --- Cenário 4: takePhoto() lança → cai para input nativo, sem crash ----
   // Nota: o botão principal da página ("Fotografar código") e o obturador
   // dentro do overlay (.nfe-photocapture-shutter) têm o MESMO texto — por
   // isso o obturador é sempre clicado pela classe CSS, nunca por texto, para
@@ -184,19 +182,19 @@ async function main() {
   {
     const browser = await launch()
     const { context, page } = await openPage(browser, { mockNative: false, imageCaptureMode: 'throws' })
-    page.on('pageerror', (err) => report('Cenário 5: sem exceção não tratada na página', false, err.message))
+    page.on('pageerror', (err) => report('Cenário 4: sem exceção não tratada na página', false, err.message))
     await page.waitForTimeout(300)
     await page.click('.nfe-source-actions >> button:has-text("Fotografar código")')
     await page.waitForSelector('.nfe-photocapture-shutter', { timeout: 5000 })
     const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null)
     await page.click('.nfe-photocapture-shutter')
     const chooser = await fileChooserPromise
-    report('Cenário 5: takePhoto() lançando cai para o seletor de arquivo nativo', Boolean(chooser))
+    report('Cenário 4: takePhoto() lançando cai para o seletor de arquivo nativo', Boolean(chooser))
     await context.close()
     await browser.close()
   }
 
-  // --- Cenário 6: pipeline de foto sem regressão (fixture real) -----------
+  // --- Cenário 5: pipeline de foto sem regressão (fixture real) -----------
   {
     const browser = await launch()
     const fixtureBase64 = readFileSync(join(HERE, 'clean.png')).toString('base64')
@@ -208,12 +206,22 @@ async function main() {
     await page.waitForSelector('h2:has-text("2. Revisão")', { timeout: 10000 }).catch(() => {})
     const reviewVisible = (await page.locator('h2:has-text("2. Revisão")').count()) > 0
     let chaveValue = null
+    let origemText = ''
     if (reviewVisible) {
       chaveValue = await page
         .locator('.form-grid input')
         .evaluateAll((inputs) => inputs.map((i) => i.value).find((v) => v && v.length === 44))
+      // Escopado à seção "2. Revisão" especificamente — a seção "1. Selecionar arquivo" também
+      // tem um <p> em .panel-header, e viria primeiro no DOM se não filtrássemos por seção.
+      const revisaoPanel = page.locator('section.panel', { has: page.locator('h2:has-text("2. Revisão")') })
+      origemText = (await revisaoPanel.locator('.panel-header p').first().innerText()).trim()
     }
-    report('Cenário 6: pipeline de foto encontra a chave da fixture sintética', chaveValue === CHAVE_SINTETICA, String(chaveValue))
+    report('Cenário 5: pipeline de foto encontra a chave da fixture sintética', chaveValue === CHAVE_SINTETICA, String(chaveValue))
+    report(
+      'Cenário 5: origem exibida é "foto do código de barras", nunca "scanner ao vivo"',
+      origemText.includes('foto do código de barras') && !origemText.includes('scanner ao vivo'),
+      origemText,
+    )
     await context.close()
     await browser.close()
   }
