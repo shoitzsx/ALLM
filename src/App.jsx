@@ -495,6 +495,7 @@ function NewReceiptPage({ store, pushToast }) {
       if (!form.pedido.trim()) nextErrors.pedido = 'Informe o número do Pedido de Compra.'
       if (!form.dataRecebimento) nextErrors.dataRecebimento = 'Informe a data do recebimento.'
       if (!form.fornecedor.trim()) nextErrors.fornecedor = 'Informe o fornecedor.'
+      if (form.cnpjFornecedor.trim() && form.cnpjFornecedor.replace(/\D/g, '').length !== 14) nextErrors.cnpjFornecedor = 'Informe um CNPJ com 14 dígitos ou deixe o campo vazio.'
       if (!form.tipo) nextErrors.tipo = 'Selecione o tipo de recebimento.'
     }
     if (targetStep === 1) {
@@ -544,21 +545,27 @@ function NewReceiptPage({ store, pushToast }) {
   const removeLocalFile = (index) => setForm((current) => ({ ...current, anexos: current.anexos.filter((_, fileIndex) => fileIndex !== index) }))
 
   const save = async (sendToFlow) => {
+    if (form.cnpjFornecedor.trim() && form.cnpjFornecedor.replace(/\D/g, '').length !== 14) {
+      setErrors((current) => ({ ...current, cnpjFornecedor: 'Informe um CNPJ com 14 dígitos ou deixe o campo vazio.' }))
+      setStep(0)
+      return
+    }
     if (sendToFlow && (!validateStep(0) || !validateStep(1))) {
       setStep(!form.pedido || !form.fornecedor ? 0 : 1)
       return
     }
     setSaving(true)
     try {
-      let receipt = store.createRecebimento({
+      let receipt = await store.createRecebimento({
         ...form,
+        rascunho: !sendToFlow,
         itens: form.itens.map(({ id, ...item }) => item),
       })
       if (sendToFlow) {
         const nextStatus = isNfPending(receipt)
           ? RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO
           : RECEBIMENTO_STATUS.CONFERENCIA
-        receipt = store.transitionStatus(receipt.id, nextStatus, {
+        receipt = await store.transitionStatus(receipt.id, nextStatus, {
           note: isNfPending(receipt) ? 'Registro enviado com documentação pendente.' : 'Registro enviado para conferência.',
         })
       }
@@ -631,7 +638,8 @@ function NewReceiptPage({ store, pushToast }) {
                 </div>
                 <div className="field">
                   <label>CNPJ <span className="optional">Opcional no MVP</span></label>
-                  <input value={form.cnpjFornecedor} onChange={(event) => setField('cnpjFornecedor', event.target.value)} placeholder="00.000.000/0000-00" />
+                  <input className={errors.cnpjFornecedor ? 'error' : ''} value={form.cnpjFornecedor} onChange={(event) => setField('cnpjFornecedor', event.target.value)} placeholder="00.000.000/0000-00" />
+                  <FieldError>{errors.cnpjFornecedor}</FieldError>
                 </div>
                 <div className="field">
                   <label>Tipo de recebimento <span className="required-hint">Obrigatório</span></label>
@@ -811,9 +819,9 @@ function DetailPage({ store, receiptId, pushToast }) {
   const allowedStatuses = getAllowedNextStatuses(receipt, store.currentUser)
   const nfPending = isNfPending(receipt)
 
-  const tryTransition = (status, note) => {
+  const tryTransition = async (status, note) => {
     try {
-      store.transitionStatus(receipt.id, status, { note })
+      await store.transitionStatus(receipt.id, status, { note })
       pushToast('Status atualizado', `${receipt.protocolo} agora está em “${status}”.`)
     } catch (error) {
       pushToast('Ação não concluída', error.message, 'error')

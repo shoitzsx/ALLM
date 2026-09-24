@@ -25,16 +25,16 @@ function forbidden(message) { const error = new Error(message); error.code = 'FO
 function conflict(code, message) { const error = new Error(message); error.code = code; error.status = 409; throw error }
 function validationError(message, details) { const error = new Error(message); error.code = 'VALIDATION_ERROR'; error.status = 422; error.details = details; throw error }
 
-function validateReceiptInput(input, partial = false) {
+function validateReceiptInput(input, partial = false, allowIncomplete = false) {
   const errors = {}
-  if (!partial || 'pedido' in input) if (!String(input.pedido || '').trim()) errors.pedido = 'Pedido é obrigatório.'
-  if (!partial || 'fornecedor' in input) if (!String(input.fornecedor || '').trim()) errors.fornecedor = 'Fornecedor é obrigatório.'
-  if (!partial || 'dataRecebimento' in input) if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.dataRecebimento || ''))) errors.dataRecebimento = 'Data de recebimento inválida.'
+  if (!allowIncomplete && (!partial || 'pedido' in input)) if (!String(input.pedido || '').trim()) errors.pedido = 'Pedido é obrigatório.'
+  if (!allowIncomplete && (!partial || 'fornecedor' in input)) if (!String(input.fornecedor || '').trim()) errors.fornecedor = 'Fornecedor é obrigatório.'
+  if ((!allowIncomplete || input.dataRecebimento) && (!partial || 'dataRecebimento' in input)) if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.dataRecebimento || ''))) errors.dataRecebimento = 'Data de recebimento inválida.'
   if ('tipo' in input && !RECEIPT_TYPE_OPTIONS.some((option) => option.value === input.tipo)) errors.tipo = 'Tipo de recebimento inválido.'
-  if ('cnpjFornecedor' in input && input.cnpjFornecedor && !/^\d{2}\.?(\d{3})\.?\d{3}\/?\d{4}-?\d{2}$/.test(String(input.cnpjFornecedor))) errors.cnpjFornecedor = 'CNPJ do fornecedor inválido.'
+  if ('cnpjFornecedor' in input && String(input.cnpjFornecedor || '').trim() && String(input.cnpjFornecedor).replace(/\D/g, '').length !== 14) errors.cnpjFornecedor = 'CNPJ do fornecedor deve conter 14 dígitos ou ficar vazio.'
   if ('itens' in input) {
     if (!Array.isArray(input.itens)) errors.itens = 'Itens deve ser uma lista.'
-    else input.itens.forEach((item, index) => { if (!String(item.descricao || '').trim()) errors[`itens.${index}.descricao`] = 'Descrição do item é obrigatória.'; if (!UNIT_OPTIONS.some((option) => option.value === item.unidade)) errors[`itens.${index}.unidade`] = 'Unidade inválida.'; if (Number(item.quantidadeRecebida) < 0 || Number(item.quantidadeSolicitada) < 0) errors[`itens.${index}.quantidade`] = 'Quantidade não pode ser negativa.' })
+    else input.itens.forEach((item, index) => { if (!allowIncomplete && !String(item.descricao || '').trim()) errors[`itens.${index}.descricao`] = 'Descrição do item é obrigatória.'; if (!UNIT_OPTIONS.some((option) => option.value === item.unidade)) errors[`itens.${index}.unidade`] = 'Unidade inválida.'; if (Number(item.quantidadeRecebida) < 0 || Number(item.quantidadeSolicitada) < 0) errors[`itens.${index}.quantidade`] = 'Quantidade não pode ser negativa.' })
   }
   if (Object.keys(errors).length) validationError('Dados do recebimento inválidos.', errors)
 }
@@ -43,7 +43,7 @@ function requireWritable(user) { if (!canWrite(user)) forbidden('O perfil Consul
 function requireOpenForEdit(receipt, user, message = 'Recebimento finalizado.') { if (receipt.status === RECEBIMENTO_STATUS.FINALIZADO && !isAdmin(user)) forbidden(message) }
 
 export function createRecebimento(input, user, allRecebimentos) {
-  requireWritable(user); validateReceiptInput(input)
+  requireWritable(user); validateReceiptInput(input, false, input.rascunho === true)
   const timestamp = now(); const date = input.dataRecebimento || timestamp.slice(0, 10); const protocolo = input.protocolo || nextProtocol(allRecebimentos, date)
   if (allRecebimentos.some((entry) => entry.protocolo === protocolo)) conflict('PROTOCOL_EXISTS', 'Protocolo já existe.')
   const receipt = { id: input.id || protocolo, protocolo, pedido: String(input.pedido || '').trim(), numeroNf: String(input.numeroNf || '').trim() || null, serieNf: String(input.serieNf || '').trim() || null, dataRecebimento: date, fornecedor: String(input.fornecedor || '').trim(), cnpjFornecedor: String(input.cnpjFornecedor || '').trim(), tipo: input.tipo || 'Estoque', responsavel: actor(user), status: RECEBIMENTO_STATUS.DIGITACAO, observacoes: String(input.observacoes || '').trim(), criadoEm: timestamp, atualizadoEm: timestamp, itens: (input.itens || []).map(normalizeItem), anexos: [], divergencias: [], historicoStatus: [], historicoAlteracoes: [], arquivado: false }

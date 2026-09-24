@@ -14,7 +14,15 @@ export async function apiRequest(path, options = {}) {
   const text = await response.text()
   let payload = {}
   try { payload = text ? JSON.parse(text) : {} } catch { payload = { raw: text } }
-  if (!response.ok) throw new Error(payload?.error?.message || `Erro HTTP ${response.status}`)
+  if (!response.ok) {
+    const details = Object.values(payload?.error?.details || {}).filter(Boolean)
+    const requestError = new Error(
+      details.length ? details.join(' ') : payload?.error?.message || `Erro HTTP ${response.status}`,
+    )
+    requestError.code = payload?.error?.code
+    requestError.details = payload?.error?.details
+    throw requestError
+  }
   return payload
 }
 

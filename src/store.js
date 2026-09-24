@@ -748,14 +748,16 @@ async function refreshReceiptFromApi(id) {
 
 const apiMutationQueues = new Map()
 
-function syncMutation(id, promiseFactory) {
+function syncMutation(id, promiseFactory, options = {}) {
   const previous = apiMutationQueues.get(id) || Promise.resolve()
   const next = previous
     .then(() => (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory))
     .then(() => refreshReceiptFromApi(id))
-    .catch((error) => {
+    .catch(async (error) => {
       console.warn('ALM API: operação rejeitada pelo servidor.', error)
-      return refreshReceiptFromApi(id)
+      const remote = await refreshReceiptFromApi(id)
+      if (options.rethrow) throw error
+      return remote
     })
     .finally(() => {
       if (apiMutationQueues.get(id) === next) apiMutationQueues.delete(id)
@@ -764,9 +766,12 @@ function syncMutation(id, promiseFactory) {
   return next
 }
 
-function apiCreate(input, local) {
-  syncMutation(local.id, async () => {
-    await api.createRecebimento({
+async function apiCreate(input, local) {
+  let created = null
+  try {
+    created = await api.createRecebimento({
+      id: local.id,
+      protocolo: local.protocolo,
       pedido: input.pedido,
       numeroNf: input.numeroNf,
       serieNf: input.serieNf,
@@ -775,14 +780,27 @@ function apiCreate(input, local) {
       cnpjFornecedor: input.cnpjFornecedor,
       tipo: input.tipo,
       observacoes: input.observacoes,
+      rascunho: input.rascunho === true,
       itens: (input.itens || input.items || []).map(({ id, ...item }) => item),
     })
     for (const entry of input.anexos || input.attachments || []) {
       const file = entry?.file instanceof File ? entry.file : entry instanceof File ? entry : null
-      if (file) await api.uploadAttachment(local.id, file, entry.categoria || entry.category || 'Outro')
+      if (file) await api.uploadAttachment(created.id, file, entry.categoria || entry.category || 'Outro')
     }
-  })
-  return local
+    return (await refreshReceiptFromApi(created.id)) || created
+  } catch (error) {
+    if (created) {
+      await refreshReceiptFromApi(created.id)
+    } else {
+      setState((current) => ({
+        ...current,
+        recebimentos: current.recebimentos.filter(
+          (entry) => entry.id !== local.id && entry.protocolo !== local.protocolo,
+        ),
+      }))
+    }
+    throw error
+  }
 }
 
 const apiBackedActions = {
@@ -858,9 +876,12 @@ const apiBackedActions = {
     return local
   },
   transitionStatus: (id, nextStatus, options = {}) => {
-    const local = transitionStatus(id, nextStatus, options)
-    syncMutation(id, () => api.transitionStatus(id, nextStatus, options.note || options.observacao || '', options.force))
-    return local
+    transitionStatus(id, nextStatus, options)
+    return syncMutation(
+      id,
+      () => api.transitionStatus(id, nextStatus, options.note || options.observacao || '', options.force),
+      { rethrow: true },
+    )
   },
   archiveRecebimento: (id, reason = '', options = {}) => {
     const local = archiveRecebimento(id, reason, options)
