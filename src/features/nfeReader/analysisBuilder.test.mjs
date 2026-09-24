@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { analyzeNfeKey, buildAnalysisFromKey, CONFIDENCE } from './analysisBuilder.js'
+import { analyzeNfeKey, buildAnalysisFromKey, buildReliableReceiptPrefill, CONFIDENCE } from './analysisBuilder.js'
 
 const CHAVE_METALFORT = '42260748909580000160550010000082801675042868'
 const CHAVE_INVALIDA = CHAVE_METALFORT.slice(0, 43) + '0'
@@ -57,4 +57,48 @@ test('buildAnalysisFromKey propaga fontesCruzadas e origens tal como recebidas',
   })
   assert.equal(resultado.fontesCruzadas, true)
   assert.deepEqual(resultado.origensChave, ['texto do PDF', 'código de barras'])
+})
+
+// --- buildReliableReceiptPrefill — o que pode ser levado para "Novo recebimento" ---
+
+test('buildReliableReceiptPrefill leva só os campos derivados matematicamente da chave (confiança alta)', () => {
+  const resultado = analyzeNfeKey(CHAVE_METALFORT, 'foto do código de barras')
+  const prefill = buildReliableReceiptPrefill(resultado, {})
+  assert.deepEqual(Object.keys(prefill).sort(), ['cnpjFornecedor', 'numeroNf', 'serieNf'])
+  assert.equal(prefill.numeroNf, '8280')
+  assert.equal(prefill.serieNf, '1')
+})
+
+test('buildReliableReceiptPrefill NUNCA leva pedido, mesmo que a análise tenha encontrado um valor por heurística de texto', () => {
+  const resultado = buildAnalysisFromKey(CHAVE_METALFORT, ['texto do PDF'], { text: 'Pedido de compra nº 4500873245' })
+  assert.equal(resultado.fields.pedido.confidence, CONFIDENCE.BAIXA)
+  assert.ok(resultado.fields.pedido.value, 'pré-condição: a heurística encontrou algo')
+  const prefill = buildReliableReceiptPrefill(resultado, {})
+  assert.equal('pedido' in prefill, false)
+})
+
+test('buildReliableReceiptPrefill inclui fornecedor só quando vem do catálogo real (confiança alta) — nunca um valor de exemplo', () => {
+  const semCatalogo = analyzeNfeKey(CHAVE_METALFORT)
+  assert.equal(semCatalogo.fields.fornecedor.confidence, CONFIDENCE.NAO_ENCONTRADO)
+  assert.equal('fornecedor' in buildReliableReceiptPrefill(semCatalogo, {}), false)
+
+  // Simula o catálogo local já ter um fornecedor real, confirmado manualmente antes pelo usuário
+  // para este CNPJ (supplierCatalog.js) — buildAnalysisFromKey já testa isso via getSupplierByCnpj;
+  // aqui simulamos o resultado que ela produziria.
+  const comCatalogo = buildAnalysisFromKey(CHAVE_METALFORT, ['código de barras'])
+  comCatalogo.fields.fornecedor = { value: 'Fornecedor Real Ltda', confidence: CONFIDENCE.ALTA, origin: 'catálogo de fornecedores' }
+  const prefill = buildReliableReceiptPrefill(comCatalogo, {})
+  assert.equal(prefill.fornecedor, 'Fornecedor Real Ltda')
+})
+
+test('buildReliableReceiptPrefill usa o valor atual da tela (correção manual do usuário), não o valor extraído original', () => {
+  const resultado = analyzeNfeKey(CHAVE_METALFORT)
+  const prefill = buildReliableReceiptPrefill(resultado, { numeroNf: '9999-corrigido' })
+  assert.equal(prefill.numeroNf, '9999-corrigido')
+})
+
+test('buildReliableReceiptPrefill com chave inválida não leva nada (tudo "não encontrado")', () => {
+  const resultado = analyzeNfeKey(CHAVE_INVALIDA)
+  const prefill = buildReliableReceiptPrefill(resultado, {})
+  assert.deepEqual(prefill, {})
 })

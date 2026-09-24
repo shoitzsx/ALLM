@@ -30,13 +30,13 @@ import { extractPdfText, renderPdfFirstPageToCanvas } from './pdfExtractor.js'
 import { decodeCode128RawZxing, loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
 import { decodeCode128RawZbar } from './zbarReader.js'
 import { findNfeKeysWithOcr } from './ocrReader.js'
-import { buildAnalysisFromKey, CONFIDENCE, analyzeNfeKey } from './analysisBuilder.js'
+import { buildAnalysisFromKey, buildReliableReceiptPrefill, CONFIDENCE, analyzeNfeKey } from './analysisBuilder.js'
 import { classifyDecodedText, createDiagnosticsCounter, DECODE_OUTCOME } from './decodeDiagnostics.js'
 
 // Reexportados para continuar sendo o único ponto de entrada do módulo do
 // ponto de vista de quem consome (NfeReaderPage.jsx, README.md) — a lógica em
 // si vive em analysisBuilder.js (ver o porquê no topo daquele arquivo).
-export { CONFIDENCE, analyzeNfeKey }
+export { CONFIDENCE, analyzeNfeKey, buildReliableReceiptPrefill }
 
 const ORIGEM_TEXTO = 'texto do PDF'
 const ORIGEM_BARCODE = 'código de barras'

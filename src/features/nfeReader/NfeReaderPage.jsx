@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle2,
+  Code2,
   Copy,
   FileText,
   HelpCircle,
@@ -14,9 +15,11 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { analyzeNfeFile, analyzeNfeKey, CONFIDENCE } from './extractor.js'
+import { analyzeNfeFile, analyzeNfeKey, buildReliableReceiptPrefill, CONFIDENCE } from './extractor.js'
 import { saveSupplier } from './supplierCatalog.js'
+import { setPendingReceiptPrefill } from './receiptHandoff.js'
 import { formatFileSize } from '../../ui.jsx'
+import { navigate, ROUTES } from '../../layout/navigation.js'
 import NfeLiveScanner from './NfeLiveScanner.jsx'
 import NfePhotoCapture from './NfePhotoCapture.jsx'
 import { isNativeCode128Supported } from './nativeBarcodeDetector.js'
@@ -58,6 +61,13 @@ const CAN_SCAN_BARCODE = CAMERA_SUPPORTED
 // rota por hash. Sem a flag, nenhum item novo aparece na tela — ver
 // scannerDebug.js.
 const SCANNER_DEBUG_ENABLED = isScannerDebugEnabled()
+
+// O visualizador de JSON de depuração em "Confirmar dados" (seção 3) usa a
+// MESMA flag do painel de diagnóstico do scanner — nunca aparece na interface
+// normal do usuário. "Confirmar dados" sempre navega direto para "Novo
+// recebimento"; o JSON é só uma ferramenta secundária de inspeção para quem
+// está desenvolvendo (ver handleConfirm/handleShowDebugJson).
+const DEBUG_JSON_ENABLED = import.meta.env.DEV || SCANNER_DEBUG_ENABLED
 
 const CONFIDENCE_META = {
   [CONFIDENCE.ALTA]: { label: 'Alta confiança', icon: CheckCircle2, className: 'nfe-badge-alta' },
@@ -257,9 +267,10 @@ export default function NfeReaderPage({ pushToast }) {
 
   const isCorrected = (key) => Boolean(metaByKey[key]) && fieldValues[key] !== metaByKey[key].value
 
-  const handleConfirm = () => {
+  /** Retrato completo do que está na tela agora — usado pelo JSON de depuração e para alimentar o catálogo de fornecedores. Nunca é o que vai para "Novo recebimento" (ver buildReliableReceiptPrefill). */
+  const buildFullSnapshot = () => {
     const value = (key) => fieldValues[key] ?? ''
-    const resultado = {
+    return {
       numeroNf: value('numeroNf'),
       serieNf: value('serieNf'),
       cnpjFornecedor: value('cnpjFornecedor'),
@@ -274,13 +285,40 @@ export default function NfeReaderPage({ pushToast }) {
         valorTotal: value('valorTotal'),
       },
     }
-    const cnpjDigits = onlyDigits(resultado.cnpjFornecedor)
-    if (cnpjDigits.length === 14 && resultado.fornecedor.trim()) {
-      saveSupplier(cnpjDigits, resultado.fornecedor.trim())
+  }
+
+  /**
+   * Ação principal da tela: leva os dados confiáveis (só o que tem
+   * correspondência real com o formulário — número da NF, série, CNPJ e
+   * fornecedor, quando de fato vêm da chave/catálogo, nunca heurística de
+   * texto como pedido/data de emissão/valor total — ver
+   * `buildReliableReceiptPrefill`, analysisBuilder.js) para "Novo
+   * recebimento" já pré-preenchido. NÃO chama `store.createRecebimento` nem
+   * qualquer coisa que grave no backend/Google Sheets — o usuário ainda
+   * revisa e decide quando salvar rascunho ou enviar para conferência, no
+   * fluxo normal do wizard (App.jsx).
+   */
+  const handleConfirm = () => {
+    const snapshot = buildFullSnapshot()
+    const cnpjDigits = onlyDigits(snapshot.cnpjFornecedor)
+    if (cnpjDigits.length === 14 && snapshot.fornecedor.trim()) {
+      saveSupplier(cnpjDigits, snapshot.fornecedor.trim())
     }
-    setConfirmed(resultado)
+    const prefill = buildReliableReceiptPrefill(analysis, fieldValues)
+    setPendingReceiptPrefill(prefill)
+    pushToast?.(
+      'Dados prontos para o recebimento',
+      Object.keys(prefill).length
+        ? 'Revise e complete o cadastro antes de salvar ou enviar.'
+        : 'Nenhum dado confiável foi extraído — preencha o recebimento manualmente.',
+    )
+    navigate(ROUTES.newReceipt)
+  }
+
+  /** Só em DEV/diagnóstico (ver DEBUG_JSON_ENABLED) — inspeciona o JSON completo sem navegar, nunca dispara `saveSupplier`. */
+  const handleShowDebugJson = () => {
+    setConfirmed(buildFullSnapshot())
     setCopied(false)
-    pushToast?.('Dados confirmados', 'Copie o JSON abaixo para usar na próxima etapa.')
   }
 
   const handleCopy = async () => {
@@ -300,8 +338,8 @@ export default function NfeReaderPage({ pushToast }) {
         <div className="page-header-copy">
           <h1>Leitura automática de NF-e <span className="beta-tag">Beta</span></h1>
           <p>
-            Extrai dados da Nota Fiscal por texto do PDF e código de barras, sem OCR. Não altera o fluxo de
-            "Novo recebimento" e não grava nada automaticamente.
+            Extrai dados da Nota Fiscal por texto do PDF e código de barras, sem OCR. Ao confirmar, os dados
+            confiáveis são levados para "Novo recebimento" já pré-preenchido — nada é salvo automaticamente.
           </p>
         </div>
         {SCANNER_DEBUG_ENABLED ? (
@@ -462,7 +500,7 @@ export default function NfeReaderPage({ pushToast }) {
                 <ShieldCheck size={15} />
                 <span>
                   Estes campos de referência ainda não existem no modelo de recebimento do backend — são apenas
-                  candidatos, exibidos separadamente no JSON final (<code>referenciaNfe</code>).
+                  candidatos, não fazem parte do que é levado para "Novo recebimento" ao confirmar.
                 </span>
               </div>
             </div>
@@ -471,8 +509,8 @@ export default function NfeReaderPage({ pushToast }) {
           <section className="panel">
             <header className="panel-header">
               <div>
-                <h2>3. Confirmar e exportar</h2>
-                <p>Nada é salvo automaticamente em nenhum recebimento.</p>
+                <h2>3. Confirmar dados</h2>
+                <p>Os dados serão levados para um novo recebimento para sua revisão. Nada será salvo até você confirmar o cadastro.</p>
               </div>
             </header>
             <div className="detail-section-body">
@@ -480,12 +518,17 @@ export default function NfeReaderPage({ pushToast }) {
                 <button className="btn btn-primary" type="button" onClick={handleConfirm}>
                   <CheckCircle2 size={16} /> Confirmar dados
                 </button>
+                {DEBUG_JSON_ENABLED ? (
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={handleShowDebugJson}>
+                    <Code2 size={13} /> Ver JSON (depuração)
+                  </button>
+                ) : null}
               </div>
 
-              {confirmed ? (
+              {confirmed && DEBUG_JSON_ENABLED ? (
                 <div className="nfe-json-block">
                   <div className="nfe-json-toolbar">
-                    <span>JSON resultante</span>
+                    <span>JSON de depuração — só visível em desenvolvimento/diagnóstico, nunca enviado a lugar nenhum</span>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={handleCopy}>
                       <Copy size={13} /> {copied ? 'Copiado!' : 'Copiar'}
                     </button>

@@ -72,9 +72,14 @@ import { KpiStrip } from './components/dashboard/KpiStrip.jsx'
 import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
 import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
 import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
+import { clearPendingReceiptPrefill, peekPendingReceiptPrefill } from './features/nfeReader/receiptHandoff.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
-// a quem abrir esta tela experimental.
+// a quem abrir esta tela experimental. `receiptHandoff.js` acima é importado
+// fora dessa fronteira de propósito: é um módulo minúsculo, sem dependência
+// pesada, usado por `NewReceiptPage` (que não é lazy) para receber os dados
+// confirmados na leitura de NF-e — importá-lo aqui não traz nenhuma
+// dependência de câmera/PDF/OCR para o bundle principal.
 const NfeReaderPage = lazy(() => import('./features/nfeReader/NfeReaderPage.jsx'))
 
 const WIZARD_STEPS = [
@@ -471,7 +476,17 @@ function NewReceiptPage({ store, pushToast }) {
   const [step, setStep] = useState(0)
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
+  // Dados confiáveis vindos da Leitura automática de NF-e (número da NF, série, CNPJ,
+  // fornecedor quando já cadastrado — nunca heurística de texto, ver
+  // buildReliableReceiptPrefill em analysisBuilder.js), se o usuário chegou aqui pelo
+  // botão "Confirmar dados" daquela tela. `peekPendingReceiptPrefill()` é leitura NÃO
+  // destrutiva de propósito (App roda em React.StrictMode, que chama o inicializador de
+  // useState duas vezes em dev — uma leitura que já limpasse o valor perderia o dado na
+  // segunda chamada). A limpeza de verdade acontece no useEffect abaixo, depois que o
+  // valor já foi usado para montar `form` — assim uma visita manual posterior a "Novo
+  // recebimento" nunca reaproveita dados de uma leitura antiga.
+  const [initialPrefill] = useState(() => peekPendingReceiptPrefill())
+  const [form, setForm] = useState(() => ({
     pedido: '',
     dataRecebimento: getLocalDate(),
     fornecedor: '',
@@ -482,7 +497,12 @@ function NewReceiptPage({ store, pushToast }) {
     observacoes: '',
     itens: [createEmptyItem(0)],
     anexos: [],
-  })
+    ...initialPrefill,
+  }))
+
+  useEffect(() => {
+    clearPendingReceiptPrefill()
+  }, [])
 
   const setField = (name, value) => {
     setForm((current) => ({ ...current, [name]: value }))
@@ -587,6 +607,17 @@ function NewReceiptPage({ store, pushToast }) {
         title="Novo recebimento"
         description="Registre os dados no ritmo da operação. A NF poderá ser anexada depois."
       />
+
+      {initialPrefill && Object.keys(initialPrefill).length ? (
+        <div className="info-strip">
+          <ShieldCheck size={15} />
+          <span>
+            Alguns campos foram preenchidos automaticamente a partir da leitura da NF-e (número, série, CNPJ e/ou
+            fornecedor, quando reconhecidos com segurança). Revise e complete os demais antes de enviar — nada foi
+            salvo ainda.
+          </span>
+        </div>
+      ) : null}
 
       <section className="wizard-shell">
         <aside className="stepper-card">

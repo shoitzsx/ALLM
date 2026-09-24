@@ -103,6 +103,34 @@ export function buildAnalysisFromKey(chave, origens = [], { text = '', fontesCru
  * Como não há texto de PDF envolvido, pedido/valor total/data de emissão
  * ficam como "não encontrado" — o scanner não inventa dado que não leu.
  */
+/**
+ * Filtra, de um resultado de análise de NF-e já em tela, só os campos com
+ * correspondência real e confiável com o formulário de "Novo recebimento" —
+ * hoje isso significa confiança "alta": matemática da chave de acesso
+ * (número da NF, série, CNPJ) ou catálogo local de fornecedores (nome já
+ * confirmado antes para aquele CNPJ, `supplierCatalog.js`). NUNCA inclui
+ * campos de heurística fraca de texto (`pedido`, e os de `referenciaNfe`
+ * como `dataEmissao`/`valorTotal`) — esses não podem ser obtidos de forma
+ * confiável só a partir da chave (não são "alta" em nenhuma circunstância,
+ * ver `buildAnalysisFromKey` acima), e ficam de fora de propósito, para o
+ * usuário preencher diretamente no formulário real.
+ *
+ * `currentValues` — o que está atualmente nos campos da tela de revisão
+ * (pode já refletir uma correção manual do usuário sobre o valor extraído);
+ * é isso que é levado adiante, não necessariamente `meta.value` original.
+ * Usado por `NfeReaderPage.jsx` ao confirmar os dados e navegar para "Novo
+ * recebimento" — nunca decide sozinho, só filtra o que é seguro repassar.
+ */
+export function buildReliableReceiptPrefill(analysis, currentValues = {}) {
+  const prefill = {}
+  Object.entries(analysis?.fields || {}).forEach(([key, meta]) => {
+    if (meta.confidence !== CONFIDENCE.ALTA) return
+    const value = currentValues[key] ?? meta.value
+    if (value) prefill[key] = value
+  })
+  return prefill
+}
+
 export function analyzeNfeKey(chaveRaw, origem = 'scanner ao vivo, código de barras') {
   const chave = normalizarChave(chaveRaw)
   if (!validarChaveNFe(chave)) {
