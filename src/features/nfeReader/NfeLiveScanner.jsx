@@ -28,6 +28,18 @@ const HINT_STAGE_AFTER_MS = [3000, 7000]
 // contínua está demorando.
 const CAPTURE_BUTTON_AFTER_MS = 6000
 
+// Live fast path (BarcodeDetector nativo, `fastPathMode`): nunca fica
+// tentando por minutos. Evidência real (iPhone/Safari, ver README): o
+// BarcodeDetector simplesmente não está disponível ali, então este timeout
+// só entra em cena nos aparelhos onde ELE EXISTE mas não encontra a chave
+// rápido — 3s (dentro da faixa de 2-4s pedida) é curto o bastante para não
+// perder tempo, longo o bastante para um enquadramento razoável resolver.
+// Ao expirar, `onFastPathTimeout` assume — normalmente abrindo a tela de
+// "Fotografar código" (NfePhotoCapture.jsx) — em vez das dicas/temporizador
+// de "Capturar e analisar" do caminho experimental (ZXing), que continuam
+// se aplicando normalmente quando `fastPathMode` é falso.
+const FAST_PATH_TIMEOUT_MS = 3000
+
 function hintForStage(stage, torchAvailable, isPortrait) {
   // Nunca sugerir aproximar demais: isso corta a quiet zone (margem clara)
   // que o CODE_128 precisa nas laterais para ser decodificado.
@@ -61,7 +73,7 @@ export function describeError(err) {
  * chave encontrada, aba perder visibilidade, ou o componente deixar de estar
  * aberto. Nunca deixa a câmera ligada "esquecida" em segundo plano.
  */
-export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
+export default function NfeLiveScanner({ open, onClose, onKeyFound, fastPathMode = false, onFastPathTimeout }) {
   const videoRef = useRef(null)
   const cancelButtonRef = useRef(null)
   const controlsRef = useRef(null)
@@ -165,12 +177,27 @@ export default function NfeLiveScanner({ open, onClose, onKeyFound }) {
 
   // "Capturar e analisar" só aparece depois de alguns segundos sem sucesso —
   // saída de emergência, não o caminho padrão. Mesmo padrão de timer único,
-  // não ligado a tentativas de decode.
+  // não ligado a tentativas de decode. Só no caminho experimental — no fast
+  // path, o timeout abaixo já assume bem antes desse prazo.
   useEffect(() => {
-    if (state !== STATE.SCANNING) return undefined
+    if (fastPathMode || state !== STATE.SCANNING) return undefined
     const timerId = window.setTimeout(() => setShowCaptureButton(true), CAPTURE_BUTTON_AFTER_MS)
     return () => window.clearTimeout(timerId)
-  }, [state])
+  }, [fastPathMode, state])
+
+  // Live fast path: nunca fica tentando por minutos (ver FAST_PATH_TIMEOUT_MS
+  // acima). Ao expirar sem uma chave válida, para a câmera e entrega a vez
+  // para quem chamou — normalmente a tela de "Fotografar código" — em vez de
+  // continuar mostrando dicas/"Capturar e analisar" como no caminho
+  // experimental (ZXing).
+  useEffect(() => {
+    if (!fastPathMode || state !== STATE.SCANNING) return undefined
+    const timerId = window.setTimeout(() => {
+      stopScan()
+      onFastPathTimeout?.()
+    }, FAST_PATH_TIMEOUT_MS)
+    return () => window.clearTimeout(timerId)
+  }, [fastPathMode, state, stopScan, onFastPathTimeout])
 
   // Orientação do aparelho — só para trocar o texto da dica (nunca trava a
   // tela numa orientação; ver hintForStage).

@@ -9,8 +9,10 @@
  *       aciona o ZXing/OCR — evita trabalho (e risco) desnecessário no caso
  *       comum de PDF digital com a chave já impressa como texto selecionável.
  *   3b. Não achou → renderiza a 1ª página (ou usa a foto direto) e tenta ler
- *       um CODE_128 (ver barcodeReader.js: sem TRY_HARDER, com rotação/recorte
- *       manuais para não bater no bug de rotação interna do ZXing).
+ *       um CODE_128: primeiro um fast path cru (ZBar, depois ZXing — ver
+ *       `FAST_PATH_DECODERS` abaixo), depois o pipeline robusto de estágios
+ *       (ver barcodeReader.js: sem TRY_HARDER, com rotação/recorte manuais
+ *       para não bater no bug de rotação interna do ZXing).
  *   3c. Barcode também não achou → tenta OCR (ver ocrReader.js) sobre a mesma
  *       imagem, como último recurso para digitalizações ruins.
  *   4. Heurísticas fracas (regex) para campos que a chave não cobre.
@@ -25,10 +27,11 @@
  */
 import { findValidNfeKeys, normalizarChave, validarChaveNFe } from './chaveNFe.js'
 import { extractPdfText, renderPdfFirstPageToCanvas } from './pdfExtractor.js'
-import { loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
+import { decodeCode128RawZxing, loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
+import { decodeCode128RawZbar } from './zbarReader.js'
 import { findNfeKeysWithOcr } from './ocrReader.js'
 import { buildAnalysisFromKey, CONFIDENCE, analyzeNfeKey } from './analysisBuilder.js'
-import { createDiagnosticsCounter } from './decodeDiagnostics.js'
+import { classifyDecodedText, createDiagnosticsCounter, DECODE_OUTCOME } from './decodeDiagnostics.js'
 
 // Reexportados para continuar sendo o único ponto de entrada do módulo do
 // ponto de vista de quem consome (NfeReaderPage.jsx, README.md) — a lógica em
@@ -75,6 +78,22 @@ function buildOcrWarning() {
   return 'Para usar o reconhecimento de texto como alternativa, inclua também os 44 números impressos abaixo do código de barras.'
 }
 
+// Fast path de barcode estático, tentado antes do pipeline robusto de
+// estágios: ZBar cru, depois ZXing cru (uma tentativa cada, sem recorte/
+// rotação/contraste/deskew) — evidência do benchmark de decoders
+// (testFixtures/README.md, testFixtures/validate-decoder-benchmark.mjs):
+// nas fixtures sintéticas, ZBar cru decodificou 10/10 e ZXing cru 7/10,
+// incluindo casos (rotação, pequena inclinação) que o ZXing cru sozinho não
+// pegava. Sequencial, nunca em paralelo (custo de CPU/bateria numa foto só).
+// Cai para o pipeline robusto de sempre (`readCode128FromCanvas`, que já
+// tenta nativo+ZXing na imagem inteira, recortes, margem artificial e
+// deskew) se os dois falharem — nenhuma lógica de decodificação nova aqui,
+// só reordenação de quem tenta primeiro.
+const FAST_PATH_DECODERS = [
+  { label: 'ZBar (fast path)', decode: (canvas) => decodeCode128RawZbar(canvas) },
+  { label: 'ZXing (fast path)', decode: (canvas) => decodeCode128RawZxing(canvas) },
+]
+
 /**
  * Tenta o código de barras e, se não resolver, o OCR — nessa ordem, sobre o
  * mesmo canvas. Compartilhado por `analyzeNfeFile` (arquivo/foto) e
@@ -85,6 +104,18 @@ function buildOcrWarning() {
  */
 async function runBarcodeThenOcr(canvas, warnings) {
   const diagnostics = createDiagnosticsCounter()
+
+  for (const { label, decode } of FAST_PATH_DECODERS) {
+    const rawFast = await decode(canvas)
+    const outcome = classifyDecodedText(rawFast)
+    diagnostics.record(outcome)
+    if (outcome === DECODE_OUTCOME.VALID) {
+      const chave = normalizarChave(rawFast)
+      log(`Barcode encontrado (${label}):`, chave)
+      return { chave, origem: ORIGEM_BARCODE }
+    }
+  }
+
   const raw = await readCode128FromCanvas(canvas, { onAttempt: (outcome) => diagnostics.record(outcome) })
   const summary = diagnostics.summary()
   log(`Código de barras: ${summary.attempts} tentativa(s) — não_encontrado=${summary.not_found} tamanho_inválido=${summary.invalid_length} dv_inválido=${summary.invalid_dv} válido=${summary.valid}`)

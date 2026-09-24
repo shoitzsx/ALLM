@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Camera,
@@ -18,6 +18,8 @@ import { analyzeNfeFile, analyzeNfeKey, CONFIDENCE } from './extractor.js'
 import { saveSupplier } from './supplierCatalog.js'
 import { formatFileSize } from '../../ui.jsx'
 import NfeLiveScanner from './NfeLiveScanner.jsx'
+import NfePhotoCapture from './NfePhotoCapture.jsx'
+import { isNativeCode128Supported } from './nativeBarcodeDetector.js'
 import { isScannerDebugEnabled } from './scannerDebug.js'
 
 // Import dinâmico: o painel de benchmark (e a dependência ZBar/WASM que ele
@@ -121,7 +123,28 @@ export default function NfeReaderPage({ pushToast }) {
   const [copied, setCopied] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false)
   const [benchmarkOpen, setBenchmarkOpen] = useState(false)
+  // Decisão de arquitetura por CAPACIDADE, não por user-agent: existe o
+  // BarcodeDetector nativo e ele suporta code_128? Determina se "Escanear
+  // código de barras" abre o live fast path (rápido, mas só existe em
+  // Chromium/Android Chrome) ou se "Fotografar código" vira a ação
+  // principal (universal — funciona em qualquer navegador com câmera,
+  // incluindo Safari/iOS, onde o live scanner sozinho se mostrou pouco
+  // confiável em teste físico real — ver README). `null` enquanto a checagem
+  // assíncrona não resolve — os botões dependentes dela ficam ocultos até lá
+  // para não piscar entre os dois estados.
+  const [nativeAvailable, setNativeAvailable] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    isNativeCode128Supported().then((supported) => {
+      if (!cancelled) setNativeAvailable(supported)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const metaByKey = useMemo(() => {
     if (!analysis) return {}
@@ -183,12 +206,42 @@ export default function NfeReaderPage({ pushToast }) {
     }
   }
 
-  /** Chave já validada pelo scanner ao vivo (NfeLiveScanner) — mesmo formato de resultado, sem arquivo envolvido. */
+  /** Chave já validada pelo scanner ao vivo ou pela captura de foto — mesmo formato de resultado, sem arquivo envolvido. */
   const handleScannedKey = (chave) => {
     setFile(null)
     setErrorMessage('')
     const result = analyzeNfeKey(chave)
     applyAnalysisResult(result)
+  }
+
+  /**
+   * Live fast path (BarcodeDetector nativo) expirou sem achar a chave (ver
+   * FAST_PATH_TIMEOUT_MS, NfeLiveScanner.jsx) — em vez de continuar tentando
+   * por minutos, avisa e entrega a vez para "Fotografar código".
+   */
+  const handleFastPathTimeout = () => {
+    setScannerOpen(false)
+    pushToast?.('Não foi possível ler automaticamente.', 'Tente fotografar o código de perto, com boa iluminação.')
+    setPhotoCaptureOpen(true)
+  }
+
+  /**
+   * Método B da tela de foto (`NfePhotoCapture.jsx`): sem ImageCapture, ou
+   * `takePhoto()` falhou — encaminha para o MESMO input de câmera nativo de
+   * "Tirar foto" (abaixo). Cai para "Selecionar arquivo" se, por algum
+   * motivo, esse input não existir neste aparelho (ex.: sem toque — ver
+   * CAN_TAKE_PHOTO).
+   */
+  const handlePhotoCaptureFallback = () => {
+    setPhotoCaptureOpen(false)
+    ;(cameraInputRef.current || inputRef.current)?.click()
+  }
+
+  /** "Preencher manualmente" na tela de foto: aplica o último resultado (já no formato padrão, mesmo com chave não encontrada) e deixa o usuário editar na revisão — igual a qualquer outra análise sem chave. */
+  const handlePhotoCaptureManualFill = (result) => {
+    setPhotoCaptureOpen(false)
+    setFile(null)
+    if (result) applyAnalysisResult(result)
   }
 
   const setFieldValue = (key, value) => setFieldValues((current) => ({ ...current, [key]: value }))
@@ -296,13 +349,31 @@ export default function NfeReaderPage({ pushToast }) {
               </label>
             ) : null}
 
-            {CAN_SCAN_BARCODE ? (
+            {/* Ação por CAPACIDADE (isNativeCode128Supported, feature detection — nunca user-agent), não por
+                aparelho: com BarcodeDetector nativo, "Escanear código de barras" abre o live fast path (rápido,
+                timeout curto — ver NfeLiveScanner.jsx); sem ele, "Fotografar código" vira a ação principal e o
+                live scanner (ZXing) fica como opção secundária/experimental — ver README. `nativeAvailable`
+                começa `null` enquanto a checagem assíncrona resolve, para não piscar entre os dois estados. */}
+            {CAN_SCAN_BARCODE && nativeAvailable === true ? (
               <button className="nfe-source-action" type="button" onClick={() => setScannerOpen(true)}>
                 <ScanBarcode size={16} />
                 <span>Escanear código de barras</span>
               </button>
             ) : null}
+
+            {CAN_SCAN_BARCODE && nativeAvailable === false ? (
+              <button className="nfe-source-action" type="button" onClick={() => setPhotoCaptureOpen(true)}>
+                <Camera size={16} />
+                <span>Fotografar código</span>
+              </button>
+            ) : null}
           </div>
+
+          {CAN_SCAN_BARCODE && nativeAvailable === false ? (
+            <button className="nfe-debug-link nfe-source-experimental" type="button" onClick={() => setScannerOpen(true)}>
+              Tentar scanner ao vivo (experimental)
+            </button>
+          ) : null}
 
           {file ? (
             <div className="file-list">
@@ -426,7 +497,21 @@ export default function NfeReaderPage({ pushToast }) {
         </>
       ) : null}
 
-      <NfeLiveScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onKeyFound={handleScannedKey} />
+      <NfeLiveScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onKeyFound={handleScannedKey}
+        fastPathMode={nativeAvailable === true}
+        onFastPathTimeout={handleFastPathTimeout}
+      />
+
+      <NfePhotoCapture
+        open={photoCaptureOpen}
+        onClose={() => setPhotoCaptureOpen(false)}
+        onKeyFound={handleScannedKey}
+        onFallbackToFilePicker={handlePhotoCaptureFallback}
+        onManualFill={handlePhotoCaptureManualFill}
+      />
 
       {SCANNER_DEBUG_ENABLED && benchmarkOpen ? (
         <Suspense fallback={null}>

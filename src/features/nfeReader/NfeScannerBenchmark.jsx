@@ -16,6 +16,7 @@ import { LIVE_TEST_DURATION_MS, runLiveEngineTest } from './benchmarkLiveRunner.
 import { computeFrameStats } from './imageStats.js'
 import { summarizeCameraState } from './cameraCapabilities.js'
 import { buildDiagnosticsReportText } from './benchmarkReport.js'
+import { blobToCanvas, isImageCaptureSupported, takePhotoViaImageCapture } from './photoCapture.js'
 
 /**
  * Painel de diagnóstico/benchmark de decoders de código de barras — SÓ existe
@@ -48,6 +49,16 @@ export default function NfeScannerBenchmark({ open, onClose }) {
   const [frameStats, setFrameStats] = useState(null)
   const [frameResults, setFrameResults] = useState(null)
   const [pipelineResult, setPipelineResult] = useState(null)
+
+  // Vídeo vs. Foto (ver README, "Live fast path vs. Fotografar código") — a
+  // MESMA captura de "Capturar frame para teste" (handleCaptureFrame)
+  // também tenta uma foto via ImageCapture da mesma câmera, para comparar
+  // ZXing/ZBar sobre o frame de vídeo E sobre a foto de mais qualidade, lado
+  // a lado. `photoUnavailable` distingue "não tentamos" de "tentamos e
+  // ImageCapture não existe/falhou" — nunca inventa um resultado.
+  const [photoStats, setPhotoStats] = useState(null)
+  const [photoResults, setPhotoResults] = useState(null)
+  const [photoUnavailable, setPhotoUnavailable] = useState(null)
 
   const [liveEngine, setLiveEngine] = useState(null)
   const [liveTick, setLiveTick] = useState(null)
@@ -116,6 +127,9 @@ export default function NfeScannerBenchmark({ open, onClose }) {
       setFrameResults(null)
       setPipelineResult(null)
       setFrameStats(null)
+      setPhotoStats(null)
+      setPhotoResults(null)
+      setPhotoUnavailable(null)
       setLiveResults({})
       setCopyStatus('')
     }
@@ -140,6 +154,9 @@ export default function NfeScannerBenchmark({ open, onClose }) {
     setCapturingFrame(true)
     setFrameResults(null)
     setPipelineResult(null)
+    setPhotoStats(null)
+    setPhotoResults(null)
+    setPhotoUnavailable(null)
     try {
       const canvas = captureCurrentFrame(video)
       drawPreview(canvas)
@@ -159,6 +176,27 @@ export default function NfeScannerBenchmark({ open, onClose }) {
       const pipeline = await decodeWithProductionPipeline(canvas)
       setPipelineResult(pipeline)
       console.debug('[NFe][benchmark] pipeline de produção (Nível B)', { detected: pipeline.detected, validNfeKey: pipeline.validNfeKey, decodeTimeMs: pipeline.decodeTimeMs })
+
+      // Vídeo vs. Foto: a MESMA câmera aberta, mas via ImageCapture (quando
+      // suportado) em vez do frame de vídeo — para confirmar (ou não) se uma
+      // foto de mais qualidade resolve o que o frame de vídeo não resolveu.
+      if (isImageCaptureSupported()) {
+        try {
+          const videoTrack = streamRef.current?.getVideoTracks()?.[0]
+          const blob = await takePhotoViaImageCapture(videoTrack)
+          const { canvas: photoCanvas, width, height } = await blobToCanvas(blob)
+          setPhotoStats({ width, height })
+          const photoZxing = await decodeWithZxing(photoCanvas)
+          const photoZbar = await decodeWithZbar(photoCanvas)
+          setPhotoResults([photoZxing, photoZbar])
+          console.debug('[NFe][benchmark] foto (ImageCapture) comparada ao vídeo', { width, height })
+        } catch (err) {
+          console.debug('[NFe][benchmark] ImageCapture falhou ao comparar vídeo vs. foto.', { name: err?.name, message: err?.message })
+          setPhotoUnavailable('ImageCapture existe, mas falhou ao capturar (ver console).')
+        }
+      } else {
+        setPhotoUnavailable('ImageCapture indisponível neste navegador.')
+      }
     } catch (err) {
       console.error('[NFe][benchmark] Falha ao capturar/comparar frame.', { name: err?.name, message: err?.message })
     } finally {
@@ -279,6 +317,40 @@ export default function NfeScannerBenchmark({ open, onClose }) {
             </div>
           ) : null}
         </section>
+
+        {frameResults ? (
+          <section className="nfe-benchmark-section">
+            <h3>Vídeo vs. Foto</h3>
+            <p className="nfe-benchmark-hint">
+              Mesma câmera, dois métodos de captura: o frame de vídeo já usado acima, e uma foto via ImageCapture
+              (quando suportado) — para confirmar se uma foto de mais qualidade resolve o que o vídeo não resolveu.
+            </p>
+            <dl className="nfe-benchmark-facts">
+              <div><dt>Vídeo — resolução</dt><dd>{frameStats ? `${frameStats.width}×${frameStats.height}` : 'N/D'}</dd></div>
+              <div><dt>Foto — resolução</dt><dd>{photoStats ? `${photoStats.width}×${photoStats.height}` : photoUnavailable || 'N/D'}</dd></div>
+            </dl>
+            <div className="nfe-benchmark-results">
+              {[ENGINE.ZXING, ENGINE.ZBAR].map((engine) => {
+                const videoResult = frameResults.find((r) => r.engine === engine)
+                return videoResult ? (
+                  <EngineResultRow key={`video-${engine}`} result={videoResult} labelOverride={`${ENGINE_LABEL[engine]} no vídeo`} />
+                ) : null
+              })}
+              {photoResults
+                ? photoResults.map((result) => (
+                    <EngineResultRow key={`photo-${result.engine}`} result={result} labelOverride={`${ENGINE_LABEL[result.engine]} na foto`} />
+                  ))
+                : photoUnavailable
+                  ? [ENGINE.ZXING, ENGINE.ZBAR].map((engine) => (
+                      <div className="nfe-benchmark-result-row" key={`photo-na-${engine}`}>
+                        <strong>{ENGINE_LABEL[engine]} na foto</strong>
+                        <span className="nfe-benchmark-result-line">{photoUnavailable}</span>
+                      </div>
+                    ))
+                  : null}
+            </div>
+          </section>
+        ) : null}
 
         <section className="nfe-benchmark-section">
           <h3>Modo B — teste ao vivo (10s por engine)</h3>

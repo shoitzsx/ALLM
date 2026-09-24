@@ -3547,6 +3547,66 @@ button {
   color: var(--ink-700);
 }
 
+/* Link discreto para o scanner ao vivo experimental (ZXing), mostrado só quando o BarcodeDetector
+   nativo não está disponível e "Fotografar código" já é a ação principal — mesmo estilo textual/
+   sutil do link de diagnóstico, mas em fluxo de bloco normal (não dentro de um cabeçalho flex). */
+.nfe-source-experimental {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--ink-500);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nfe-source-experimental:hover {
+  color: var(--ink-700);
+}
+
+/* Tela "Fotografar código" (NfePhotoCapture.jsx) — reaproveita o visual escuro de viewfinder de
+   .nfe-scanner-overlay/.nfe-scanner-stage (mesmo componente-mãe), só a moldura muda: horizontal e
+   larga (o código de barras do DANFE é comprido e deitado), não a caixa quase quadrada do scanner
+   ao vivo contínuo. */
+.nfe-photocapture-frame {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.nfe-photocapture-frame-box {
+  width: min(88%, 480px);
+  height: min(18vh, 110px);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 10px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+}
+
+.nfe-photocapture-footer {
+  justify-content: center;
+}
+
+.nfe-photocapture-shutter {
+  min-height: 48px;
+  padding: 12px 28px;
+  font-size: 15px;
+}
+
+.nfe-photocapture-failed-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
 /* Painel de benchmark de decoders — tela cheia, mobile-first, dados densos (não é um viewfinder puro
    como .nfe-scanner-overlay, então segue os tokens claro/escuro normais do app em vez do visual escuro
    fixo da câmera ao vivo). "Não precisa ficar bonito, mas deve ser legível/funcional/fácil de testar
