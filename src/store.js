@@ -36,6 +36,10 @@ function makeDefaultState() {
     currentUser: cloneData(DEMO_CURRENT_USER),
     selectedRecebimentoId: null,
     lastUpdated: null,
+    // Distingue "ainda carregando" / "falhou" / "carregou e está vazio mesmo" —
+    // sem isso os três casos renderizavam o mesmo "Nenhum recebimento ainda".
+    initialLoadStatus: 'loading',
+    initialLoadError: null,
   }
 }
 
@@ -904,6 +908,7 @@ let initialHydration = null
 export async function hydrateRecebimentosFromApi() {
   if (initialHydration) return initialHydration
   initialHydration = (async () => {
+    setState((current) => ({ ...current, initialLoadStatus: 'loading', initialLoadError: null }), { keepTimestamp: true })
     try {
       const firstPage = await api.listRecebimentos({
         includeArchived: 'true',
@@ -926,6 +931,8 @@ export async function hydrateRecebimentosFromApi() {
       setState((current) => ({
         ...current,
         recebimentos,
+        initialLoadStatus: 'ready',
+        initialLoadError: null,
         selectedRecebimentoId: recebimentos.some(
           (entry) => entry.id === current.selectedRecebimentoId,
         )
@@ -935,11 +942,22 @@ export async function hydrateRecebimentosFromApi() {
       return recebimentos
     } catch (error) {
       console.warn('ALM API: não foi possível carregar os recebimentos iniciais.', error)
-      setState((current) => ({ ...current, recebimentos: [], selectedRecebimentoId: null }))
+      setState((current) => ({
+        ...current,
+        recebimentos: [],
+        initialLoadStatus: 'error',
+        initialLoadError: error?.message || 'Erro desconhecido.',
+        selectedRecebimentoId: null,
+      }))
       return []
     }
   })()
   return initialHydration
+}
+
+export function retryInitialLoad() {
+  initialHydration = null
+  return hydrateRecebimentosFromApi()
 }
 
 /**
@@ -1008,6 +1026,7 @@ export function useRecebimentosStore(options = {}) {
     getReceiptById,
     queryRecebimentos,
     buildCsvExport,
+    retryInitialLoad,
   }
 }
 

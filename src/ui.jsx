@@ -144,12 +144,12 @@ export function ToastHost({ toasts, onDismiss }) {
   )
 }
 
-export function EmptyState({ icon: Icon, title, description, action }) {
+export function EmptyState({ icon: Icon, title, description, action, iconClassName }) {
   return (
     <div className="empty-state">
       {Icon ? (
         <span className="empty-icon">
-          <Icon size={25} />
+          <Icon size={25} className={iconClassName} />
         </span>
       ) : null}
       <h3>{title}</h3>

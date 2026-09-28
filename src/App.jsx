@@ -260,7 +260,44 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
   )
 }
 
+// Distingue carregando / erro / vazio real na carga inicial — sem isso, as
+// três situações renderizavam o mesmo estado de "nenhum recebimento".
+function InitialLoadState({ store, label }) {
+  if (store.initialLoadStatus === 'loading') {
+    return (
+      <div className="page">
+        <div role="status" aria-live="polite">
+          <EmptyState
+            icon={RefreshCw}
+            iconClassName="spin"
+            title={`Carregando ${label}…`}
+            description="Buscando os dados mais recentes."
+          />
+        </div>
+      </div>
+    )
+  }
+  if (store.initialLoadStatus === 'error') {
+    return (
+      <div className="page">
+        <div role="alert">
+          <EmptyState
+            icon={AlertTriangle}
+            title="Não foi possível carregar os dados"
+            description="Verifique sua conexão e tente novamente em instantes."
+            action={<button className="btn btn-secondary" type="button" onClick={store.retryInitialLoad}><RefreshCw size={14} /> Tentar novamente</button>}
+          />
+        </div>
+      </div>
+    )
+  }
+  return null
+}
+
 function DashboardPage({ store }) {
+  const loadState = <InitialLoadState store={store} label="recebimentos" />
+  if (loadState) return loadState
+
   const { receipts, metrics } = store
   const maxStatus = Math.max(1, ...metrics.porStatus.map((item) => item.total))
   const attention = receipts
@@ -425,6 +462,12 @@ function ReceiptsPage({ store, initialQuery }) {
   const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }))
   const clearFilters = () => setFilters({ search: '', status: '', tipo: '', fornecedor: '', responsavel: '', periodoInicio: '', periodoFim: '', nfPendente: '' })
   const activeCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length
+
+  // Depois dos hooks (Rules of Hooks) — loading/erro não deve renderizar a
+  // tabela nem "Nenhum recebimento encontrado" (que é sobre filtro, não sobre
+  // a carga inicial).
+  const loadState = <InitialLoadState store={store} label="recebimentos" />
+  if (loadState) return loadState
 
   return (
     <div className="page">
@@ -1113,7 +1156,11 @@ function DetailPage({ store, receiptId, pushToast }) {
   )
 }
 
-function PendingPage({ receipts }) {
+function PendingPage({ store }) {
+  const loadState = <InitialLoadState store={store} label="pendências" />
+  if (loadState) return loadState
+
+  const receipts = store.receipts
   const docs = receipts.filter((item) => isNfPending(item) && item.status !== RECEBIMENTO_STATUS.DIGITACAO)
   const review = receipts.filter((item) => item.status === RECEBIMENTO_STATUS.CONFERENCIA)
   const divergence = receipts.filter((item) => hasOpenDivergences(item))
@@ -1177,7 +1224,7 @@ export default function App() {
   } else if (route.path === ROUTES.newReceipt) {
     content = <NewReceiptPage store={store} pushToast={pushToast} />
   } else if (route.path === ROUTES.pending) {
-    content = <PendingPage receipts={store.receipts} />
+    content = <PendingPage store={store} />
   } else if (route.path === ROUTES.nfeReader) {
     content = (
       <Suspense fallback={<div className="page"><EmptyState icon={ScanBarcode} title="Carregando módulo" description="Preparando a leitura automática de NF-e…" /></div>}>
