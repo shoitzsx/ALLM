@@ -68,7 +68,10 @@ export async function createApp() {
           const { buffer, mimeType } = await drive.downloadFile(parts[1])
           res.writeHead(200, { 'Content-Length': buffer.length, 'Content-Type': mimeType, 'Access-Control-Allow-Origin': env.corsOrigin })
           return res.end(buffer)
-        } catch { return error(res, 404, 'FILE_NOT_FOUND', 'Arquivo não encontrado.') }
+        } catch (exception) {
+          if (exception.status) throw exception
+          return error(res, 404, 'FILE_NOT_FOUND', 'Arquivo não encontrado.')
+        }
       }
       return error(res, 404, 'NOT_FOUND', 'Endpoint não encontrado.')
     } catch (exception) { console.error(exception); return error(res, exception.status || 500, exception.code || 'INTERNAL_ERROR', exception.message || 'Erro interno.', exception.details) }

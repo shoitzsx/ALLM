@@ -9,12 +9,22 @@ const FOLDER_NAME = 'ALM Recebimentos - Anexos'
 const SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 export function createGoogleDriveClient(config) {
-  const auth = new google.auth.OAuth2(config.clientId, config.clientSecret)
-  auth.setCredentials({ refresh_token: config.refreshToken })
-  const drive = google.drive({ version: 'v3', auth })
+  const configured = Boolean(config.clientId && config.clientSecret && config.refreshToken)
+  const auth = configured ? new google.auth.OAuth2(config.clientId, config.clientSecret) : null
+  if (auth) auth.setCredentials({ refresh_token: config.refreshToken })
+  const drive = auth ? google.drive({ version: 'v3', auth }) : null
 
   let folderIdPromise = null
+  function requireConfigured() {
+    if (drive) return
+    const error = new Error('Google Drive OAuth nao configurado.')
+    error.status = 503
+    error.code = 'DRIVE_NOT_CONFIGURED'
+    throw error
+  }
+
   async function ensureFolder() {
+    requireConfigured()
     if (config.folderId) return config.folderId
     if (!folderIdPromise) {
       folderIdPromise = (async () => {
@@ -45,12 +55,14 @@ export function createGoogleDriveClient(config) {
   }
 
   async function downloadFile(fileId) {
+    requireConfigured()
     const meta = await drive.files.get({ fileId, fields: 'mimeType, name' })
     const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' })
     return { buffer: Buffer.from(response.data), mimeType: meta.data.mimeType || 'application/octet-stream' }
   }
 
   async function deleteFile(fileId) {
+    requireConfigured()
     await drive.files.delete({ fileId }).catch(() => {})
   }
 
