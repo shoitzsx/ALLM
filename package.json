@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "postinstall": "node scripts/copy-vendor-assets.mjs",
     "test": "node --test src/features/nfeReader/*.test.mjs src/features/nfeReader/decoders/*.test.mjs",
@@ -16,6 +19,8 @@
     "@undecaf/zbar-wasm": "^0.11.0",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
+    "dotenv": "^18.0.3",
+    "googleapis": "^181.0.0",
     "lucide-react": "^0.468.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^18.3.1",

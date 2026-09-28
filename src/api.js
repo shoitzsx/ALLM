@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1').replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')
 const USER_KEY = 'alm:api:user:v1'
 
 function currentUserId() {

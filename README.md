@@ -263,32 +263,46 @@ npm run preview    # serve a build de produção localmente, para testes
 
 ## Configuração
 
-Crie `backend/.env` a partir de `.env.example` (raiz do projeto). Variáveis usadas pelo backend, confirmadas em `backend/config/env.mjs` — **apenas os nomes**, nunca valores reais devem ser versionados:
+Crie `.env` na raiz do projeto a partir de `.env.example`. É o mesmo arquivo para frontend (Vite) e backend — cada um lê só o que precisa. Variáveis usadas pelo backend, confirmadas em `backend/config/env.mjs` — **apenas os nomes**, nunca valores reais devem ser versionados:
 
 ```env
-# Frontend — URL da API
+# Frontend — normalmente vazio: em produção o frontend chama /api/v1 (same-origin).
 VITE_API_URL=
 
-# Backend — credenciais da conta de serviço do Google (obrigatórias)
+# Backend — Google Sheets, conta de serviço (obrigatórias)
 GOOGLE_SHEETS_SPREADSHEET_ID=
 GOOGLE_SERVICE_ACCOUNT_EMAIL=
 GOOGLE_PRIVATE_KEY=
+
+# Backend — Google Drive, OAuth (obrigatórias; guarda os anexos)
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REFRESH_TOKEN=
+GOOGLE_DRIVE_FOLDER_ID=
 
 # Backend — opcionais (têm valor padrão se ausentes)
 PORT=
 HOST=
 CORS_ORIGIN=
-ALM_UPLOAD_DIR=
 ```
 
-`GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` são obrigatórias — o backend não inicia sem elas. Nunca use o prefixo `VITE_` nessas variáveis (isso as exporia ao bundle do frontend), e nunca versione o `.env` nem um `credentials.json` da conta de serviço.
+Todas as variáveis de `GOOGLE_*` são obrigatórias — o backend não inicia sem elas. Nunca use o prefixo `VITE_` nessas variáveis (isso as exporia ao bundle do frontend), e nunca versione o `.env` nem um `credentials.json`.
 
 ### Configurando o Google Sheets (alto nível)
 
 1. Crie uma conta de serviço no Google Cloud e gere uma chave.
 2. Compartilhe a planilha de destino com o e-mail dessa conta de serviço, com permissão de edição.
-3. Preencha `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` no `backend/.env`.
+3. Preencha `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` e `GOOGLE_PRIVATE_KEY` no `.env`.
 4. As abas necessárias (`Recebimentos`, `Itens`, `Divergencias`, `HistoricoStatus`, `Auditoria`, `Anexos`, `Usuarios`) são criadas automaticamente na primeira execução, se ainda não existirem.
+
+### Configurando o Google Drive para anexos (alto nível)
+
+Contas de serviço não têm cota de armazenamento própria para criar arquivos no Drive, por isso os anexos usam OAuth de uma conta Google real (não a conta de serviço do Sheets):
+
+1. No Google Cloud Console, crie um "OAuth 2.0 Client ID" do tipo **Desktop app** e ative a Google Drive API.
+2. Rode `GOOGLE_OAUTH_CLIENT_ID=... GOOGLE_OAUTH_CLIENT_SECRET=... node scripts/google-drive-oauth-setup.mjs`, abra a URL impressa e autorize com a conta que vai guardar os anexos.
+3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente da Vercel em produção).
+4. `GOOGLE_DRIVE_FOLDER_ID` é opcional — se vazio, uma pasta "ALM Recebimentos - Anexos" é criada/reaproveitada automaticamente.
 
 ---
 
@@ -332,7 +346,13 @@ Fluxos que dependem de APIs de navegador reais (câmera, Canvas, renderização 
 
 ## Deploy
 
-O projeto é construído com Vite (`npm run build`), gerando arquivos estáticos em `dist/`. Existe uma versão publicada, hospedada na Vercel, usada para validação funcional e testes em dispositivo físico. O backend (API própria + integração com Google Sheets) roda como um processo Node.js separado do frontend estático.
+Frontend e backend são publicados juntos, no mesmo projeto Vercel:
+
+- O frontend é construído com Vite (`npm run build`) e servido como estático a partir de `dist/`.
+- O backend roda como uma Vercel Function em `api/v1/[...path].mjs`, que reaproveita o mesmo dispatcher de `backend/app.mjs` usado localmente por `npm run api` — sem lógica duplicada.
+- `src/api.js` chama `/api/v1` (caminho relativo, same-origin); não é necessário configurar `VITE_API_URL` em produção.
+- As variáveis `GOOGLE_*` (Sheets e Drive) devem ser cadastradas em Project Settings → Environment Variables na Vercel, sem prefixo `VITE_` — elas nunca chegam ao bundle do frontend.
+- Node.js recomendado: 24.x (Project Settings → Node.js Version), mesma versão usada em desenvolvimento.
 
 ---
 
