@@ -8,7 +8,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/copy-vendor-assets.mjs",
-    "test": "node --test src/features/nfeReader/*.test.mjs src/features/nfeReader/decoders/*.test.mjs",
+    "test": "node --test backend/attachments.test.mjs src/features/nfeReader/*.test.mjs src/features/nfeReader/decoders/*.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "api": "node backend/server.mjs",
     "api:dev": "node --watch backend/server.mjs",
