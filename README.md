@@ -274,7 +274,7 @@ GOOGLE_SHEETS_SPREADSHEET_ID=
 GOOGLE_SERVICE_ACCOUNT_EMAIL=
 GOOGLE_PRIVATE_KEY=
 
-# Backend — Google Drive, OAuth (obrigatórias; guarda os anexos)
+# Backend — Google Drive, OAuth (opcionais até os anexos serem ativados)
 GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_OAUTH_REFRESH_TOKEN=
@@ -286,7 +286,7 @@ HOST=
 CORS_ORIGIN=
 ```
 
-Todas as variáveis de `GOOGLE_*` são obrigatórias — o backend não inicia sem elas. Nunca use o prefixo `VITE_` nessas variáveis (isso as exporia ao bundle do frontend), e nunca versione o `.env` nem um `credentials.json`.
+As três variáveis do Google Sheets são obrigatórias. As variáveis OAuth do Drive só são obrigatórias quando os anexos forem ativados: até lá a API continua disponível e as rotas de anexo respondem `503 DRIVE_NOT_CONFIGURED`. Nunca use o prefixo `VITE_` nessas variáveis (isso as exporia ao bundle do frontend), e nunca versione o `.env` nem um `credentials.json`.
 
 ### Configurando o Google Sheets (alto nível)
 
@@ -300,9 +300,10 @@ Todas as variáveis de `GOOGLE_*` são obrigatórias — o backend não inicia s
 Contas de serviço não têm cota de armazenamento própria para criar arquivos no Drive, por isso os anexos usam OAuth de uma conta Google real (não a conta de serviço do Sheets):
 
 1. No Google Cloud Console, crie um "OAuth 2.0 Client ID" do tipo **Desktop app** e ative a Google Drive API.
-2. Rode `GOOGLE_OAUTH_CLIENT_ID=... GOOGLE_OAUTH_CLIENT_SECRET=... node scripts/google-drive-oauth-setup.mjs`, abra a URL impressa e autorize com a conta que vai guardar os anexos.
+2. Preencha `GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_CLIENT_SECRET` no `.env`, rode `node scripts/google-drive-oauth-setup.mjs`, abra a URL impressa e autorize com a conta que vai guardar os anexos.
 3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente da Vercel em produção).
-4. `GOOGLE_DRIVE_FOLDER_ID` é opcional — se vazio, uma pasta "ALM Recebimentos - Anexos" é criada/reaproveitada automaticamente.
+4. `GOOGLE_DRIVE_FOLDER_ID` é opcional. É recomendado deixá-lo vazio: uma pasta própria chamada "ALM Recebimentos - Anexos" é criada/reaproveitada automaticamente com o escopo mínimo `drive.file`.
+5. O contrato resumível, os limites e os erros de anexo estão em [`docs/attachments-api.md`](docs/attachments-api.md).
 
 ---
 

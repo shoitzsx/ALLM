@@ -8,8 +8,12 @@ const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 // diretório usado para iniciar o processo. Em produção (Vercel) este arquivo
 // não existe e a chamada abaixo é um no-op silencioso — as variáveis vêm
 // direto de process.env, injetadas pela plataforma.
-dotenv.config({ path: path.join(projectRoot, '.env') })
-dotenv.config({ path: path.join(projectRoot, 'backend', '.env') })
+export function loadProjectEnvironment() {
+  dotenv.config({ path: path.join(projectRoot, '.env') })
+  dotenv.config({ path: path.join(projectRoot, 'backend', '.env') })
+}
+
+loadProjectEnvironment()
 
 function required(name) {
   const value = process.env[name]?.trim()
