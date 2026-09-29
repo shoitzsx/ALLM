@@ -17,6 +17,8 @@ import {
   validateStatusTransition,
 } from './data.js'
 import { api } from './api.js'
+import { uploadFileToSession } from './features/attachments/resumableUpload.js'
+import { validateAttachmentFile } from './features/attachments/constraints.js'
 
 export const STORAGE_KEY = 'alm:recebimentos:mvp:v1' // legado; não usado no MVP volátil
 export const suppliers = SUPPLIER_OPTIONS
@@ -496,6 +498,45 @@ export function removeAttachment(id, attachmentId, options = {}) {
 
 export const removeAnexo = removeAttachment
 
+/**
+ * Fluxo resumível completo (sessão → PUT direto ao Drive → confirmação no
+ * ALM). Só toca o estado local DEPOIS do 201 de confirmação — nunca antes.
+ * Se qualquer etapa falhar, propaga o erro e não adiciona nada à UI.
+ */
+export async function uploadAttachment(id, file, categoria, options = {}) {
+  const user = options.user || state.currentUser
+  requireWritePermission(user)
+  validateAttachmentFile(file)
+
+  const metadata = {
+    name: file.name || 'arquivo',
+    mimeType: file.type,
+    size: file.size,
+    categoria: categoria || 'Outro',
+  }
+  const session = await api.createAttachmentUploadSession(id, metadata)
+  const uploaded = await uploadFileToSession({
+    sessionUrl: session.upload.sessionUrl,
+    chunkSize: session.upload.chunkSize,
+    file,
+    onProgress: options.onProgress,
+    signal: options.signal,
+  })
+  const attachment = await api.confirmAttachment(id, { fileId: uploaded.id, categoria: metadata.categoria })
+
+  mutateReceipt(id, (receipt) => ({
+    ...receipt,
+    anexos: [...(receipt.anexos || []), attachment],
+    atualizadoEm: attachment.dataInclusao || nowIso(),
+    historicoAlteracoes: [
+      ...(receipt.historicoAlteracoes || []),
+      auditEntry(user, 'Arquivo incluído', attachment.nome, attachment.dataInclusao),
+    ],
+  }))
+
+  return attachment
+}
+
 export function addDivergence(id, input = {}, options = {}) {
   const user = options.user || state.currentUser
   requireWritePermission(user)
@@ -789,7 +830,7 @@ async function apiCreate(input, local) {
     })
     for (const entry of input.anexos || input.attachments || []) {
       const file = entry?.file instanceof File ? entry.file : entry instanceof File ? entry : null
-      if (file) await api.uploadAttachment(created.id, file, entry.categoria || entry.category || 'Outro')
+      if (file) await uploadAttachment(created.id, file, entry.categoria || entry.category || 'Outro')
     }
     return (await refreshReceiptFromApi(created.id)) || created
   } catch (error) {
@@ -843,26 +884,30 @@ const apiBackedActions = {
     syncMutation(id, () => api.removeItem(id, itemId))
     return local
   },
+  // Async de verdade: só resolve (e só atualiza a UI) depois que o backend
+  // confirma o anexo. Se qualquer etapa falhar, rejeita — sem sucesso otimista.
   addAttachment: (id, file, categoryOrOptions = {}, maybeOptions = {}) => {
     const options = typeof categoryOrOptions === 'string' ? { ...maybeOptions, category: categoryOrOptions } : categoryOrOptions
-    const local = addAttachment(id, file, options)
-    if (file?.file instanceof File) syncMutation(id, () => api.uploadAttachment(id, file.file, options.category || options.categoria))
-    else if (file instanceof File) syncMutation(id, () => api.uploadAttachment(id, file, options.category || options.categoria))
-    return local
+    const realFile = file?.file instanceof File ? file.file : file instanceof File ? file : null
+    if (!realFile) return Promise.reject(new Error('Arquivo inválido.'))
+    return uploadAttachment(id, realFile, options.category || options.categoria, options)
   },
-  addAttachments: (id, files, options = {}) => {
+  addAttachments: async (id, files, options = {}) => {
     const list = Array.from(files || [])
-    const local = addAttachments(id, list, options)
-    list.forEach((entry) => {
+    const results = []
+    for (const entry of list) {
       const file = entry?.file instanceof File ? entry.file : entry instanceof File ? entry : null
-      if (file) syncMutation(id, () => api.uploadAttachment(id, file, options.category || options.categoria || entry.categoria))
-    })
-    return local
+      if (file) results.push(await uploadAttachment(id, file, options.category || options.categoria || entry.categoria, options))
+    }
+    return results
   },
-  removeAttachment: (id, attachmentId, options = {}) => {
-    const local = removeAttachment(id, attachmentId, options)
-    syncMutation(id, () => api.removeAttachment(id, attachmentId, options.reason || options.motivo || ''))
-    return local
+  // Idem: remove do backend primeiro. Só some da UI se o backend confirmar —
+  // em caso de erro o anexo permanece visível (nenhuma mutação local ocorreu).
+  removeAttachment: async (id, attachmentId, options = {}) => {
+    const user = options.user || state.currentUser
+    requireWritePermission(user)
+    await api.removeAttachment(id, attachmentId, options.reason || options.motivo || '')
+    return removeAttachment(id, attachmentId, { ...options, user })
   },
   addDivergence: (id, input = {}, options = {}) => {
     const local = addDivergence(id, input, options)

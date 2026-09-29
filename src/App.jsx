@@ -881,6 +881,13 @@ function DetailPage({ store, receiptId, pushToast }) {
   const [documentForm, setDocumentForm] = useState({ category: 'Nota Fiscal', numeroNf: '', serieNf: '', files: [] })
   const [divergenceForm, setDivergenceForm] = useState({ tipo: 'Quantidade incorreta', itemId: '', descricao: '' })
   const [resolution, setResolution] = useState('')
+  const [uploadQueue, setUploadQueue] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState(null)
+  const [removeReason, setRemoveReason] = useState('')
+  const [removing, setRemoving] = useState(false)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   if (!receipt) {
     return <div className="page"><EmptyState icon={PackageOpen} title="Recebimento não encontrado" description="O registro pode ter sido arquivado ou o endereço está incorreto." action={<button className="btn btn-secondary" onClick={() => navigate(ROUTES.receipts)}>Voltar à consulta</button>} /></div>
@@ -923,7 +930,11 @@ function DetailPage({ store, receiptId, pushToast }) {
 
   const primaryAction = contextualAction()
 
+  // Async de verdade: nada de "sucesso" antes do 201 do backend. Cada arquivo
+  // tem seu próprio status (pending/uploading/success/error) — uma retentativa
+  // manual só reenvia o que falhou, nunca os que já foram confirmados.
   const saveDocument = async () => {
+    if (uploading) return
     if (!documentForm.files.length) {
       pushToast('Selecione um arquivo', 'Escolha ao menos um documento para anexar.', 'error')
       return
@@ -932,16 +943,60 @@ function DetailPage({ store, receiptId, pushToast }) {
       pushToast('Número da NF necessário', 'Informe o número para identificar o documento.', 'error')
       return
     }
-    try {
-      if (documentForm.category === 'Nota Fiscal') {
-        store.updateRecebimento(receipt.id, { numeroNf: documentForm.numeroNf || receipt.numeroNf, serieNf: documentForm.serieNf || receipt.serieNf })
+    const files = documentForm.files
+    const setQueueEntry = (index, patch) => {
+      if (!mountedRef.current) return
+      setUploadQueue((current) => current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)))
+    }
+    setUploadQueue(files.map((file) => ({ name: file.name, status: 'pending', progress: 0 })))
+    setUploading(true)
+    const remaining = []
+    let hadError = false
+    if (documentForm.category === 'Nota Fiscal') {
+      store.updateRecebimento(receipt.id, { numeroNf: documentForm.numeroNf || receipt.numeroNf, serieNf: documentForm.serieNf || receipt.serieNf })
+    }
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index]
+      setQueueEntry(index, { status: 'uploading' })
+      try {
+        await store.addAttachment(receipt.id, file, {
+          category: documentForm.category,
+          onProgress: (sent, total) => setQueueEntry(index, { progress: total ? Math.round((sent / total) * 100) : 0 }),
+        })
+        setQueueEntry(index, { status: 'success', progress: 100 })
+      } catch (error) {
+        hadError = true
+        remaining.push(file)
+        setQueueEntry(index, { status: 'error', error: friendlyAttachmentError(error) })
       }
-      store.addAttachments(receipt.id, documentForm.files, { category: documentForm.category })
-      setDocumentModal(false)
-      setDocumentForm({ category: 'Nota Fiscal', numeroNf: '', serieNf: '', files: [] })
-      pushToast('Documento anexado', 'O arquivo já está vinculado ao histórico do recebimento.')
+    }
+    if (!mountedRef.current) return
+    setUploading(false)
+    if (hadError) {
+      setDocumentForm((current) => ({ ...current, files: remaining }))
+      pushToast('Nem todos os arquivos foram anexados', 'Revise os itens com erro e tente novamente.', 'error')
+      return
+    }
+    setDocumentModal(false)
+    setDocumentForm({ category: 'Nota Fiscal', numeroNf: '', serieNf: '', files: [] })
+    setUploadQueue([])
+    pushToast('Documento anexado', 'O arquivo já está vinculado ao histórico do recebimento.')
+  }
+
+  const confirmRemoveAttachment = async () => {
+    if (!removeTarget || removing) return
+    setRemoving(true)
+    try {
+      await store.removeAttachment(receipt.id, removeTarget.id, { reason: removeReason.trim() })
+      if (!mountedRef.current) return
+      pushToast('Arquivo removido', `${removeTarget.nome} foi removido do recebimento.`)
+      setRemoveTarget(null)
+      setRemoveReason('')
     } catch (error) {
-      pushToast('Não foi possível anexar', error.message, 'error')
+      if (!mountedRef.current) return
+      pushToast('Não foi possível remover', friendlyAttachmentError(error), 'error')
+    } finally {
+      if (mountedRef.current) setRemoving(false)
     }
   }
 
@@ -1037,7 +1092,8 @@ function DetailPage({ store, receiptId, pushToast }) {
                   <div className="document-card" key={file.id}>
                     <span className="document-icon"><FileText size={16} /></span>
                     <span className="document-copy"><strong>{file.nome}</strong><span>{file.categoria || file.tipo} · {formatFileSize(file.tamanho)}</span></span>
-                    <button className="icon-button" type="button" onClick={() => pushToast('Arquivo demonstrativo', 'A visualização binária será ativada com o armazenamento corporativo.')} aria-label="Visualizar arquivo"><Eye size={15} /></button>
+                    <a className="icon-button" href={attachmentDownloadHref(file)} target="_blank" rel="noopener noreferrer" aria-label="Visualizar ou baixar arquivo"><Eye size={15} /></a>
+                    <button className="icon-button" type="button" onClick={() => setRemoveTarget(file)} aria-label="Remover arquivo"><Trash2 size={15} /></button>
                   </div>
                 ))}
                 {!docs.some((file) => (file.categoria || file.tipo) === 'Nota Fiscal') ? (
@@ -1113,16 +1169,69 @@ function DetailPage({ store, receiptId, pushToast }) {
         open={documentModal}
         title="Adicionar documento"
         description="O arquivo ficará vinculado ao protocolo e registrado na auditoria."
-        onClose={() => setDocumentModal(false)}
-        footer={<><button className="btn btn-secondary" type="button" onClick={() => setDocumentModal(false)}>Cancelar</button><button className="btn btn-primary" type="button" onClick={saveDocument}><Upload size={15} /> Anexar arquivo</button></>}
+        onClose={() => { if (!uploading) setDocumentModal(false) }}
+        footer={<>
+          <button className="btn btn-secondary" type="button" disabled={uploading} onClick={() => setDocumentModal(false)}>Cancelar</button>
+          <button className="btn btn-primary" type="button" disabled={uploading} onClick={saveDocument}>
+            {uploading ? <RefreshCw className="spin" size={15} /> : <Upload size={15} />} {uploading ? 'Enviando…' : 'Anexar arquivo'}
+          </button>
+        </>}
       >
         <div className="form-grid">
-          <div className="field field-full"><label>Tipo de documento</label><select value={documentForm.category} onChange={(event) => setDocumentForm((current) => ({ ...current, category: event.target.value }))}>{DOCUMENT_TYPE_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></div>
-          {documentForm.category === 'Nota Fiscal' ? <><div className="field"><label>Número da NF</label><input value={documentForm.numeroNf || receipt.numeroNf || ''} onChange={(event) => setDocumentForm((current) => ({ ...current, numeroNf: event.target.value }))} placeholder="Ex.: 248913" /></div><div className="field"><label>Série <span className="optional">Opcional</span></label><input value={documentForm.serieNf || receipt.serieNf || ''} onChange={(event) => setDocumentForm((current) => ({ ...current, serieNf: event.target.value }))} placeholder="Ex.: 1" /></div></> : null}
+          <div className="field field-full"><label>Tipo de documento</label><select value={documentForm.category} disabled={uploading} onChange={(event) => setDocumentForm((current) => ({ ...current, category: event.target.value }))}>{DOCUMENT_TYPE_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></div>
+          {documentForm.category === 'Nota Fiscal' ? <><div className="field"><label>Número da NF</label><input value={documentForm.numeroNf || receipt.numeroNf || ''} disabled={uploading} onChange={(event) => setDocumentForm((current) => ({ ...current, numeroNf: event.target.value }))} placeholder="Ex.: 248913" /></div><div className="field"><label>Série <span className="optional">Opcional</span></label><input value={documentForm.serieNf || receipt.serieNf || ''} disabled={uploading} onChange={(event) => setDocumentForm((current) => ({ ...current, serieNf: event.target.value }))} placeholder="Ex.: 1" /></div></> : null}
           <div className="field field-full">
             <div className="field-label">Arquivo</div>
-            <label className="upload-zone"><Upload size={20} /><strong>Selecionar do dispositivo</strong><span>PDF ou imagem, até 10 MB por arquivo</span><input type="file" multiple={documentForm.category === 'Foto' || documentForm.category === 'Outro'} accept={documentForm.category === 'Foto' ? 'image/*' : 'application/pdf,image/*'} capture={documentForm.category === 'Foto' ? 'environment' : undefined} onChange={(event) => setDocumentForm((current) => ({ ...current, files: Array.from(event.target.files || []) }))} /></label>
-            {documentForm.files.length ? <div className="file-list">{documentForm.files.map((file) => <div className="file-row" key={file.name}><span className="file-row-icon"><FileText size={14} /></span><div><strong>{file.name}</strong><span>{formatFileSize(file.size)}</span></div><CheckCircle2 size={15} className="icon-brand" /></div>)}</div> : null}
+            <label className="upload-zone">
+              <Upload size={20} /><strong>Selecionar do dispositivo</strong><span>PDF ou imagem, até 4 MiB por arquivo</span>
+              <input
+                type="file"
+                disabled={uploading}
+                multiple={documentForm.category === 'Foto' || documentForm.category === 'Outro'}
+                accept={documentForm.category === 'Foto' ? ALLOWED_IMAGE_ACCEPT : ALLOWED_ATTACHMENT_ACCEPT}
+                capture={documentForm.category === 'Foto' ? 'environment' : undefined}
+                onChange={(event) => {
+                  const files = Array.from(event.target.files || [])
+                  const valid = []
+                  const rejected = []
+                  for (const file of files) {
+                    try { validateAttachmentFile(file); valid.push(file) } catch (error) { rejected.push(`${file.name}: ${friendlyAttachmentError(error)}`) }
+                  }
+                  if (rejected.length) pushToast('Arquivo não aceito', rejected.join(' '), 'error')
+                  setDocumentForm((current) => ({ ...current, files: valid }))
+                  setUploadQueue([])
+                }}
+              />
+            </label>
+            {documentForm.files.length ? (
+              <div className="file-list">
+                {documentForm.files.map((file, index) => {
+                  const entry = uploadQueue[index]
+                  return (
+                    <div className="file-row" key={`${file.name}-${index}`}>
+                      <span className="file-row-icon"><FileText size={14} /></span>
+                      <div>
+                        <strong>{file.name}</strong>
+                        <span>
+                          {formatFileSize(file.size)}
+                          {entry?.status === 'uploading' ? ` · enviando ${entry.progress}%` : null}
+                          {entry?.status === 'error' ? ` · ${entry.error}` : null}
+                        </span>
+                      </div>
+                      {entry?.status === 'uploading' ? (
+                        <span role="status" aria-live="polite"><RefreshCw className="spin" size={15} /></span>
+                      ) : entry?.status === 'success' ? (
+                        <CheckCircle2 size={15} className="icon-brand" />
+                      ) : entry?.status === 'error' ? (
+                        <AlertTriangle size={15} className="icon-danger" />
+                      ) : (
+                        <CheckCircle2 size={15} className="icon-brand" />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       </Modal>
@@ -1151,6 +1260,26 @@ function DetailPage({ store, receiptId, pushToast }) {
         footer={<><button className="btn btn-secondary" type="button" onClick={() => setResolveTarget(null)}>Cancelar</button><button className="btn btn-primary" type="button" onClick={saveResolution}><CheckCircle2 size={15} /> Marcar como resolvida</button></>}
       >
         <div className="field"><label>Como foi resolvida? <span className="required-hint">Obrigatório</span></label><textarea value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Ex.: fornecedor substituiu as peças e a nova quantidade foi conferida..." /></div>
+      </Modal>
+
+      <Modal
+        open={Boolean(removeTarget)}
+        title="Remover anexo"
+        description="O arquivo é removido do armazenamento e a ação fica registrada na auditoria do recebimento."
+        onClose={() => { if (!removing) { setRemoveTarget(null); setRemoveReason('') } }}
+        size="sm"
+        footer={<>
+          <button className="btn btn-secondary" type="button" disabled={removing} onClick={() => { setRemoveTarget(null); setRemoveReason('') }}>Cancelar</button>
+          <button className="btn btn-danger-soft" type="button" disabled={removing} onClick={confirmRemoveAttachment}>
+            {removing ? <RefreshCw className="spin" size={15} /> : <Trash2 size={15} />} {removing ? 'Removendo…' : 'Remover'}
+          </button>
+        </>}
+      >
+        <p>Remover <strong>{removeTarget?.nome}</strong> deste recebimento?</p>
+        <div className="field field-full">
+          <label>Motivo <span className="optional">Opcional</span></label>
+          <input value={removeReason} disabled={removing} onChange={(event) => setRemoveReason(event.target.value)} placeholder="Ex.: Documento substituído" />
+        </div>
       </Modal>
     </div>
   )
