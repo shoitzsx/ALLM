@@ -14,6 +14,25 @@ export function createGoogleDriveOAuthClient(clientId, clientSecret, redirectUri
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
 }
 
+// Comparação exata, nunca substring/prefixo/regex — quem chama (backend/app.mjs)
+// decide a allowlist; esta função só confere a decisão antes de repassar a
+// Origin ao Google, nunca aceita o header do cliente sem checagem.
+export function isOriginAllowed(origin, allowedOrigins) {
+  return typeof origin === 'string' && origin.length > 0 && Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)
+}
+
+// Extraído à parte para poder testar, sem rede real, que a Origin já validada
+// (nunca o header cru) é o que vai no POST que abre a sessão resumível no Drive.
+export function buildResumableUploadHeaders({ accessToken, mimeType, size, origin }) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json; charset=UTF-8',
+    'X-Upload-Content-Type': mimeType,
+    'X-Upload-Content-Length': String(size),
+    ...(origin ? { Origin: origin } : {}),
+  }
+}
+
 function driveError(exception, fallbackCode = 'DRIVE_OPERATION_FAILED') {
   if (exception?.status && typeof exception?.code === 'string') return exception
   const status = Number(exception?.response?.status || exception?.status || 0)
@@ -79,7 +98,7 @@ export function createGoogleDriveClient(config) {
     }
   }
 
-  async function createResumableUpload({ name, mimeType, size, receiptId }) {
+  async function createResumableUpload({ name, mimeType, size, receiptId, origin }) {
     requireConfigured()
     const parents = [await ensureFolder()]
     try {
@@ -88,12 +107,7 @@ export function createGoogleDriveClient(config) {
       if (!accessToken) throw new Error('Access token indisponível.')
       const response = await fetch(RESUMABLE_UPLOAD_URL, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json; charset=UTF-8',
-          'X-Upload-Content-Type': mimeType,
-          'X-Upload-Content-Length': String(size),
-        },
+        headers: buildResumableUploadHeaders({ accessToken, mimeType, size, origin }),
         body: JSON.stringify({ name: safeStorageFileName(name), mimeType, parents, appProperties: { almReceiptId: receiptId } }),
       })
       const sessionUrl = response.headers.get('location')

@@ -859,10 +859,13 @@ const apiBackedActions = {
     const local = createRecebimento(input, options)
     return apiCreate(input, local)
   },
+  // Mutação local otimista continua imediata; o retorno agora é a Promise da
+  // confirmação real do backend (rethrow: true), para quem precisar mesmo
+  // esperar a persistência terminar antes de seguir (ex.: App.jsx serializando
+  // a atualização de NF antes de começar o upload de anexos).
   updateRecebimento: (id, changes = {}, options = {}) => {
-    const local = updateRecebimento(id, changes, options)
-    syncMutation(id, () => api.updateRecebimento(id, changes))
-    return local
+    updateRecebimento(id, changes, options)
+    return syncMutation(id, () => api.updateRecebimento(id, changes), { rethrow: true })
   },
   updateReceipt: (id, changes = {}, options = {}) => {
     const local = updateRecebimento(id, changes, options)

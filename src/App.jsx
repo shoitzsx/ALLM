@@ -73,6 +73,9 @@ import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
 import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
 import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
 import { clearPendingReceiptPrefill, peekPendingReceiptPrefill } from './features/nfeReader/receiptHandoff.js'
+import { attachmentDownloadHref } from './api.js'
+import { friendlyAttachmentError } from './features/attachments/errorMessages.js'
+import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile } from './features/attachments/constraints.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
 // a quem abrir esta tela experimental. `receiptHandoff.js` acima é importado
@@ -950,18 +953,35 @@ function DetailPage({ store, receiptId, pushToast }) {
     }
     setUploadQueue(files.map((file) => ({ name: file.name, status: 'pending', progress: 0 })))
     setUploading(true)
+    // Serializado de propósito: a atualização da NF precisa terminar de
+    // verdade no backend antes do upload começar. As duas mexiam na mesma
+    // linha do recebimento ao mesmo tempo (uma não esperava a outra), o que
+    // já causou uma confirmação de anexo ficar presa por disputa na mesma
+    // planilha.
+    if (documentForm.category === 'Nota Fiscal') {
+      try {
+        await store.updateRecebimento(receipt.id, { numeroNf: documentForm.numeroNf || receipt.numeroNf, serieNf: documentForm.serieNf || receipt.serieNf })
+      } catch (error) {
+        if (!mountedRef.current) return
+        setUploading(false)
+        pushToast('Não foi possível salvar', friendlyAttachmentError(error), 'error')
+        return
+      }
+    }
     const remaining = []
     let hadError = false
-    if (documentForm.category === 'Nota Fiscal') {
-      store.updateRecebimento(receipt.id, { numeroNf: documentForm.numeroNf || receipt.numeroNf, serieNf: documentForm.serieNf || receipt.serieNf })
-    }
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index]
       setQueueEntry(index, { status: 'uploading' })
       try {
         await store.addAttachment(receipt.id, file, {
           category: documentForm.category,
-          onProgress: (sent, total) => setQueueEntry(index, { progress: total ? Math.round((sent / total) * 100) : 0 }),
+          onProgress: (sent, total) => {
+            const progress = total ? Math.round((sent / total) * 100) : 0
+            // Bytes 100% enviados não é sucesso: falta o POST de confirmação
+            // ao backend (só ele persiste o anexo) — "finalizing" cobre essa janela.
+            setQueueEntry(index, { progress, status: progress >= 100 ? 'finalizing' : 'uploading' })
+          },
         })
         setQueueEntry(index, { status: 'success', progress: 100 })
       } catch (error) {
@@ -1215,10 +1235,11 @@ function DetailPage({ store, receiptId, pushToast }) {
                         <span>
                           {formatFileSize(file.size)}
                           {entry?.status === 'uploading' ? ` · enviando ${entry.progress}%` : null}
+                          {entry?.status === 'finalizing' ? ` · finalizando...` : null}
                           {entry?.status === 'error' ? ` · ${entry.error}` : null}
                         </span>
                       </div>
-                      {entry?.status === 'uploading' ? (
+                      {entry?.status === 'uploading' || entry?.status === 'finalizing' ? (
                         <span role="status" aria-live="polite"><RefreshCw className="spin" size={15} /></span>
                       ) : entry?.status === 'success' ? (
                         <CheckCircle2 size={15} className="icon-brand" />

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { DEMO_USERS } from '../src/data.js'
 import { readEnvironment } from './config/env.mjs'
 import { createGoogleSheetsClient } from './integrations/googleSheets.mjs'
-import { createGoogleDriveClient } from './integrations/googleDrive.mjs'
+import { createGoogleDriveClient, isOriginAllowed } from './integrations/googleDrive.mjs'
 import { createRecebimentosRepository } from './repositories/recebimentosRepository.mjs'
 import * as service from './services/recebimentosService.mjs'
 import { MAX_ATTACHMENT_BYTES, MAX_LEGACY_BASE64_ATTACHMENT_BYTES, RESUMABLE_UPLOAD_CHUNK_BYTES, decodeBase64Attachment, isInlinePreviewMimeType, normalizeAttachmentMetadata } from './attachments.mjs'
@@ -24,9 +24,26 @@ function sendDownload(res, { buffer, mimeType, name }, corsOrigin) {
   })
   res.end(buffer)
 }
-function attachmentResponse(attachment) {
-  const { storageKey, ...publicAttachment } = attachment
+export function attachmentResponse(attachment) {
+  const { storageKey, _rowNumber, ...publicAttachment } = attachment
   return publicAttachment
+}
+
+// Tenta persistir; se falhar, tenta desfazer o efeito colateral externo
+// (o upload no Drive) e, se ATÉ a limpeza falhar, avisa via onCleanupFailed
+// em vez de engolir silenciosamente — mas o erro relançado é sempre o da
+// falha de persistência original, nunca o da limpeza.
+export async function persistOrCleanupDrive({ persist, cleanup, onCleanupFailed }) {
+  try {
+    return await persist()
+  } catch (exception) {
+    try {
+      await cleanup()
+    } catch {
+      onCleanupFailed?.()
+    }
+    throw exception
+  }
 }
 function receiptResponse(receipt) {
   return { ...receipt, anexos: (receipt.anexos || []).map(attachmentResponse) }
@@ -43,14 +60,13 @@ export async function createApp() {
   const save = async (receipt) => repository.updateRecebimento(receipt)
   async function saveUploadedAttachment(receipt, metadata, uploaded, user) {
     const attachment = service.addAttachment(receipt, metadata, uploaded.id, user)
-    try {
-      await save(receipt)
-      return attachment
-    } catch (exception) {
-      // The Drive object has no value without durable metadata in Sheets.
-      await drive.deleteFile(uploaded.id).catch(() => {})
-      throw exception
-    }
+    // The Drive object has no value without durable metadata in Sheets.
+    await persistOrCleanupDrive({
+      persist: () => repository.addAttachmentRow(receipt),
+      cleanup: () => drive.deleteFile(uploaded.id),
+      onCleanupFailed: () => console.error('Cleanup do Drive falhou após erro de persistência.', { receiptId: receipt.id, attachmentId: attachment.id, cleanupFailed: true }),
+    })
+    return attachment
   }
 
   async function handle(req, res) {
@@ -80,8 +96,17 @@ export async function createApp() {
         }
         if (req.method === 'POST' && parts.length === 4 && parts[3] === 'upload-sessions') {
           if (!writeGuard(user, res)) return
+          // O binário vai do navegador direto pro Drive (nunca pela nossa API) —
+          // a sessionUrl só recebe CORS do Google para a Origin que mandarmos
+          // agora. Por isso exigimos Origin e checamos contra a allowlist antes
+          // de repassá-la; sem Origin (ex.: chamada server-to-server), recusamos,
+          // já que este endpoint só existe para gerar sessão destinada ao navegador.
+          const origin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : ''
+          if (!isOriginAllowed(origin, env.google.drive.allowedUploadOrigins)) {
+            return error(res, 403, 'ORIGIN_NOT_ALLOWED', 'Origem não autorizada para criar sessão de upload.')
+          }
           const metadata = normalizeAttachmentMetadata(await body(req))
-          const upload = await drive.createResumableUpload({ ...metadata, receiptId: receipt.id })
+          const upload = await drive.createResumableUpload({ ...metadata, receiptId: receipt.id, origin })
           return json(res, 201, { upload: { sessionUrl: upload.sessionUrl, method: 'PUT', chunkSize: RESUMABLE_UPLOAD_CHUNK_BYTES }, constraints: { maxBytes: MAX_ATTACHMENT_BYTES, chunkBytes: RESUMABLE_UPLOAD_CHUNK_BYTES } })
         }
         if (req.method === 'POST' && parts.length === 3) {
@@ -99,7 +124,7 @@ export async function createApp() {
           const uploaded = await drive.uploadFile({ ...metadata, buffer, receiptId: receipt.id })
           return json(res, 201, attachmentResponse(await saveUploadedAttachment(receipt, metadata, uploaded, user)))
         }
-        if (parts.length === 4 && req.method === 'DELETE') { if (!writeGuard(user, res)) return; const attachment = service.removeAttachment(receipt, parts[3], (await body(req)).reason, user); await drive.deleteFile(attachment.storageKey); await save(receipt); return json(res, 200, attachmentResponse(attachment)) }
+        if (parts.length === 4 && req.method === 'DELETE') { if (!writeGuard(user, res)) return; const attachment = service.removeAttachment(receipt, parts[3], (await body(req)).reason, user); await drive.deleteFile(attachment.storageKey); await repository.removeAttachmentRow(receipt, attachment); return json(res, 200, attachmentResponse(attachment)) }
       }
       if (parts[0] === 'recebimentos' && parts[2] === 'divergencias') { const receipt = receiptOr404(res, await repository.getRecebimento(parts[1])); if (!receipt) return; if (req.method === 'GET' && parts.length === 3) return json(res, 200, { data: receipt.divergencias || [] }); if (!writeGuard(user, res)) return; if (req.method === 'POST' && parts.length === 3) { const divergence = service.addDivergence(receipt, await body(req), user); await save(receipt); return json(res, 201, divergence) } if (parts.length === 5 && parts[4] === 'resolver' && req.method === 'POST') { const divergence = service.resolveDivergence(receipt, parts[3], await body(req), user); await save(receipt); return json(res, 200, divergence) } if (parts.length === 5 && parts[4] === 'reabrir' && req.method === 'POST') { const divergence = service.reopenDivergence(receipt, parts[3], await body(req), user); await save(receipt); return json(res, 200, divergence) } }
       if (parts[0] === 'recebimentos' && parts[2] === 'status' && parts.length === 3 && req.method === 'POST') { if (!writeGuard(user, res)) return; const receipt = receiptOr404(res, await repository.getRecebimento(parts[1])); if (!receipt) return; const result = service.transitionStatus(receipt, await body(req), user); await save(receipt); return json(res, 200, result) }

@@ -21,12 +21,22 @@ function required(name) {
   return value
 }
 
+// O navegador faz o PUT do binário direto para o Drive (fora da nossa API) —
+// a sessão resumível só ganha CORS do Google se a origem que vai usá-la for
+// enviada já na criação (ver backend/integrations/googleDrive.mjs). Por isso
+// validamos aqui contra uma allowlist exata, nunca repassando o Origin do
+// cliente sem checagem.
+function parseOriginAllowlist(raw) {
+  return String(raw || '').split(',').map((entry) => entry.trim()).filter(Boolean)
+}
+
 export function readEnvironment() {
   const drive = {
     clientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null,
     clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || null,
     refreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim() || null,
     folderId: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || null,
+    allowedUploadOrigins: parseOriginAllowlist(process.env.DRIVE_UPLOAD_ALLOWED_ORIGINS),
   }
 
   return {
