@@ -9,7 +9,17 @@ import { MAX_ATTACHMENT_BYTES, MAX_LEGACY_BASE64_ATTACHMENT_BYTES, RESUMABLE_UPL
 
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
 const error = (res, status, code, message, details) => json(res, status, { error: { code, message, ...(details ? { details } : {}) } })
-const routeParts = (url) => url.pathname.replace(/^\/api\/v1\/?/, '').split('/').filter(Boolean)
+// Em produção (Vercel), /api/v1/:path* é reescrito (vercel.json) para uma
+// Function de caminho estático (api/router.mjs) com o path original
+// repassado via query string — porque o catch-all dinâmico
+// (api/v1/[...path].mjs) não estava resolvendo rotas com mais de 1 segmento
+// neste projeto. Em dev local (proxy do Vite chama o backend direto, sem
+// rewrite), não existe esse parâmetro e o pathname funciona normalmente.
+const routeParts = (url) => {
+  const fromQuery = url.searchParams.get('path')
+  if (fromQuery !== null) return fromQuery.split('/').filter(Boolean)
+  return url.pathname.replace(/^\/api\/v1\/?/, '').split('/').filter(Boolean)
+}
 const parseUrl = (req) => new URL(req.url, `http://${req.headers.host || 'localhost'}`)
 export function isNfOnlyPatch(input) {
   const keys = Object.keys(input || {})
@@ -79,7 +89,7 @@ export async function createApp() {
   async function handle(req, res) {
     const url = parseUrl(req); const parts = routeParts(url)
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': env.corsOrigin, 'Access-Control-Allow-Headers': 'Content-Type, X-User-Id', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' }); return res.end() }
-    if (!url.pathname.startsWith('/api/v1')) return error(res, 404, 'NOT_FOUND', 'Rota não encontrada.')
+    if (!url.searchParams.has('path') && !url.pathname.startsWith('/api/v1')) return error(res, 404, 'NOT_FOUND', 'Rota não encontrada.')
     try {
       const user = await requestUser(req, res); if (!user) return
       if (parts.join('/') === 'auth/me' && req.method === 'GET') return json(res, 200, { ...service.actor(user), email: user.email, permissoes: service.permissions(user) })
