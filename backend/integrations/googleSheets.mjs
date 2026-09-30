@@ -38,10 +38,42 @@ export const REQUEST_OPTIONS = {
 // repository, só extraída pra não duplicar a lógica entre os dois.
 export function parseSheetValues(values) {
   const [headers = [], ...rows] = values || []
-  return rows.filter((row) => row.some((value) => value !== '')).map((row, index) => ({
+  return rows.flatMap((row, index) => row.some((value) => value !== '') ? [{
     rowNumber: index + 2,
     data: Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ''])),
-  }))
+  }] : [])
+}
+
+function rowData(sheetName, data) {
+  return { values: SHEET_SCHEMA[sheetName].map((header) => {
+    const value = data[header] ?? ''
+    const userEnteredValue = typeof value === 'number'
+      ? { numberValue: value }
+      : typeof value === 'boolean'
+        ? { boolValue: value }
+        : { stringValue: String(value) }
+    return { userEnteredValue }
+  }) }
+}
+
+export function buildAppendCellsRequest(sheetId, sheetName, data) {
+  return {
+    appendCells: {
+      sheetId,
+      rows: [rowData(sheetName, data)],
+      fields: 'userEnteredValue',
+    },
+  }
+}
+
+export function buildUpdateCellsRequest(sheetId, rowNumber, sheetName, data) {
+  return {
+    updateCells: {
+      range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber, startColumnIndex: 0, endColumnIndex: SHEET_SCHEMA[sheetName].length },
+      rows: [rowData(sheetName, data)],
+      fields: 'userEnteredValue',
+    },
+  }
 }
 
 export function createGoogleSheetsClient(config) {
@@ -52,9 +84,16 @@ export function createGoogleSheetsClient(config) {
   })
   const sheets = google.sheets({ version: 'v4', auth })
   const spreadsheetId = config.spreadsheetId
+  const sheetIds = new Map()
+
+  async function loadSheetIds() {
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' }, REQUEST_OPTIONS)
+    for (const { properties } of metadata.data.sheets || []) sheetIds.set(properties.title, properties.sheetId)
+    return metadata
+  }
 
   async function ensureSchema() {
-    const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' }, REQUEST_OPTIONS)
+    const metadata = await loadSheetIds()
     const existing = new Set((metadata.data.sheets || []).map(({ properties }) => properties.title))
     const missing = Object.keys(SHEET_SCHEMA).filter((name) => !existing.has(name))
     if (missing.length) {
@@ -62,6 +101,7 @@ export function createGoogleSheetsClient(config) {
         spreadsheetId,
         requestBody: { requests: missing.map((title) => ({ addSheet: { properties: { title } } })) },
       }, REQUEST_OPTIONS)
+      await loadSheetIds()
     }
     for (const [name, headers] of Object.entries(SHEET_SCHEMA)) {
       const response = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${name}'!1:1` }, REQUEST_OPTIONS)
@@ -107,6 +147,62 @@ export function createGoogleSheetsClient(config) {
     }, REQUEST_OPTIONS)
   }
 
+  // As duas linhas são a confirmação do mesmo anexo. batchUpdate estrutural
+  // aplica ambas atomicamente, evitando anexo gravado sem auditoria.
+  async function appendAttachmentAndAudit(attachment, audit) {
+    if (!sheetIds.has('Anexos') || !sheetIds.has('Auditoria')) await loadSheetIds()
+    const requests = [
+      buildAppendCellsRequest(sheetIds.get('Anexos'), 'Anexos', attachment),
+      buildAppendCellsRequest(sheetIds.get('Auditoria'), 'Auditoria', audit),
+    ]
+    try {
+      // Um retry automático após resposta perdida poderia duplicar as linhas.
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }, {
+        ...REQUEST_OPTIONS,
+        retry: false,
+        retryConfig: { ...REQUEST_OPTIONS.retryConfig, retry: 0 },
+      })
+    } catch (exception) {
+      // A escrita pode ter sido aplicada antes de a conexão cair. Confirme
+      // pelo ID público antes de decidir se o arquivo no Drive deve ser limpo.
+      try {
+        const [attachments, audits] = await readManyRows(['Anexos', 'Auditoria'])
+        const attachmentSaved = attachments.some(({ data }) => data.id === attachment.id && data.recebimentoId === attachment.recebimentoId)
+        const auditSaved = audits.some(({ data }) => data.id === audit.id && data.recebimentoId === audit.recebimentoId)
+        if (attachmentSaved && auditSaved) return
+        const status = Number(exception.response?.status || exception.status || 0)
+        if (attachmentSaved || auditSaved || status === 0 || status >= 500) exception.persistenceUnknown = true
+      } catch {
+        exception.persistenceUnknown = true
+      }
+      throw exception
+    }
+  }
+
+  async function updateReceiptAndAudit(rowNumber, receipt, audit) {
+    if (!sheetIds.has('Recebimentos') || !sheetIds.has('Auditoria')) await loadSheetIds()
+    const requests = [
+      buildUpdateCellsRequest(sheetIds.get('Recebimentos'), rowNumber, 'Recebimentos', receipt),
+      buildAppendCellsRequest(sheetIds.get('Auditoria'), 'Auditoria', audit),
+    ]
+    try {
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }, {
+        ...REQUEST_OPTIONS,
+        retry: false,
+        retryConfig: { ...REQUEST_OPTIONS.retryConfig, retry: 0 },
+      })
+    } catch (exception) {
+      // Se a resposta se perdeu depois do commit, o ID único da auditoria
+      // comprova que as duas mudanças atômicas foram aplicadas.
+      try {
+        const audits = await readRows('Auditoria')
+        const savedAudit = audits.some(({ data }) => data.id === audit.id && data.recebimentoId === receipt.id)
+        if (savedAudit) return
+      } catch {}
+      throw exception
+    }
+  }
+
   async function updateRow(sheetName, rowNumber, data) {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
@@ -127,5 +223,5 @@ export function createGoogleSheetsClient(config) {
     await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }, REQUEST_OPTIONS)
   }
 
-  return { ensureSchema, readRows, readManyRows, appendRow, updateRow, deleteRows }
+  return { ensureSchema, readRows, readManyRows, appendRow, appendAttachmentAndAudit, updateReceiptAndAudit, updateRow, deleteRows }
 }

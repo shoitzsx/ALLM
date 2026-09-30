@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { MAX_ATTACHMENT_BYTES, MAX_LEGACY_BASE64_ATTACHMENT_BYTES, decodeBase64Attachment, isInlinePreviewMimeType, normalizeAttachmentMetadata } from './attachments.mjs'
 import { createGoogleDriveClient, isOriginAllowed, buildResumableUploadHeaders } from './integrations/googleDrive.mjs'
-import { parseSheetValues, REQUEST_OPTIONS } from './integrations/googleSheets.mjs'
+import { buildAppendCellsRequest, buildUpdateCellsRequest, parseSheetValues, REQUEST_OPTIONS } from './integrations/googleSheets.mjs'
 import { createRecebimentosRepository } from './repositories/recebimentosRepository.mjs'
-import { attachmentResponse, persistOrCleanupDrive } from './app.mjs'
+import { attachmentResponse, isNfOnlyPatch, persistOrCleanupDrive } from './app.mjs'
 
 const valid = { name: 'nota-fiscal.pdf', mimeType: 'application/pdf', size: 3, categoria: 'Nota Fiscal' }
 
@@ -20,6 +20,22 @@ function createFakeSheets(initialData = {}) {
     async readRows(name) { calls.push(['readRows', name]); return sheet(name).map((row) => ({ rowNumber: row.rowNumber, data: { ...row.data } })) },
     async readManyRows(names) { calls.push(['readManyRows', names]); return names.map((name) => sheet(name).map((row) => ({ rowNumber: row.rowNumber, data: { ...row.data } }))) },
     async appendRow(name, data) { calls.push(['appendRow', name]); const rows = sheet(name); const rowNumber = rows.length ? Math.max(...rows.map((r) => r.rowNumber)) + 1 : 2; rows.push({ rowNumber, data: { ...data } }) },
+    async appendAttachmentAndAudit(attachment, audit) {
+      calls.push(['appendAttachmentAndAudit', 'Anexos+Auditoria'])
+      for (const [name, data] of [['Anexos', attachment], ['Auditoria', audit]]) {
+        const rows = sheet(name)
+        const rowNumber = rows.length ? Math.max(...rows.map((r) => r.rowNumber)) + 1 : 2
+        rows.push({ rowNumber, data: { ...data } })
+      }
+    },
+    async updateReceiptAndAudit(rowNumber, receipt, audit) {
+      calls.push(['updateReceiptAndAudit', 'Recebimentos+Auditoria'])
+      const rows = sheet('Recebimentos')
+      const index = rows.findIndex((r) => r.rowNumber === rowNumber)
+      rows[index] = { rowNumber, data: { ...receipt } }
+      const audits = sheet('Auditoria')
+      audits.push({ rowNumber: audits.length + 2, data: { ...audit } })
+    },
     async updateRow(name, rowNumber, data) { calls.push(['updateRow', name]); const rows = sheet(name); const index = rows.findIndex((r) => r.rowNumber === rowNumber); if (index >= 0) rows[index] = { rowNumber, data: { ...data } }; else rows.push({ rowNumber, data: { ...data } }) },
     async deleteRows(name, rowNumbers) { calls.push(['deleteRows', name]); store.set(name, sheet(name).filter((r) => !rowNumbers.includes(r.rowNumber))) },
   }
@@ -114,11 +130,10 @@ test('parseSheetValues transforma values em {rowNumber, data}, pulando linhas em
     ['', ''],
     ['2', 'b'],
   ]
-  // rowNumber é calculado sobre a lista já filtrada (comportamento herdado
-  // do readRows original) — a linha em branco não conta pro índice de 'b'.
+  // A linha vazia ainda ocupa a linha 3 na planilha.
   assert.deepEqual(parseSheetValues(values), [
     { rowNumber: 2, data: { id: '1', nome: 'a' } },
-    { rowNumber: 3, data: { id: '2', nome: 'b' } },
+    { rowNumber: 4, data: { id: '2', nome: 'b' } },
   ])
 })
 
@@ -143,7 +158,7 @@ test('listRecebimentos usa 1 chamada readManyRows em vez de 6 readRows separadas
   assert.equal(list[0].anexos[0].id, 'ANX-1')
 })
 
-test('addAttachmentRow toca somente Recebimentos, Anexos e Auditoria', async () => {
+test('addAttachmentRow atualiza Recebimentos e confirma Anexos/Auditoria juntos', async () => {
   const sheets = createFakeSheets({ Recebimentos: [{ id: 'REC-1', protocolo: 'REC-1' }] })
   const repository = createRecebimentosRepository({ sheets, defaultUsers: [] })
   const receipt = {
@@ -154,11 +169,29 @@ test('addAttachmentRow toca somente Recebimentos, Anexos e Auditoria', async () 
 
   const returned = await repository.addAttachmentRow(receipt)
 
-  const sheetsTouched = new Set(sheets.calls.map(([, name]) => name))
-  assert.deepEqual([...sheetsTouched].sort(), ['Anexos', 'Auditoria', 'Recebimentos'])
+  assert.deepEqual(sheets.calls.map(([op, name]) => `${op}:${name}`), [
+    'readRows:Recebimentos', 'updateRow:Recebimentos', 'appendAttachmentAndAudit:Anexos+Auditoria',
+  ])
   assert.equal(returned.id, 'ANX-1')
   assert.equal(sheets.getRows('Anexos').length, 1)
   assert.equal(sheets.getRows('Auditoria').length, 1)
+})
+
+test('appendCells usa o schema da planilha e preserva tipos RAW', () => {
+  const request = buildAppendCellsRequest(42, 'Anexos', { id: 'ANX-1', tamanho: 123, removido: false })
+  assert.equal(request.appendCells.sheetId, 42)
+  assert.equal(request.appendCells.fields, 'userEnteredValue')
+  assert.deepEqual(request.appendCells.rows[0].values[0].userEnteredValue, { stringValue: 'ANX-1' })
+  assert.deepEqual(request.appendCells.rows[0].values[6].userEnteredValue, { numberValue: 123 })
+  assert.deepEqual(request.appendCells.rows[0].values[11].userEnteredValue, { boolValue: false })
+})
+
+test('updateCells modifica somente a linha do recebimento escolhida', () => {
+  const request = buildUpdateCellsRequest(7, 4, 'Recebimentos', { id: 'REC-1', numeroNf: '123' })
+  assert.deepEqual(request.updateCells.range, {
+    sheetId: 7, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: 20,
+  })
+  assert.deepEqual(request.updateCells.rows[0].values[3].userEnteredValue, { stringValue: '123' })
 })
 
 test('addAttachmentRow NÃO toca Itens, Divergencias ou HistoricoStatus', async () => {
@@ -196,6 +229,27 @@ test('removeAttachmentRow atualiza a linha existente em Anexos, sem apagar/reesc
   assert.equal(sheets.getRows('Anexos')[0].data.removido, true)
 })
 
+test('PATCH apenas de número/série da NF usa a persistência pontual', async () => {
+  assert.equal(isNfOnlyPatch({ numeroNf: '123', serieNf: '1' }), true)
+  assert.equal(isNfOnlyPatch({ numeroNf: '123', itens: [] }), false)
+  assert.equal(isNfOnlyPatch({ observacoes: 'x' }), false)
+  assert.equal(isNfOnlyPatch({}), false)
+
+  const sheets = createFakeSheets({ Recebimentos: [{ id: 'REC-1', numeroNf: '' }] })
+  const repository = createRecebimentosRepository({ sheets, defaultUsers: [] })
+  const receipt = {
+    id: 'REC-1', numeroNf: '123', serieNf: '1', atualizadoEm: '2026-09-30T00:00:00Z',
+    historicoAlteracoes: [{ id: 'AUD-1', data: '2026-09-30', usuario: { id: 'U1' }, acao: 'Dados alterados', detalhes: 'Campos atualizados: numeroNf, serieNf.' }],
+  }
+  await repository.updateNfFields(receipt)
+
+  assert.deepEqual(sheets.calls.map(([op, name]) => `${op}:${name}`), [
+    'readRows:Recebimentos', 'updateReceiptAndAudit:Recebimentos+Auditoria',
+  ])
+  assert.equal(sheets.getRows('Recebimentos')[0].data.numeroNf, '123')
+  assert.equal(sheets.getRows('Auditoria')[0].data.acao, 'Dados alterados')
+})
+
 test('attachmentResponse nunca expõe storageKey nem o rowNumber interno', () => {
   const attachment = { id: 'ANX-1', nome: 'a.pdf', categoria: 'Outro', storageKey: 'drive-file-id-xyz', _rowNumber: 7 }
   const response = attachmentResponse(attachment)
@@ -227,6 +281,22 @@ test('falha na limpeza do Drive aciona o callback sanitizado e preserva o erro o
     { message: 'sheets falhou' },
   )
   assert.equal(flagged, true)
+})
+
+test('persistência incerta preserva o arquivo no Drive para reconciliação', async () => {
+  let cleanupCalled = false
+  let notified = false
+  const uncertain = Object.assign(new Error('resposta perdida'), { persistenceUnknown: true })
+  await assert.rejects(
+    () => persistOrCleanupDrive({
+      persist: async () => { throw uncertain },
+      cleanup: async () => { cleanupCalled = true },
+      onPersistenceUnknown: () => { notified = true },
+    }),
+    uncertain,
+  )
+  assert.equal(cleanupCalled, false)
+  assert.equal(notified, true)
 })
 
 test('sucesso na persistência nunca aciona a limpeza do Drive', async () => {

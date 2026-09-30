@@ -11,6 +11,10 @@ const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'Con
 const error = (res, status, code, message, details) => json(res, status, { error: { code, message, ...(details ? { details } : {}) } })
 const routeParts = (url) => url.pathname.replace(/^\/api\/v1\/?/, '').split('/').filter(Boolean)
 const parseUrl = (req) => new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+export function isNfOnlyPatch(input) {
+  const keys = Object.keys(input || {})
+  return keys.length > 0 && keys.every((key) => key === 'numeroNf' || key === 'serieNf')
+}
 async function body(req) { const chunks = []; for await (const chunk of req) chunks.push(chunk); const raw = Buffer.concat(chunks).toString('utf8'); if (!raw) return {}; try { return JSON.parse(raw) } catch { const exception = new Error('JSON inválido.'); exception.status = 400; exception.code = 'INVALID_JSON'; throw exception } }
 function sendDownload(res, { buffer, mimeType, name }, corsOrigin) {
   const safeName = encodeURIComponent(String(name || 'arquivo').replace(/[\r\n]/g, ''))
@@ -29,14 +33,16 @@ export function attachmentResponse(attachment) {
   return publicAttachment
 }
 
-// Tenta persistir; se falhar, tenta desfazer o efeito colateral externo
-// (o upload no Drive) e, se ATÉ a limpeza falhar, avisa via onCleanupFailed
-// em vez de engolir silenciosamente — mas o erro relançado é sempre o da
-// falha de persistência original, nunca o da limpeza.
-export async function persistOrCleanupDrive({ persist, cleanup, onCleanupFailed }) {
+// Limpa o Drive quando sabemos que a persistência falhou. Se o estado do
+// Sheets é incerto, preserva o arquivo para reconciliação posterior.
+export async function persistOrCleanupDrive({ persist, cleanup, onCleanupFailed, onPersistenceUnknown }) {
   try {
     return await persist()
   } catch (exception) {
+    if (exception.persistenceUnknown) {
+      onPersistenceUnknown?.()
+      throw exception
+    }
     try {
       await cleanup()
     } catch {
@@ -65,6 +71,7 @@ export async function createApp() {
       persist: () => repository.addAttachmentRow(receipt),
       cleanup: () => drive.deleteFile(uploaded.id),
       onCleanupFailed: () => console.error('Cleanup do Drive falhou após erro de persistência.', { receiptId: receipt.id, attachmentId: attachment.id, cleanupFailed: true }),
+      onPersistenceUnknown: () => console.error('Persistência do anexo não pôde ser confirmada; arquivo preservado para reconciliação.', { receiptId: receipt.id, attachmentId: attachment.id }),
     })
     return attachment
   }
@@ -84,7 +91,16 @@ export async function createApp() {
       if (parts.join('/') === 'recebimentos' && req.method === 'GET') { const result = listFiltered(await repository.listRecebimentos(), url.searchParams); return json(res, 200, { ...result, data: result.data.map(receiptResponse) }) }
       if (parts.join('/') === 'recebimentos' && req.method === 'POST') { if (!writeGuard(user, res)) return; const created = service.createRecebimento(await body(req), user, await repository.listRecebimentos()); await repository.createRecebimento(created); return json(res, 201, receiptResponse(created)) }
       if (parts[0] === 'recebimentos' && parts.length === 2 && req.method === 'GET') { const receipt = await repository.getRecebimento(parts[1]); return receipt ? json(res, 200, receiptResponse(receipt)) : error(res, 404, 'RECEIPT_NOT_FOUND', 'Recebimento não encontrado.') }
-      if (parts[0] === 'recebimentos' && parts.length === 2 && req.method === 'PATCH') { if (!writeGuard(user, res)) return; const receipt = receiptOr404(res, await repository.getRecebimento(parts[1])); if (!receipt) return; service.updateRecebimento(receipt, await body(req), user); await save(receipt); return json(res, 200, receiptResponse(receipt)) }
+      if (parts[0] === 'recebimentos' && parts.length === 2 && req.method === 'PATCH') {
+        if (!writeGuard(user, res)) return
+        const receipt = receiptOr404(res, await repository.getRecebimento(parts[1]))
+        if (!receipt) return
+        const input = await body(req)
+        service.updateRecebimento(receipt, input, user)
+        if (isNfOnlyPatch(input)) await repository.updateNfFields(receipt)
+        else await save(receipt)
+        return json(res, 200, receiptResponse(receipt))
+      }
       if (parts[0] === 'recebimentos' && parts[2] === 'itens') { const receipt = receiptOr404(res, await repository.getRecebimento(parts[1])); if (!receipt) return; if (req.method === 'GET' && parts.length === 3) return json(res, 200, { data: receipt.itens || [] }); if (!writeGuard(user, res)) return; if (req.method === 'POST' && parts.length === 3) { const item = service.addItem(receipt, await body(req), user); await save(receipt); return json(res, 201, item) } if (parts.length === 4 && req.method === 'PATCH') { const item = service.updateItem(receipt, parts[3], await body(req), user); await save(receipt); return json(res, 200, item) } if (parts.length === 4 && req.method === 'DELETE') { const item = service.removeItem(receipt, parts[3], user); await save(receipt); return json(res, 200, item) } }
       if (parts[0] === 'recebimentos' && parts[2] === 'anexos') {
         const receipt = receiptOr404(res, await repository.getRecebimento(parts[1])); if (!receipt) return

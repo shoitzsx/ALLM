@@ -162,7 +162,7 @@ export function createRecebimentosRepository({ sheets, defaultUsers }) {
   }
 
   // Caminho dedicado para adicionar 1 anexo: toca só Recebimentos (atualizadoEm)
-  // + a linha nova em Anexos + a linha nova em Auditoria — nunca relê/regrava
+  // + as linhas novas em Anexos e Auditoria num único batch atômico — nunca relê/regrava
   // Itens, Divergencias ou HistoricoStatus (ao contrário de saveRecebimento/
   // replaceChildren, que reescrevem os 5 filhos inteiros a cada chamada).
   // Depende de service.addAttachment já ter colocado o novo anexo e a nova
@@ -171,8 +171,7 @@ export function createRecebimentosRepository({ sheets, defaultUsers }) {
     const attachment = receipt.anexos[receipt.anexos.length - 1]
     const auditEntry = receipt.historicoAlteracoes[receipt.historicoAlteracoes.length - 1]
     await touchRecebimentoRow(receipt)
-    await sheets.appendRow('Anexos', attachmentToRow(attachment, receipt.id))
-    await sheets.appendRow('Auditoria', auditToRow(auditEntry, receipt.id))
+    await sheets.appendAttachmentAndAudit(attachmentToRow(attachment, receipt.id), auditToRow(auditEntry, receipt.id))
     return attachment
   }
 
@@ -191,6 +190,17 @@ export function createRecebimentosRepository({ sheets, defaultUsers }) {
 
   async function createRecebimento(receipt) { return saveRecebimento(receipt) }
   async function updateRecebimento(receipt) { return saveRecebimento(receipt) }
+  // O PATCH exclusivo de número/série da NF altera apenas a linha principal
+  // e acrescenta sua auditoria. Regravar todos os filhos aqui atrasava o
+  // upload seguinte e multiplicava as chamadas à API do Sheets.
+  async function updateNfFields(receipt) {
+    const auditEntry = receipt.historicoAlteracoes[receipt.historicoAlteracoes.length - 1]
+    const rows = await sheets.readRows('Recebimentos')
+    const current = rows.find((row) => row.data.id === receipt.id)
+    if (!current) throw new Error('Recebimento não encontrado para atualização da NF.')
+    await sheets.updateReceiptAndAudit(current.rowNumber, receiptToRow(receipt), auditToRow(auditEntry, receipt.id))
+    return receipt
+  }
   async function archiveRecebimento(receipt) { return saveRecebimento(receipt) }
   async function restoreRecebimento(receipt) { return saveRecebimento(receipt) }
 
@@ -222,6 +232,7 @@ export function createRecebimentosRepository({ sheets, defaultUsers }) {
     getRecebimento,
     createRecebimento,
     updateRecebimento,
+    updateNfFields,
     addItem: saveRecebimento,
     updateItem: saveRecebimento,
     removeItem: saveRecebimento,
