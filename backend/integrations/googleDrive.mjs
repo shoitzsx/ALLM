@@ -84,11 +84,11 @@ export function createGoogleDriveClient(config) {
     return folderIdPromise
   }
 
-  async function uploadFile({ name, mimeType, buffer, receiptId }) {
+  async function uploadFile({ name, storageName, mimeType, buffer, receiptId }) {
     const parents = [await ensureFolder()]
     try {
       const response = await drive.files.create({
-        requestBody: { name: safeStorageFileName(name), mimeType, parents, appProperties: { almReceiptId: receiptId } },
+        requestBody: { name: safeStorageFileName(storageName || name), description: name, mimeType, parents, appProperties: { almReceiptId: receiptId } },
         media: { mimeType, body: Readable.from(buffer) },
         fields: 'id,name,mimeType,size,parents,appProperties,trashed',
       })
@@ -98,7 +98,7 @@ export function createGoogleDriveClient(config) {
     }
   }
 
-  async function createResumableUpload({ name, mimeType, size, receiptId, origin }) {
+  async function createResumableUpload({ name, storageName, mimeType, size, receiptId, origin }) {
     requireConfigured()
     const parents = [await ensureFolder()]
     try {
@@ -108,7 +108,7 @@ export function createGoogleDriveClient(config) {
       const response = await fetch(RESUMABLE_UPLOAD_URL, {
         method: 'POST',
         headers: buildResumableUploadHeaders({ accessToken, mimeType, size, origin }),
-        body: JSON.stringify({ name: safeStorageFileName(name), mimeType, parents, appProperties: { almReceiptId: receiptId } }),
+        body: JSON.stringify({ name: safeStorageFileName(storageName || name), description: name, mimeType, parents, appProperties: { almReceiptId: receiptId } }),
       })
       const sessionUrl = response.headers.get('location')
       if (!response.ok || !sessionUrl) {
@@ -126,7 +126,7 @@ export function createGoogleDriveClient(config) {
   async function getUploadedFile(fileId, receiptId) {
     requireConfigured()
     try {
-      const response = await drive.files.get({ fileId, fields: 'id,name,mimeType,size,parents,appProperties,trashed' })
+      const response = await drive.files.get({ fileId, fields: 'id,name,description,mimeType,size,parents,appProperties,trashed' })
       const file = response.data
       const folderId = await ensureFolder()
       if (file.trashed) {

@@ -5,7 +5,7 @@ import { createGoogleSheetsClient } from './integrations/googleSheets.mjs'
 import { createGoogleDriveClient, isOriginAllowed } from './integrations/googleDrive.mjs'
 import { createRecebimentosRepository } from './repositories/recebimentosRepository.mjs'
 import * as service from './services/recebimentosService.mjs'
-import { MAX_ATTACHMENT_BYTES, MAX_LEGACY_BASE64_ATTACHMENT_BYTES, RESUMABLE_UPLOAD_CHUNK_BYTES, decodeBase64Attachment, isInlinePreviewMimeType, normalizeAttachmentMetadata } from './attachments.mjs'
+import { MAX_ATTACHMENT_BYTES, MAX_LEGACY_BASE64_ATTACHMENT_BYTES, RESUMABLE_UPLOAD_CHUNK_BYTES, decodeBase64Attachment, isInlinePreviewMimeType, normalizeAttachmentMetadata, safeStorageFileName } from './attachments.mjs'
 
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
 const error = (res, status, code, message, details) => json(res, status, { error: { code, message, ...(details ? { details } : {}) } })
@@ -53,6 +53,12 @@ export async function persistOrCleanupDrive({ persist, cleanup, onCleanupFailed,
 }
 function receiptResponse(receipt) {
   return { ...receipt, anexos: (receipt.anexos || []).map(attachmentResponse) }
+}
+function nextDriveAttachmentName(receipt, originalName) {
+  const sequence = (receipt.anexos || []).length + 1
+  const receiptCode = safeStorageFileName(receipt.protocolo || receipt.id)
+  const fileName = safeStorageFileName(originalName)
+  return `${receiptCode}_${String(sequence).padStart(4, '0')}_${fileName}`
 }
 function listFiltered(recebimentos, search) { let rows = search.get('includeArchived') === 'true' ? recebimentos : recebimentos.filter((entry) => !entry.arquivado); const q = (search.get('q') || '').toLowerCase().trim(); const status = search.get('status'); const fornecedor = search.get('fornecedor'); const pedido = search.get('pedido'); const nf = search.get('numeroNf'); if (q) rows = rows.filter((entry) => JSON.stringify(entry).toLowerCase().includes(q)); if (status) rows = rows.filter((entry) => entry.status === status); if (fornecedor) rows = rows.filter((entry) => entry.fornecedor === fornecedor); if (pedido) rows = rows.filter((entry) => entry.pedido === pedido); if (nf) rows = rows.filter((entry) => entry.numeroNf === nf); const orderBy = search.get('orderBy') || 'dataRecebimento'; const dir = search.get('order') === 'asc' ? 1 : -1; rows = [...rows].sort((a, b) => String(a[orderBy] || '').localeCompare(String(b[orderBy] || '')) * dir); const page = Math.max(1, Number(search.get('page') || 1)); const pageSize = Math.min(100, Math.max(1, Number(search.get('pageSize') || 50))); return { data: rows.slice((page - 1) * pageSize, page * pageSize), pagination: { page, pageSize, total: rows.length, totalPages: Math.max(1, Math.ceil(rows.length / pageSize)) } } }
 
@@ -122,7 +128,7 @@ export async function createApp() {
             return error(res, 403, 'ORIGIN_NOT_ALLOWED', 'Origem não autorizada para criar sessão de upload.')
           }
           const metadata = normalizeAttachmentMetadata(await body(req))
-          const upload = await drive.createResumableUpload({ ...metadata, receiptId: receipt.id, origin })
+          const upload = await drive.createResumableUpload({ ...metadata, storageName: nextDriveAttachmentName(receipt, metadata.name), receiptId: receipt.id, origin })
           return json(res, 201, { upload: { sessionUrl: upload.sessionUrl, method: 'PUT', chunkSize: RESUMABLE_UPLOAD_CHUNK_BYTES }, constraints: { maxBytes: MAX_ATTACHMENT_BYTES, chunkBytes: RESUMABLE_UPLOAD_CHUNK_BYTES } })
         }
         if (req.method === 'POST' && parts.length === 3) {
@@ -131,13 +137,13 @@ export async function createApp() {
           if (input.fileId) {
             const uploaded = await drive.getUploadedFile(String(input.fileId), receipt.id)
             if ((receipt.anexos || []).some((entry) => entry.storageKey === uploaded.id && !entry.removido)) return error(res, 409, 'ATTACHMENT_ALREADY_LINKED', 'Arquivo já está vinculado a este recebimento.')
-            const metadata = normalizeAttachmentMetadata({ ...input, name: uploaded.name, mimeType: uploaded.mimeType, size: Number(uploaded.size) })
+            const metadata = normalizeAttachmentMetadata({ ...input, name: uploaded.description || uploaded.name, mimeType: uploaded.mimeType, size: Number(uploaded.size) })
             return json(res, 201, attachmentResponse(await saveUploadedAttachment(receipt, metadata, uploaded, user)))
           }
           if (!input.dataBase64) return error(res, 422, 'FILE_REQUIRED', 'Arquivo obrigatório.')
           const metadata = normalizeAttachmentMetadata(input, { maxBytes: MAX_LEGACY_BASE64_ATTACHMENT_BYTES })
           const buffer = decodeBase64Attachment(input.dataBase64, metadata.size)
-          const uploaded = await drive.uploadFile({ ...metadata, buffer, receiptId: receipt.id })
+          const uploaded = await drive.uploadFile({ ...metadata, storageName: nextDriveAttachmentName(receipt, metadata.name), buffer, receiptId: receipt.id })
           return json(res, 201, attachmentResponse(await saveUploadedAttachment(receipt, metadata, uploaded, user)))
         }
         if (parts.length === 4 && req.method === 'DELETE') { if (!writeGuard(user, res)) return; const attachment = service.removeAttachment(receipt, parts[3], (await body(req)).reason, user); await drive.deleteFile(attachment.storageKey); await repository.removeAttachmentRow(receipt, attachment); return json(res, 200, attachmentResponse(attachment)) }

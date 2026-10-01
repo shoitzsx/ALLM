@@ -298,8 +298,9 @@ function InitialLoadState({ store, label }) {
 }
 
 function DashboardPage({ store }) {
-  const loadState = <InitialLoadState store={store} label="recebimentos" />
-  if (loadState) return loadState
+  if (store.initialLoadStatus !== 'ready') {
+    return <InitialLoadState store={store} label="recebimentos" />
+  }
 
   const { receipts, metrics } = store
   const maxStatus = Math.max(1, ...metrics.porStatus.map((item) => item.total))
@@ -469,8 +470,9 @@ function ReceiptsPage({ store, initialQuery }) {
   // Depois dos hooks (Rules of Hooks) — loading/erro não deve renderizar a
   // tabela nem "Nenhum recebimento encontrado" (que é sobre filtro, não sobre
   // a carga inicial).
-  const loadState = <InitialLoadState store={store} label="recebimentos" />
-  if (loadState) return loadState
+  if (store.initialLoadStatus !== 'ready') {
+    return <InitialLoadState store={store} label="recebimentos" />
+  }
 
   return (
     <div className="page">
@@ -890,7 +892,10 @@ function DetailPage({ store, receiptId, pushToast }) {
   const [removeReason, setRemoveReason] = useState('')
   const [removing, setRemoving] = useState(false)
   const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   if (!receipt) {
     return <div className="page"><EmptyState icon={PackageOpen} title="Recebimento não encontrado" description="O registro pode ter sido arquivado ou o endereço está incorreto." action={<button className="btn btn-secondary" onClick={() => navigate(ROUTES.receipts)}>Voltar à consulta</button>} /></div>
@@ -1307,8 +1312,9 @@ function DetailPage({ store, receiptId, pushToast }) {
 }
 
 function PendingPage({ store }) {
-  const loadState = <InitialLoadState store={store} label="pendências" />
-  if (loadState) return loadState
+  if (store.initialLoadStatus !== 'ready') {
+    return <InitialLoadState store={store} label="pendências" />
+  }
 
   const receipts = store.receipts
   const docs = receipts.filter((item) => isNfPending(item) && item.status !== RECEBIMENTO_STATUS.DIGITACAO)

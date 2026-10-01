@@ -40,6 +40,8 @@ Resposta `201`:
 
 2. Faça `PUT` direto para `sessionUrl`, enviando cada `Blob` de 1 MiB com `Content-Range: bytes inicio-fim/tamanhoTotal`. Resposta `308` significa que a parte foi aceita; continue a partir do próximo byte. A última parte retorna `200` ou `201` com o metadado do Drive, inclusive `id`.
 
+O nome salvo no Drive recebe o protocolo do recebimento e uma sequência de quatro dígitos, por exemplo `REC-2026-0017_0001_baixados.jpg`. A sequência considera todos os anexos registrados para esse recebimento, inclusive os removidos. O nome original continua sendo exibido na interface e armazenado na planilha.
+
 3. Confirme a persistência no ALM. O `fileId` recebido no passo anterior só é usado nesta chamada:
 
 ```http
