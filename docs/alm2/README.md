@@ -22,6 +22,9 @@ Leia a parte 01 inteira (15 min). Depois leia só a(s) parte(s) da sua área.
 | [06-frontend-scanner-notificacoes.md](06-frontend-scanner-notificacoes.md) | Impacto no frontend, telas novas, notificações, Portaria e scanner | Lucas (dono), Marcelo |
 | [07-migracao-infra-roadmap.md](07-migracao-infra-roadmap.md) | Migração do Sheets, ambientes, custos verificados, LGPD, testes, roadmap, spikes, riscos | todos; Marcelo (release) |
 | [08-revisao-da-versao-chatgpt.md](08-revisao-da-versao-chatgpt.md) | Avaliação afirmação por afirmação da especificação original e do diagrama | Lucas |
+| [contexto/CONTEXTO-LUCAS.md](contexto/CONTEXTO-LUCAS.md) | Quais arquivos são do Lucas, quais não são e quando avisar antes de mexer | Lucas |
+| [contexto/CONTEXTO-KOBNER.md](contexto/CONTEXTO-KOBNER.md) | Idem para o Kobner **e o Marcelo** (o Marcelo trabalha junto do Kobner) | Kobner, Marcelo |
+| [contexto/CONTEXTO-GORAN.md](contexto/CONTEXTO-GORAN.md) | Idem para o Goran | Goran |
 | [sql/001_alm2_delta.sql](sql/001_alm2_delta.sql) | Migration delta sobre o DDL da v1 (sintaxe validada) | Kobner |
 | [sql/validate-sql.mjs](sql/validate-sql.mjs) | Validador de sintaxe SQL com o parser real do Postgres | Marcelo (CI) |
 
