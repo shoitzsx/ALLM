@@ -1,0 +1,231 @@
+/* Estilos específicos do módulo Portaria. Reaproveita variáveis e classes
+   globais (page, panel, form-card, definition-grid, btn, field) definidas em
+   src/styles.css — isto cobre só o que não existia ainda. */
+
+.portaria-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.portaria-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 118px;
+  padding: 20px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  color: var(--ink-900);
+  background: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.portaria-action-card:hover {
+  border-color: var(--brand-500);
+  box-shadow: var(--shadow-md);
+}
+
+.portaria-action-card.active {
+  border-color: var(--brand-700);
+  background: var(--brand-50);
+}
+
+.portaria-action-card svg {
+  color: var(--brand-700);
+}
+
+.portaria-action-card strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.portaria-action-card span {
+  color: var(--ink-500);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.portaria-manual-form {
+  margin-bottom: 22px;
+  padding: 18px 20px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  background: var(--ink-50);
+}
+
+.field-help-inline {
+  color: var(--ink-500);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.portaria-manual-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 4px;
+}
+
+.portaria-arrival-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portaria-arrival-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--ink-100);
+  font-size: 13px;
+}
+
+.portaria-arrival-item:last-child {
+  border-bottom: 0;
+}
+
+.portaria-arrival-codigo {
+  min-width: 128px;
+  color: var(--ink-900);
+  font-weight: 700;
+}
+
+.portaria-arrival-nf {
+  min-width: 110px;
+  color: var(--ink-700);
+}
+
+.portaria-arrival-fornecedor {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--ink-700);
+}
+
+.portaria-arrival-hora {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+.portaria-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.portaria-chip-success {
+  border-color: #bfe1d5;
+  color: #146b55;
+  background: #eaf7f2;
+}
+
+.portaria-chip-warning {
+  border-color: #f0d995;
+  color: #81570d;
+  background: #fff8e5;
+}
+
+.portaria-chip-danger {
+  border-color: #f0c5c1;
+  color: #9e3735;
+  background: #fff0ef;
+}
+
+.portaria-definition-grid {
+  margin-bottom: 22px;
+}
+
+.portaria-chave-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+.portaria-edit-grid {
+  padding-top: 4px;
+  border-top: 1px solid var(--ink-100);
+}
+
+.portaria-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--ink-100);
+}
+
+.portaria-result-card {
+  text-align: left;
+}
+
+.portaria-result-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 24px 22px;
+  text-align: center;
+}
+
+.portaria-result-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: #146b55;
+  background: #eaf7f2;
+}
+
+.portaria-result-hero h2 {
+  margin: 0;
+  color: var(--ink-950);
+  font-size: 20px;
+}
+
+.portaria-result-hero p {
+  margin: 0;
+  color: var(--ink-500);
+  font-size: 13px;
+}
+
+.portaria-result-card .portaria-definition-grid {
+  padding: 0 24px 22px;
+}
+
+@media (max-width: 720px) {
+  .portaria-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portaria-arrival-item {
+    gap: 6px;
+  }
+
+  .portaria-arrival-codigo,
+  .portaria-arrival-nf {
+    min-width: 0;
+  }
+
+  .portaria-form-footer {
+    flex-wrap: wrap;
+  }
+
+  .portaria-form-footer .btn {
+    flex: 1 1 auto;
+  }
+}
