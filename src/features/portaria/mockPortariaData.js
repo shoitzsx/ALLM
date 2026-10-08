@@ -2,10 +2,19 @@
 // Nada aqui chama backend, Supabase, Sheets ou Drive — é só para a UI ter
 // algo plausível para mostrar antes da integração real existir.
 
+// Valores internos da UI da Portaria (ver src/features/portaria/scannerBridge.js)
+// — não é contrato de API/backend. ZBAR/ZXING continuam aqui por
+// compatibilidade com os rascunhos simulados antigos deste arquivo;
+// TEXTO_PDF/CODIGO_BARRAS/OCR/NAO_IDENTIFICADO são os códigos que
+// scannerBridge.js produz a partir do scanner real.
 export const METODO_LEITURA_LABELS = {
   ZBAR: 'Leitor de código de barras',
   ZXING: 'Leitor alternativo de imagem',
   MANUAL: 'Digitação manual',
+  TEXTO_PDF: 'Texto do PDF',
+  CODIGO_BARRAS: 'Código de barras',
+  OCR: 'OCR',
+  NAO_IDENTIFICADO: 'Não identificado',
 }
 
 export const CONFIANCA_META = {

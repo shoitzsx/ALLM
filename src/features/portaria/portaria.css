@@ -50,6 +50,17 @@
   line-height: 1.4;
 }
 
+.portaria-action-card.is-busy,
+.portaria-action-card:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.portaria-file-error {
+  margin-top: 0;
+  margin-bottom: 22px;
+}
+
 .portaria-manual-form {
   margin-bottom: 22px;
   padding: 18px 20px;

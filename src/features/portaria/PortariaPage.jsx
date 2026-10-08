@@ -7,6 +7,7 @@ import {
   mockTodayArrivals,
   createMockScanResult,
   createMockManualDraft,
+  generateCodigo,
   nowLabel,
 } from './mockPortariaData.js'
 import './portaria.css'
@@ -31,6 +32,23 @@ export function PortariaPage() {
 
   function startFromScan(origin) {
     setDraft(createMockScanResult(origin))
+    setStage('review')
+  }
+
+  /**
+   * "Selecionar arquivo" já usa o scanner NF-e real (analyzeNfeFile +
+   * scannerBridge.js, chamados em PortariaStart) — `scannerDraft` chega aqui
+   * só com os campos que o scanner pode produzir. id/código/status/horário
+   * continuam sendo bookkeeping da própria Portaria, igual ao caminho mock.
+   */
+  function startFromUploadedFile(scannerDraft) {
+    setDraft({
+      id: `arrival-${Date.now()}`,
+      codigo: generateCodigo(),
+      status: 'PENDENTE',
+      criadoEm: nowLabel(),
+      ...scannerDraft,
+    })
     setStage('review')
   }
 
@@ -64,7 +82,7 @@ export function PortariaPage() {
         <PortariaStart
           arrivals={arrivals}
           onStartCamera={() => startFromScan('camera')}
-          onStartUpload={() => startFromScan('upload')}
+          onFileAnalyzed={startFromUploadedFile}
           onStartManual={startFromManual}
         />
       ) : null}
