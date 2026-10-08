@@ -19,11 +19,10 @@ export const METODO_LEITURA_LABELS = {
 
 // Mesma ideia de METODO_LEITURA_LABELS acima: valores internos da UI da
 // Portaria, não contrato de API/backend. MEDIA continua aqui por
-// compatibilidade com os rascunhos simulados antigos (createMockManualDraft
-// não produz MEDIA hoje, mas o rótulo fica preservado); CONFERIR e
-// NAO_ENCONTRADO são os códigos que scannerBridge.js produz a partir do
-// scanner real. O rótulo de texto sempre acompanha a cor (tone) — nenhum
-// estado depende só de cor para ser identificado.
+// compatibilidade com os registros simulados de "Chegadas de hoje" (abaixo);
+// CONFERIR e NAO_ENCONTRADO são os códigos que scannerBridge.js produz a
+// partir do scanner real. O rótulo de texto sempre acompanha a cor (tone) —
+// nenhum estado depende só de cor para ser identificado.
 export const CONFIANCA_META = {
   ALTA: { label: 'Alta', tone: 'success' },
   CONFERIR: { label: 'Conferir', tone: 'warning' },
@@ -101,23 +100,3 @@ export const mockTodayArrivals = [
     criadoEm: '10:05',
   },
 ]
-
-/**
- * Monta um rascunho a partir de uma chave digitada manualmente. Os demais
- * campos ficam em branco de propósito — na Revisão o usuário completa.
- */
-export function createMockManualDraft(chave) {
-  return {
-    id: `mock-draft-${Date.now()}`,
-    codigo: generateCodigo(),
-    numeroNf: '',
-    serieNf: '',
-    cnpjEmitente: '',
-    fornecedor: '',
-    nfeChaveAcesso: chave || '',
-    metodoLeitura: 'MANUAL',
-    confianca: 'BAIXA',
-    status: 'PENDENTE',
-    criadoEm: nowLabel(),
-  }
-}

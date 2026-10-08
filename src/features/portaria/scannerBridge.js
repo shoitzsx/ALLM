@@ -8,8 +8,8 @@
  * deve) conhecer a Portaria; esta tradução vive inteiramente deste lado.
  *
  * Campos devolvidos são só os que vêm (ou podem vir) do scanner. id, código
- * da chegada, status e horário continuam responsabilidade de quem chama —
- * mesma convenção já usada por createMockManualDraft em mockPortariaData.js.
+ * da chegada, status e horário continuam responsabilidade de quem chama
+ * (PortariaPage.jsx) — nunca produzidos aqui.
  */
 
 /**
@@ -55,11 +55,20 @@ export const CONFIANCA = {
 // de arquivo/PDF estático (analyzeNfeFile). Necessidade real de tradução:
 // sem esta entrada, toda captura por câmera cairia em NAO_IDENTIFICADO
 // mesmo com a chave perfeitamente válida.
+//
+// ORIGEM_MANUAL não existe no scanner (NfeReaderPage não tem digitação
+// manual) — é uma origem definida pela própria Portaria, passada por
+// PortariaStart.jsx para analyzeNfeKey ao validar a chave digitada pelo
+// operador. Exportada para os dois lados usarem a MESMA string, sem
+// duplicar o literal.
+export const ORIGEM_MANUAL = 'chave digitada manualmente'
+
 const ORIGEM_PARA_METODO = {
   'texto do PDF': METODO_LEITURA.TEXTO_PDF,
   'código de barras': METODO_LEITURA.CODIGO_BARRAS,
   'foto do código de barras': METODO_LEITURA.CODIGO_BARRAS,
   OCR: METODO_LEITURA.OCR,
+  [ORIGEM_MANUAL]: METODO_LEITURA.MANUAL,
 }
 
 function origemPrincipal(origensChave) {
@@ -75,27 +84,36 @@ function origemPrincipal(origensChave) {
  * - NAO_ENCONTRADO: `chaveValida` é falso — nenhuma chave passou no dígito
  *   verificador. Nada abaixo se aplica.
  * - Dali em diante a chave JÁ passou na validação do dígito verificador
- *   (mod-11), seja a origem texto do PDF, código de barras ou OCR — nunca é
- *   "talvez". Número da NF/série/CNPJ, derivados da própria chave, são
- *   sempre corretos quando a chave é válida. A diferença entre ALTA e
- *   CONFERIR aqui não é "a chave pode estar errada": é "algo no processo
- *   merece uma segunda olhada humana antes de confiar de olhos fechados".
+ *   (mod-11), seja a origem texto do PDF, código de barras, OCR ou
+ *   digitação manual — nunca é "talvez". Número da NF/série/CNPJ, derivados
+ *   da própria chave, são sempre corretos quando a chave é válida. A
+ *   diferença entre ALTA e CONFERIR aqui não é "a chave pode estar errada
+ *   matematicamente": é "algo no processo merece uma segunda olhada humana
+ *   antes de confiar de olhos fechados".
  * - CONFERIR: a origem principal foi OCR (único estágio tratado pelo próprio
  *   scanner como último recurso, só tentado depois que texto do PDF e
- *   código de barras já falharam) OU o processo gerou algum aviso
+ *   código de barras já falharam) OU foi digitação manual (ORIGEM_MANUAL —
+ *   o dígito verificador garante que a chave é matematicamente válida, mas
+ *   não garante que o operador digitou a chave correspondente à nota
+ *   física/documento correto; por isso a origem manual é estruturalmente
+ *   válida, mas exige conferência humana) OU o processo gerou algum aviso
  *   (`warnings.length > 0` — ex.: uma etapa anterior falhou mesmo que outra
  *   tenha encontrado a chave no fim).
- * - ALTA: chave válida, origem em texto do PDF ou código de barras, sem
- *   avisos no caminho.
- * - BAIXA: esta função nunca produz BAIXA — fica reservada ao rascunho de
- *   digitação manual (createMockManualDraft, em mockPortariaData.js), que
- *   não passa por aqui.
+ * - ALTA: chave válida, origem em texto do PDF ou código de barras
+ *   (incluindo a foto do código de barras), sem avisos no caminho — leitura
+ *   automática de uma fonte já impressa/gerada pelo próprio documento, sem
+ *   intervenção manual do operador na chave em si.
+ * - BAIXA: esta função nunca produz BAIXA hoje — nenhuma origem atual cai
+ *   nesse caso; fica disponível no vocabulário para uma origem futura que
+ *   ainda não exista.
  */
 function calcularConfianca(analysis) {
   if (!analysis?.chaveValida) return CONFIANCA.NAO_ENCONTRADO
-  const viaOcr = (analysis.origensChave || [])[0] === 'OCR'
+  const origemPrincipalLabel = (analysis.origensChave || [])[0]
+  const viaOcr = origemPrincipalLabel === 'OCR'
+  const viaManual = origemPrincipalLabel === ORIGEM_MANUAL
   const temAvisos = Boolean(analysis.warnings?.length)
-  return viaOcr || temAvisos ? CONFIANCA.CONFERIR : CONFIANCA.ALTA
+  return viaOcr || viaManual || temAvisos ? CONFIANCA.CONFERIR : CONFIANCA.ALTA
 }
 
 /**

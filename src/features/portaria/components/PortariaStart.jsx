@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { AlertTriangle, Camera, Upload, Keyboard, ArrowRight, Loader2 } from 'lucide-react'
 import { STATUS_META } from '../mockPortariaData.js'
+import { FieldError } from '../../../ui.jsx'
 import { analyzeNfeFile, analyzeNfeKey } from '../../nfeReader/extractor.js'
 import NfePhotoCapture from '../../nfeReader/NfePhotoCapture.jsx'
-import { mapAnalysisToArrivalDraft } from '../scannerBridge.js'
+import { mapAnalysisToArrivalDraft, ORIGEM_MANUAL } from '../scannerBridge.js'
 
 // Mesmos tipos aceitos hoje por "Selecionar arquivo" em
 // src/features/nfeReader/NfeReaderPage.jsx — não inventa uma allowlist
@@ -15,9 +16,10 @@ function ArrivalStatusChip({ status }) {
   return <span className={`portaria-chip portaria-chip-${meta.tone}`}>{meta.label}</span>
 }
 
-export function PortariaStart({ arrivals, onFileAnalyzed, onStartManual }) {
+export function PortariaStart({ arrivals, onFileAnalyzed }) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualValue, setManualValue] = useState('')
+  const [manualError, setManualError] = useState('')
   const [analyzingFile, setAnalyzingFile] = useState(false)
   const [fileError, setFileError] = useState('')
   const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false)
@@ -26,12 +28,31 @@ export function PortariaStart({ arrivals, onFileAnalyzed, onStartManual }) {
   const digitsOnly = manualValue.replace(/\D/g, '')
   const canContinue = digitsOnly.length === 44
 
+  /**
+   * Mesma regra de confiança de qualquer outra origem: a validação e a
+   * interpretação continuam pertencendo ao scanner (analyzeNfeKey), nunca
+   * reimplementadas aqui. DV inválido (ou qualquer outro motivo de
+   * chaveValida=false) mantém o operador no formulário, sem avançar e sem
+   * inventar número da NF/série/CNPJ.
+   */
   function handleManualSubmit(event) {
     event.preventDefault()
     if (!canContinue) return
-    onStartManual(digitsOnly)
-    setManualValue('')
-    setManualOpen(false)
+    setManualError('')
+    try {
+      const analysis = analyzeNfeKey(digitsOnly, ORIGEM_MANUAL)
+      if (!analysis.chaveValida) {
+        setManualError('Chave NF-e inválida. Confira os 44 dígitos.')
+        return
+      }
+      const draft = mapAnalysisToArrivalDraft(analysis)
+      onFileAnalyzed(draft)
+      setManualValue('')
+      setManualOpen(false)
+    } catch (error) {
+      console.error('[Portaria] Falha ao validar a chave digitada manualmente.', error)
+      setManualError('Não foi possível validar a chave. Tente novamente.')
+    }
   }
 
   async function handleFileSelected(event) {
@@ -154,11 +175,17 @@ export function PortariaStart({ arrivals, onFileAnalyzed, onStartManual }) {
               autoComplete="off"
               placeholder="Digite ou cole os 44 números da chave"
               value={manualValue}
-              onChange={(event) => setManualValue(event.target.value)}
+              onChange={(event) => { setManualValue(event.target.value); setManualError('') }}
+              className={manualError ? 'error' : ''}
             />
+            <FieldError>{manualError}</FieldError>
           </div>
           <div className="portaria-manual-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => { setManualOpen(false); setManualValue('') }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => { setManualOpen(false); setManualValue(''); setManualError('') }}
+            >
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary" disabled={!canContinue || analyzingFile}>

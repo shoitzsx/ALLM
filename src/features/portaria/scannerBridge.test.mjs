@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mapAnalysisToArrivalDraft, METODO_LEITURA, CONFIANCA } from './scannerBridge.js'
+import { mapAnalysisToArrivalDraft, METODO_LEITURA, CONFIANCA, ORIGEM_MANUAL } from './scannerBridge.js'
 
 // Fixtures escritas à mão no formato documentado do scanner
 // (src/features/nfeReader/analysisBuilder.js) — este arquivo não importa
@@ -128,6 +128,20 @@ test('origem "foto do código de barras" (NfePhotoCapture) também resulta em CO
   const draft = mapAnalysisToArrivalDraft(analise)
   assert.equal(draft.metodoLeitura, METODO_LEITURA.CODIGO_BARRAS)
   assert.equal(draft.confianca, CONFIANCA.ALTA)
+})
+
+test('origem de digitação manual (ORIGEM_MANUAL) resulta em MANUAL e CONFERIR, mesmo com DV válido e sem avisos', () => {
+  const analise = {
+    ...analiseSemChave,
+    chaveValida: true,
+    chaveInterpretada: analiseCompletaViaPdf.chaveInterpretada,
+    origensChave: [ORIGEM_MANUAL],
+    fields: analiseCompletaViaPdf.fields,
+    warnings: [],
+  }
+  const draft = mapAnalysisToArrivalDraft(analise)
+  assert.equal(draft.metodoLeitura, METODO_LEITURA.MANUAL)
+  assert.equal(draft.confianca, CONFIANCA.CONFERIR)
 })
 
 test('origem OCR resulta em OCR e CONFERIR, mesmo sem avisos adicionais', () => {
