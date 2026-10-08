@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, ClipboardList, LayoutDashboard, Plus, ScanBarcode } from 'lucide-react'
+import { AlertTriangle, ClipboardList, DoorOpen, LayoutDashboard, Plus, ScanBarcode } from 'lucide-react'
 
 export const ROUTES = {
   dashboard: '/',
@@ -7,6 +7,7 @@ export const ROUTES = {
   newReceipt: '/novo',
   pending: '/pendencias',
   nfeReader: '/leitura-automatica',
+  portaria: '/portaria',
 }
 
 export const NAV_ITEMS = [
@@ -15,6 +16,7 @@ export const NAV_ITEMS = [
   { path: ROUTES.newReceipt, label: 'Novo recebimento', icon: Plus },
   { path: ROUTES.pending, label: 'Pendências', icon: AlertTriangle, count: true },
   { path: ROUTES.nfeReader, label: 'Leitura automática (beta)', icon: ScanBarcode },
+  { path: ROUTES.portaria, label: 'Portaria', icon: DoorOpen },
 ]
 
 export function parseHash() {

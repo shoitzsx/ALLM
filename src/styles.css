@@ -2724,7 +2724,7 @@ button {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     min-height: 66px;
     padding: 6px max(7px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
     border-top: 1px solid var(--ink-200);

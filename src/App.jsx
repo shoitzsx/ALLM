@@ -85,6 +85,14 @@ import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile
 // dependência de câmera/PDF/OCR para o bundle principal.
 const NfeReaderPage = lazy(() => import('./features/nfeReader/NfeReaderPage.jsx'))
 
+// PortariaPage é um named export (não default) — o adaptador abaixo resolve
+// isso para o formato que React.lazy espera. Lazy por importar, através de
+// NfePhotoCapture.jsx, a mesma cadeia pesada do scanner (ZBar/WASM, pdf.js,
+// Tesseract) que justifica NfeReaderPage também ser lazy, acima.
+const PortariaPage = lazy(() =>
+  import('./features/portaria/PortariaPage.jsx').then((module) => ({ default: module.PortariaPage })),
+)
+
 const WIZARD_STEPS = [
   { title: 'Identificação', subtitle: 'Pedido e fornecedor' },
   { title: 'Itens', subtitle: 'Materiais recebidos' },
@@ -1385,6 +1393,12 @@ export default function App() {
     content = (
       <Suspense fallback={<div className="page"><EmptyState icon={ScanBarcode} title="Carregando módulo" description="Preparando a leitura automática de NF-e…" /></div>}>
         <NfeReaderPage pushToast={pushToast} />
+      </Suspense>
+    )
+  } else if (route.path === ROUTES.portaria) {
+    content = (
+      <Suspense fallback={<div className="page"><EmptyState icon={ShieldCheck} title="Carregando módulo" description="Preparando a Portaria…" /></div>}>
+        <PortariaPage />
       </Suspense>
     )
   } else if (route.path.startsWith('/recebimentos/')) {
