@@ -5,7 +5,6 @@ import { ArrivalReview } from './components/ArrivalReview.jsx'
 import { ArrivalResult } from './components/ArrivalResult.jsx'
 import {
   mockTodayArrivals,
-  createMockScanResult,
   createMockManualDraft,
   generateCodigo,
   nowLabel,
@@ -30,16 +29,12 @@ export function PortariaPage() {
   const [confirmed, setConfirmed] = useState(null)
   const [arrivals, setArrivals] = useState(mockTodayArrivals)
 
-  function startFromScan(origin) {
-    setDraft(createMockScanResult(origin))
-    setStage('review')
-  }
-
   /**
-   * "Selecionar arquivo" já usa o scanner NF-e real (analyzeNfeFile +
-   * scannerBridge.js, chamados em PortariaStart) — `scannerDraft` chega aqui
-   * só com os campos que o scanner pode produzir. id/código/status/horário
-   * continuam sendo bookkeeping da própria Portaria, igual ao caminho mock.
+   * "Selecionar arquivo" e "Fotografar código" já usam o scanner NF-e real
+   * (analyzeNfeFile/analyzeNfeKey + scannerBridge.js, chamados em
+   * PortariaStart) — `scannerDraft` chega aqui só com os campos que o
+   * scanner pode produzir. id/código/status/horário continuam sendo
+   * bookkeeping da própria Portaria, igual ao antigo caminho mock.
    */
   function startFromUploadedFile(scannerDraft) {
     setDraft({
@@ -81,7 +76,6 @@ export function PortariaPage() {
       {stage === 'start' ? (
         <PortariaStart
           arrivals={arrivals}
-          onStartCamera={() => startFromScan('camera')}
           onFileAnalyzed={startFromUploadedFile}
           onStartManual={startFromManual}
         />

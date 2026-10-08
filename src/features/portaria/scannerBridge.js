@@ -9,8 +9,7 @@
  *
  * Campos devolvidos são só os que vêm (ou podem vir) do scanner. id, código
  * da chegada, status e horário continuam responsabilidade de quem chama —
- * mesma convenção já usada por createMockScanResult/createMockManualDraft
- * em mockPortariaData.js.
+ * mesma convenção já usada por createMockManualDraft em mockPortariaData.js.
  */
 
 /**
@@ -49,9 +48,17 @@ export const CONFIANCA = {
 // (texto do PDF > código de barras > OCR — ver extractor.js). Olhamos só a
 // primeira posição (a origem "principal") e a traduzimos para um código
 // estável que pertence à Portaria, não ao scanner.
+//
+// 'foto do código de barras' é a origem fixa que NfePhotoCapture.jsx passa
+// para analyzeNfeKey ao chamar onKeyFound — mesma leitura de código de
+// barras de 'código de barras', só que via câmera (NfePhotoCapture) em vez
+// de arquivo/PDF estático (analyzeNfeFile). Necessidade real de tradução:
+// sem esta entrada, toda captura por câmera cairia em NAO_IDENTIFICADO
+// mesmo com a chave perfeitamente válida.
 const ORIGEM_PARA_METODO = {
   'texto do PDF': METODO_LEITURA.TEXTO_PDF,
   'código de barras': METODO_LEITURA.CODIGO_BARRAS,
+  'foto do código de barras': METODO_LEITURA.CODIGO_BARRAS,
   OCR: METODO_LEITURA.OCR,
 }
 

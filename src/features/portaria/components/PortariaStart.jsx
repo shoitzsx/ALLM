@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { AlertTriangle, Camera, Upload, Keyboard, ArrowRight, Loader2 } from 'lucide-react'
 import { STATUS_META } from '../mockPortariaData.js'
-import { analyzeNfeFile } from '../../nfeReader/extractor.js'
+import { analyzeNfeFile, analyzeNfeKey } from '../../nfeReader/extractor.js'
+import NfePhotoCapture from '../../nfeReader/NfePhotoCapture.jsx'
 import { mapAnalysisToArrivalDraft } from '../scannerBridge.js'
 
 // Mesmos tipos aceitos hoje por "Selecionar arquivo" em
@@ -14,11 +15,13 @@ function ArrivalStatusChip({ status }) {
   return <span className={`portaria-chip portaria-chip-${meta.tone}`}>{meta.label}</span>
 }
 
-export function PortariaStart({ arrivals, onStartCamera, onFileAnalyzed, onStartManual }) {
+export function PortariaStart({ arrivals, onFileAnalyzed, onStartManual }) {
   const [manualOpen, setManualOpen] = useState(false)
   const [manualValue, setManualValue] = useState('')
   const [analyzingFile, setAnalyzingFile] = useState(false)
   const [fileError, setFileError] = useState('')
+  const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false)
+  const fileInputRef = useRef(null)
 
   const digitsOnly = manualValue.replace(/\D/g, '')
   const canContinue = digitsOnly.length === 44
@@ -49,10 +52,57 @@ export function PortariaStart({ arrivals, onStartCamera, onFileAnalyzed, onStart
     }
   }
 
+  /**
+   * NfePhotoCapture já valida a chave internamente (via analyzeNfeCanvas)
+   * antes de chamar onKeyFound — mesmo assim, revalidamos aqui com
+   * analyzeNfeKey, igual a NfeReaderPage.handleScannedKey, para nunca confiar
+   * cegamente no chamador (mesmo padrão documentado em analysisBuilder.js).
+   * Envolvido em try/catch: uma falha inesperada aqui não deve quebrar a
+   * Portaria, só impedir o avanço e deixar o operador tentar de novo.
+   */
+  function handleCameraKeyFound(chave, origem) {
+    setPhotoCaptureOpen(false)
+    try {
+      const analysis = analyzeNfeKey(chave, origem)
+      const draft = mapAnalysisToArrivalDraft(analysis)
+      onFileAnalyzed(draft)
+    } catch (error) {
+      console.error('[Portaria] Falha ao processar a chave capturada pela câmera.', error)
+      setFileError('Não foi possível processar a chave capturada. Tente novamente.')
+    }
+  }
+
+  /**
+   * ImageCapture indisponível ou falhou em tempo de execução — em vez de
+   * duplicar um segundo caminho de arquivo, fecha a câmera e aciona o MESMO
+   * input real de "Selecionar arquivo" (mesmo pipeline analyzeNfeFile já
+   * usado acima), igual ao padrão de NfeReaderPage.handlePhotoCaptureFallback.
+   */
+  function handleCameraFallback() {
+    setPhotoCaptureOpen(false)
+    fileInputRef.current?.click()
+  }
+
+  /**
+   * Foto tirada mas nenhuma chave válida encontrada — não é um segundo
+   * formulário manual: traduzimos o resultado (ainda que sem chave) pelo
+   * mesmo scannerBridge e entregamos à MESMA Revisão já usada por qualquer
+   * outra origem, com os campos vazios para o operador completar ali.
+   */
+  function handleCameraManualFill(result) {
+    setPhotoCaptureOpen(false)
+    if (result) onFileAnalyzed(mapAnalysisToArrivalDraft(result))
+  }
+
   return (
     <>
       <div className="portaria-action-grid">
-        <button type="button" className="portaria-action-card" onClick={onStartCamera} disabled={analyzingFile}>
+        <button
+          type="button"
+          className="portaria-action-card"
+          onClick={() => setPhotoCaptureOpen(true)}
+          disabled={analyzingFile}
+        >
           <Camera size={26} />
           <strong>Fotografar código</strong>
           <span>Use a câmera para capturar a NF-e</span>
@@ -63,6 +113,7 @@ export function PortariaStart({ arrivals, onStartCamera, onFileAnalyzed, onStart
           <strong>{analyzingFile ? 'Analisando nota fiscal…' : 'Selecionar arquivo'}</strong>
           <span>{analyzingFile ? 'Isso pode levar alguns segundos' : 'PDF ou imagem da NF-e (DANFE)'}</span>
           <input
+            ref={fileInputRef}
             type="file"
             accept={SCANNER_FILE_ACCEPT}
             disabled={analyzingFile}
@@ -136,6 +187,14 @@ export function PortariaStart({ arrivals, onStartCamera, onFileAnalyzed, onStart
           ))}
         </ul>
       </section>
+
+      <NfePhotoCapture
+        open={photoCaptureOpen}
+        onClose={() => setPhotoCaptureOpen(false)}
+        onKeyFound={handleCameraKeyFound}
+        onFallbackToFilePicker={handleCameraFallback}
+        onManualFill={handleCameraManualFill}
+      />
     </>
   )
 }

@@ -116,6 +116,20 @@ test('origem código de barras (sem avisos) resulta em CODIGO_BARRAS e ALTA', ()
   assert.equal(draft.confianca, CONFIANCA.ALTA)
 })
 
+test('origem "foto do código de barras" (NfePhotoCapture) também resulta em CODIGO_BARRAS e ALTA', () => {
+  const analise = {
+    ...analiseSemChave,
+    chaveValida: true,
+    chaveInterpretada: analiseCompletaViaPdf.chaveInterpretada,
+    origensChave: ['foto do código de barras'],
+    fields: analiseCompletaViaPdf.fields,
+    warnings: [],
+  }
+  const draft = mapAnalysisToArrivalDraft(analise)
+  assert.equal(draft.metodoLeitura, METODO_LEITURA.CODIGO_BARRAS)
+  assert.equal(draft.confianca, CONFIANCA.ALTA)
+})
+
 test('origem OCR resulta em OCR e CONFERIR, mesmo sem avisos adicionais', () => {
   const analise = {
     ...analiseSemChave,

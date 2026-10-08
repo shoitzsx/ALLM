@@ -103,30 +103,6 @@ export const mockTodayArrivals = [
 ]
 
 /**
- * Simula o resultado de uma leitura (câmera ou arquivo) para alimentar a
- * tela de revisão. Nenhuma câmera, OCR ou pipeline real é usado aqui — é só
- * um registro de exemplo com método/confiança coerentes com a origem.
- */
-export function createMockScanResult(origin) {
-  const isUpload = origin === 'upload'
-  return {
-    id: `mock-draft-${Date.now()}`,
-    codigo: generateCodigo(),
-    numeroNf: isUpload ? '552034' : '718420',
-    serieNf: '1',
-    cnpjEmitente: isUpload ? '11222333000181' : '44555666000172',
-    fornecedor: isUpload ? 'Fornecedor Simulado (arquivo)' : 'Fornecedor Simulado (câmera)',
-    nfeChaveAcesso: isUpload
-      ? '35260112222333000181550010005520341123456785'
-      : '35260144555666000172550010007184201123456781',
-    metodoLeitura: isUpload ? 'ZXING' : 'ZBAR',
-    confianca: isUpload ? 'MEDIA' : 'ALTA',
-    status: 'PENDENTE',
-    criadoEm: nowLabel(),
-  }
-}
-
-/**
  * Monta um rascunho a partir de uma chave digitada manualmente. Os demais
  * campos ficam em branco de propósito — na Revisão o usuário completa.
  */
