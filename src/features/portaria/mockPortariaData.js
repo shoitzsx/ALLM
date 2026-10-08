@@ -17,10 +17,19 @@ export const METODO_LEITURA_LABELS = {
   NAO_IDENTIFICADO: 'Não identificado',
 }
 
+// Mesma ideia de METODO_LEITURA_LABELS acima: valores internos da UI da
+// Portaria, não contrato de API/backend. MEDIA continua aqui por
+// compatibilidade com os rascunhos simulados antigos (createMockManualDraft
+// não produz MEDIA hoje, mas o rótulo fica preservado); CONFERIR e
+// NAO_ENCONTRADO são os códigos que scannerBridge.js produz a partir do
+// scanner real. O rótulo de texto sempre acompanha a cor (tone) — nenhum
+// estado depende só de cor para ser identificado.
 export const CONFIANCA_META = {
   ALTA: { label: 'Alta', tone: 'success' },
+  CONFERIR: { label: 'Conferir', tone: 'warning' },
   MEDIA: { label: 'Média', tone: 'warning' },
   BAIXA: { label: 'Baixa', tone: 'danger' },
+  NAO_ENCONTRADO: { label: 'Não encontrado', tone: 'danger' },
 }
 
 export const STATUS_META = {
