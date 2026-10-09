@@ -1,0 +1,277 @@
+/* Estilos específicos da Visualização. Reaproveita variáveis e classes
+   globais (page, panel, info-strip, table-toolbar, list-search,
+   filter-select, data-table, table-scroll, pagination, btn, EmptyState)
+   definidas em src/styles.css/src/ui.jsx — isto cobre só o que não
+   existia ainda, com o prefixo `viz-` para nunca colidir com outro módulo. */
+
+.viz-readonly-banner {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.sr-only-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Abas */
+
+.viz-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.viz-tab {
+  padding: 8px 14px;
+  border: 1px solid var(--ink-200);
+  border-radius: 999px;
+  color: var(--ink-700);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.viz-tab:hover {
+  border-color: var(--ink-300);
+  background: var(--ink-50);
+}
+
+.viz-tab.active {
+  border-color: var(--brand-700);
+  color: #fff;
+  background: var(--brand-700);
+}
+
+/* ------------------------------------------------------------- Toolbar */
+
+.viz-panel {
+  overflow: hidden;
+}
+
+.viz-toolbar {
+  flex-wrap: wrap;
+}
+
+.viz-period-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+.viz-period-filter input {
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.viz-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.viz-result-bar {
+  justify-content: space-between;
+}
+
+.viz-last-updated {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------- Grid */
+
+.viz-table-scroll {
+  max-height: min(64vh, 560px);
+  overflow: auto;
+  border-top: 1px solid var(--ink-100);
+}
+
+.viz-data-table th {
+  top: 0;
+}
+
+.viz-data-table td {
+  white-space: nowrap;
+}
+
+.viz-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.viz-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.viz-truncate {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.viz-id-col {
+  color: var(--ink-500);
+}
+
+.viz-action-col {
+  width: 44px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------- Chips */
+
+.viz-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.viz-chip-success {
+  border-color: #bfe1d5;
+  color: #146b55;
+  background: #eaf7f2;
+}
+
+.viz-chip-warning {
+  border-color: #f0d995;
+  color: #81570d;
+  background: #fff8e5;
+}
+
+.viz-chip-danger {
+  border-color: #f0c5c1;
+  color: #9e3735;
+  background: #fff0ef;
+}
+
+.viz-chip-info {
+  border-color: #ccdef0;
+  color: #295b8b;
+  background: #eef5fb;
+}
+
+.viz-chip-neutral {
+  border-color: var(--ink-200);
+  color: var(--ink-600);
+  background: var(--ink-50);
+}
+
+/* ---------------------------------------------------------- Paginação */
+
+.viz-pagination {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.viz-page-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+.viz-page-size select {
+  min-height: 32px;
+  padding: 4px 7px;
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.viz-page-of {
+  color: var(--ink-500);
+  font-size: 12px;
+}
+
+/* ----------------------------------------------------- Responsividade */
+
+@media (max-width: 640px) {
+  .viz-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .viz-toolbar-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .viz-table-scroll {
+    max-height: min(70vh, 480px);
+  }
+
+  /* 8 abas em uma linha rolável, nunca quebrando — mesma ideia já usada em
+     .table-scroll (overflow contido no próprio elemento, nunca na página). */
+  .viz-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+  }
+
+  .viz-tabs::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .viz-tabs::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--ink-200);
+  }
+
+  .viz-tab {
+    flex: 0 0 auto;
+  }
+
+  /* Status ganha a linha inteira para si (hierarquia mais limpa que dividir
+     espaço com o que resta ao lado da busca, que já é 100% largura). */
+  .viz-toolbar .filter-select {
+    flex: 1 1 100%;
+  }
+
+  /* "Mostrar ID técnico" passa a opção secundária: visualmente abaixo das
+     ações principais (Atualizar/Exportar), sem competir com elas. Usa
+     `order` (não reordena o JSX) porque o desktop precisa continuar como
+     está — só a ORDEM VISUAL muda no mobile, a ordem do DOM/tab continua
+     igual nos dois casos. */
+  .viz-toolbar .filter-toggle {
+    order: 1;
+    width: 100%;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ink-100);
+    color: var(--ink-500);
+    font-size: 12px;
+    font-weight: 600;
+  }
+}

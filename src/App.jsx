@@ -93,6 +93,14 @@ const PortariaPage = lazy(() =>
   import('./features/portaria/PortariaPage.jsx').then((module) => ({ default: module.PortariaPage })),
 )
 
+// Mesmo adaptador de named export que PortariaPage usa acima. Lazy mais por
+// consistência com o resto do módulo do que por peso (Visualização não tem
+// dependência pesada, é só mock local) — mantém o bundle inicial livre de
+// qualquer página que não seja a primeira que o usuário abre.
+const VisualizacaoPage = lazy(() =>
+  import('./features/visualizacao/VisualizacaoPage.jsx').then((module) => ({ default: module.VisualizacaoPage })),
+)
+
 const WIZARD_STEPS = [
   { title: 'Identificação', subtitle: 'Pedido e fornecedor' },
   { title: 'Itens', subtitle: 'Materiais recebidos' },
@@ -1399,6 +1407,12 @@ export default function App() {
     content = (
       <Suspense fallback={<div className="page"><EmptyState icon={ShieldCheck} title="Carregando módulo" description="Preparando a Portaria…" /></div>}>
         <PortariaPage />
+      </Suspense>
+    )
+  } else if (route.path === ROUTES.visualizacao) {
+    content = (
+      <Suspense fallback={<div className="page"><EmptyState icon={Search} title="Carregando módulo" description="Preparando a Visualização…" /></div>}>
+        <VisualizacaoPage />
       </Suspense>
     )
   } else if (route.path.startsWith('/recebimentos/')) {
