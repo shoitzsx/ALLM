@@ -1032,7 +1032,7 @@ button {
 
 .data-table th {
   position: sticky;
-  top: 72px;
+  top: 0;
   height: 42px;
   padding: 0 13px;
   color: var(--ink-500);
@@ -2662,9 +2662,32 @@ button {
   .advanced-filters .form-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  /* Tablet (ex.: 1024px): ainda é o shell de desktop (sidebar + tabela),
+     mas a toolbar de Recebimentos e o grid de duas colunas da Visão geral
+     já não têm largura sobrando — quebrar para não espremer os controles
+     nem forçar o painel "Requer atenção" para uma coluna estreita demais. */
+  .table-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .list-search {
+    flex: 1 1 100%;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 920px) {
+  :root {
+    /* Altura real da barra inferior (sem a safe area) — usada para reservar
+       espaço de conteúdo e posicionar o painel "Mais" sem repetir o número
+       cru em vários lugares. */
+    --mobile-nav-height: 66px;
+  }
+
   .app-shell {
     display: block;
   }
@@ -2724,7 +2747,7 @@ button {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     min-height: 66px;
     padding: 6px max(7px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
     border-top: 1px solid var(--ink-200);
@@ -2763,8 +2786,88 @@ button {
     box-shadow: 0 6px 13px rgba(29, 63, 174, 0.22);
   }
 
+  /* Backdrop do menu "Mais" — cobre a página mas PARA antes da própria barra,
+     para que os outros 4 botões continuem clicáveis normalmente mesmo com o
+     menu aberto (navegar para eles já fecha o menu via mudança de rota). */
+  .mobile-more-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+    z-index: 41;
+    border: 0;
+    padding: 0;
+    background: rgba(12, 22, 56, 0.32);
+  }
+
+  .mobile-more-panel {
+    position: fixed;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(var(--mobile-nav-height) + 10px + env(safe-area-inset-bottom, 0px));
+    left: max(10px, env(safe-area-inset-left));
+    z-index: 42;
+    display: grid;
+    gap: 2px;
+    max-height: 60vh;
+    padding: 8px;
+    overflow-y: auto;
+    border: 1px solid var(--ink-200);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 -10px 30px rgba(12, 22, 56, 0.18);
+  }
+
+  .mobile-more-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px 10px;
+    color: var(--ink-500);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .mobile-more-close {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    color: var(--ink-600);
+    background: transparent;
+  }
+
+  .mobile-more-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--ink-800);
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .mobile-more-item:hover {
+    background: var(--ink-50);
+  }
+
+  .mobile-more-item.active {
+    color: var(--brand-700);
+    background: var(--brand-50);
+  }
+
   .page {
     padding: 22px 16px 96px;
+    padding-bottom: calc(var(--mobile-nav-height) + 30px + env(safe-area-inset-bottom, 0px));
   }
 
   .page-header {
@@ -2845,8 +2948,8 @@ button {
     flex: 1 1 100%;
   }
 
-  .table-scroll,
-  .pagination {
+  .table-panel .table-scroll,
+  .table-panel .pagination {
     display: none;
   }
 
@@ -2905,6 +3008,19 @@ button {
   .mobile-record-meta strong {
     color: var(--ink-700);
     font-size: 11px;
+  }
+
+  .mobile-record-open {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 3px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ink-100);
+    color: var(--brand-700);
+    font-size: 12px;
+    font-weight: 700;
   }
 
   .pending-columns {
@@ -2997,6 +3113,7 @@ button {
   .wizard-footer {
     position: sticky;
     bottom: 65px;
+    bottom: calc(65px + env(safe-area-inset-bottom, 0px));
     padding: 12px 15px;
     box-shadow: 0 -8px 24px rgba(12, 22, 56, 0.07);
     z-index: 10;
