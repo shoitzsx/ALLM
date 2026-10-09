@@ -10,6 +10,7 @@
 }
 
 .portaria-action-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -28,6 +29,28 @@
 .portaria-action-card:hover {
   border-color: var(--brand-500);
   box-shadow: var(--shadow-md);
+}
+
+/* O input nativo de arquivo some visualmente, mas continua no DOM, focável
+   e operável por teclado — o <label> (este card) é só a aparência; clicar
+   ou focar+Enter/Espaço nele aciona o input real do mesmo jeito. */
+.portaria-action-card:focus-within {
+  border-color: var(--brand-500);
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(49, 97, 224, 0.15);
+}
+
+.portaria-file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.portaria-action-card .portaria-file-chosen {
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .portaria-action-card.active {

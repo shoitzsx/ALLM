@@ -22,6 +22,7 @@ export function PortariaStart({ arrivals, onFileAnalyzed }) {
   const [manualError, setManualError] = useState('')
   const [analyzingFile, setAnalyzingFile] = useState(false)
   const [fileError, setFileError] = useState('')
+  const [selectedFileName, setSelectedFileName] = useState('')
   const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -60,6 +61,7 @@ export function PortariaStart({ arrivals, onFileAnalyzed }) {
     event.target.value = ''
     if (!selected || analyzingFile) return
     setFileError('')
+    setSelectedFileName(selected.name)
     setAnalyzingFile(true)
     try {
       const analysis = await analyzeNfeFile(selected)
@@ -133,9 +135,11 @@ export function PortariaStart({ arrivals, onFileAnalyzed }) {
           {analyzingFile ? <Loader2 size={26} className="spin" /> : <Upload size={26} />}
           <strong>{analyzingFile ? 'Analisando nota fiscal…' : 'Selecionar arquivo'}</strong>
           <span>{analyzingFile ? 'Isso pode levar alguns segundos' : 'PDF ou imagem da NF-e (DANFE)'}</span>
+          <span className="portaria-file-chosen">{selectedFileName || 'Nenhum arquivo selecionado'}</span>
           <input
             ref={fileInputRef}
             type="file"
+            className="portaria-file-input-hidden"
             accept={SCANNER_FILE_ACCEPT}
             disabled={analyzingFile}
             onChange={handleFileSelected}
