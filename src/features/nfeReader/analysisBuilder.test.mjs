@@ -102,3 +102,29 @@ test('buildReliableReceiptPrefill com chave inválida não leva nada (tudo "não
   const prefill = buildReliableReceiptPrefill(resultado, {})
   assert.deepEqual(prefill, {})
 })
+
+// --- Falso positivo real (chave passa no DV, mas é semanticamente inválida) ---
+
+const CHAVE_FALSO_POSITIVO_OCR = '40104994734000518550020000395041864220514400'
+
+test('analyzeNfeKey rejeita a chave real do falso positivo (DV ok, cUF/AAMM/modelo/CNPJ incoerentes) e marca candidataInvalidaEncontrada', () => {
+  const resultado = analyzeNfeKey(CHAVE_FALSO_POSITIVO_OCR, 'OCR')
+  assert.equal(resultado.chaveValida, false)
+  assert.equal(resultado.chaveInterpretada, null)
+  assert.equal(resultado.candidataInvalidaEncontrada, true, '44 dígitos foram encontrados — diferente de "nada encontrado"')
+  assert.equal(resultado.fields.numeroNf.value, '', 'nunca deriva NF de uma chave semanticamente inválida')
+  assert.equal(resultado.fields.cnpjFornecedor.value, '')
+})
+
+test('analyzeNfeKey com entrada vazia NÃO marca candidataInvalidaEncontrada (não há candidato de 44 dígitos)', () => {
+  const resultado = analyzeNfeKey('')
+  assert.equal(resultado.chaveValida, false)
+  assert.equal(resultado.candidataInvalidaEncontrada, false)
+})
+
+test('analyzeNfeKey com a chave real da METALFORT continua aceita após a validação semântica (não regressão)', () => {
+  const resultado = analyzeNfeKey(CHAVE_METALFORT, 'texto do PDF')
+  assert.equal(resultado.chaveValida, true)
+  assert.equal(resultado.candidataInvalidaEncontrada, false)
+  assert.equal(resultado.fields.numeroNf.value, '8280')
+})

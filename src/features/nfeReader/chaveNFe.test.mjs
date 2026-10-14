@@ -5,10 +5,48 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { findValidNfeKeys, interpretarChave, validarChaveNFe } from './chaveNFe.js'
+import {
+  encontrouSequenciaDe44Digitos,
+  findValidNfeKeys,
+  interpretarChave,
+  validarCnpjDigitos,
+  validarChaveNFe,
+  validarDvChaveNFe,
+} from './chaveNFe.js'
 
 const CHAVE_METALFORT = '42260748909580000160550010000082801675042868'
 const CHAVE_METALFORT_FORMATADA = '4226 0748 9095 8000 0160 5500 1000 0082 8016 7504 2868'
+const BASE43_METALFORT = CHAVE_METALFORT.slice(0, 43)
+
+// Chave real reportada como falso positivo: passa no DV, mas cUF=40 (não
+// existe), AAMM com mês 49 (impossível), modelo 02 (não é NF-e) e CNPJ com
+// dígitos verificadores inválidos. Antes da validação semântica abaixo,
+// `validarChaveNFe` aceitava isso como uma chave de NF-e real.
+const CHAVE_FALSO_POSITIVO_OCR = '40104994734000518550020000395041864220514400'
+
+/** Mesmo algoritmo de validarDvChaveNFe — usado só para MONTAR fixtures de teste com DV correto, nunca para validar produção. */
+function calcularDv(base43) {
+  const digs = base43.split('').map(Number)
+  let peso = 2
+  let soma = 0
+  for (let i = digs.length - 1; i >= 0; i--) {
+    soma += digs[i] * peso
+    peso++
+    if (peso > 9) peso = 2
+  }
+  const resto = soma % 11
+  const dv = 11 - resto
+  return dv >= 10 ? 0 : dv
+}
+
+function montarChaveComDvCorreto(base43) {
+  return `${base43}${calcularDv(base43)}`
+}
+
+/** Substitui um trecho de `base` a partir de `inicio`, mantendo o resto intacto. */
+function substituir(base, inicio, novoTrecho) {
+  return base.slice(0, inicio) + novoTrecho + base.slice(inicio + novoTrecho.length)
+}
 
 test('valida a chave real da METALFORT (dígito verificador correto)', () => {
   assert.equal(validarChaveNFe(CHAVE_METALFORT), true)
@@ -51,4 +89,60 @@ test('findValidNfeKeys deduplica a mesma chave repetida no texto', () => {
 test('interpretarChave rejeita uma chave com dígito verificador incorreto', () => {
   const chaveComDvErrado = CHAVE_METALFORT.slice(0, 43) + '0'
   assert.equal(interpretarChave(chaveComDvErrado), null)
+})
+
+// --- Validação semântica (cUF/AAMM/CNPJ/modelo) — não basta passar no DV ---
+
+test('validarCnpjDigitos aceita um CNPJ real (dígitos verificadores corretos, da própria chave METALFORT)', () => {
+  assert.equal(validarCnpjDigitos('48909580000160'), true)
+})
+
+test('validarCnpjDigitos rejeita dígitos verificadores incorretos e sequências de 14 dígitos iguais', () => {
+  assert.equal(validarCnpjDigitos('94734000518550'), false, 'CNPJ embutido no falso positivo real')
+  assert.equal(validarCnpjDigitos('00000000000000'), false, 'repetição não é um CNPJ real, mesmo que passasse no cálculo')
+  assert.equal(validarCnpjDigitos('123'), false, 'tamanho errado')
+})
+
+test('validarChaveNFe rejeita cUF inexistente (ex.: 40), mesmo com DV correto', () => {
+  const chave = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 0, '40'))
+  assert.equal(validarDvChaveNFe(chave), true, 'pré-condição: o DV precisa estar correto para o teste provar a checagem semântica')
+  assert.equal(validarChaveNFe(chave), false)
+})
+
+test('validarChaveNFe rejeita AAMM com mês 49 (impossível), mesmo com DV correto', () => {
+  const chave = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 4, '49'))
+  assert.equal(validarDvChaveNFe(chave), true)
+  assert.equal(validarChaveNFe(chave), false)
+})
+
+test('validarChaveNFe aceita meses nas bordas válidas (01 e 12)', () => {
+  const chaveJaneiro = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 4, '01'))
+  const chaveDezembro = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 4, '12'))
+  assert.equal(validarChaveNFe(chaveJaneiro), true)
+  assert.equal(validarChaveNFe(chaveDezembro), true)
+})
+
+test('validarChaveNFe rejeita modelo diferente de 55 (ex.: 02, 65), mesmo com DV correto', () => {
+  const chaveModelo02 = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 20, '02'))
+  const chaveModelo65 = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 20, '65'))
+  assert.equal(validarChaveNFe(chaveModelo02), false)
+  assert.equal(validarChaveNFe(chaveModelo65), false)
+})
+
+test('validarChaveNFe rejeita CNPJ embutido com dígitos verificadores inválidos, mesmo com DV da chave correto', () => {
+  const chave = montarChaveComDvCorreto(substituir(BASE43_METALFORT, 6, '00000000000001'))
+  assert.equal(validarDvChaveNFe(chave), true)
+  assert.equal(validarChaveNFe(chave), false)
+})
+
+test('a chave real do falso positivo relatado (cUF/AAMM/modelo/CNPJ todos incoerentes) é rejeitada', () => {
+  assert.equal(validarDvChaveNFe(CHAVE_FALSO_POSITIVO_OCR), true, 'é um falso positivo exatamente porque passa no DV')
+  assert.equal(validarChaveNFe(CHAVE_FALSO_POSITIVO_OCR), false)
+  assert.equal(interpretarChave(CHAVE_FALSO_POSITIVO_OCR), null)
+})
+
+test('encontrouSequenciaDe44Digitos identifica a sequência do falso positivo mesmo sabendo que ela é inválida', () => {
+  assert.equal(encontrouSequenciaDe44Digitos(CHAVE_FALSO_POSITIVO_OCR), true)
+  assert.equal(encontrouSequenciaDe44Digitos('nenhum número de 44 dígitos aqui'), false)
+  assert.equal(encontrouSequenciaDe44Digitos(''), false)
 })

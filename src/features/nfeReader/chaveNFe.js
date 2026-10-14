@@ -10,7 +10,15 @@ export function normalizarChave(v) {
   return (v || '').replace(/\D/g, '')
 }
 
-export function validarChaveNFe(chaveRaw) {
+/**
+ * Só o dígito verificador (módulo 11) — a checagem original deste arquivo,
+ * antes da validação semântica abaixo. Isolada porque é só ARITMÉTICA sobre
+ * 44 dígitos: não sabe (nem precisa saber) se os campos embutidos fazem
+ * sentido. Exportada separada para teste e para instrumentação de
+ * diagnóstico (decodeDiagnostics.js) que especificamente quer saber "o DV
+ * bateu?", não "é uma NF-e de verdade?".
+ */
+export function validarDvChaveNFe(chaveRaw) {
   const chave = normalizarChave(chaveRaw)
   if (chave.length !== 44) return false
   const digs = chave.split('').map(Number)
@@ -35,6 +43,73 @@ export const UF_POR_CODIGO = {
   '31': 'MG', '32': 'ES', '33': 'RJ', '35': 'SP',
   '41': 'PR', '42': 'SC', '43': 'RS',
   '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF',
+}
+
+// Único modelo de documento que este scanner interpreta/declara suportado —
+// NF-e. Não há, em nenhum outro ponto do módulo (README, testes, UI), menção
+// ou suporte a NFC-e (65), CT-e ou qualquer outro modelo: restringir a 55 não
+// remove nenhuma capacidade existente, só nomeia explicitamente o que já era
+// implicitamente assumido.
+export const MODELO_NFE = '55'
+
+/**
+ * Dígitos verificadores do CNPJ (dois módulo 11, pesos padrão). Puro texto —
+ * não confirma que o CNPJ existe na Receita, só que a sequência de 14
+ * dígitos é matematicamente consistente com a regra de formação de um CNPJ
+ * (o mesmo nível de garantia que o DV da própria chave já dá para a chave
+ * inteira). Rejeita também os 14 dígitos iguais (ex. "00000000000000"), que
+ * passariam no cálculo mas nunca são um CNPJ real emitido.
+ */
+export function validarCnpjDigitos(cnpjRaw) {
+  const cnpj = normalizarChave(cnpjRaw)
+  if (cnpj.length !== 14) return false
+  if (/^(\d)\1{13}$/.test(cnpj)) return false
+  const digs = cnpj.split('').map(Number)
+  const calcDv = (base, pesos) => {
+    const soma = base.reduce((acc, d, i) => acc + d * pesos[i], 0)
+    const resto = soma % 11
+    return resto < 2 ? 0 : 11 - resto
+  }
+  const dv1 = calcDv(digs.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+  if (dv1 !== digs[12]) return false
+  const dv2 = calcDv(digs.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+  return dv2 === digs[13]
+}
+
+/**
+ * Validação COMPLETA de uma chave de acesso: 44 dígitos + DV + coerência
+ * semântica dos campos embutidos (cUF, AAMM, CNPJ, modelo). Até aqui, só o
+ * DV era checado — um falso positivo real foi encontrado em produção: uma
+ * sequência de 44 dígitos passou no módulo 11 (10% de chance para dígitos
+ * aleatórios — o DV é 1 dígito contra 10 possíveis, não é uma prova de
+ * autenticidade) mas tinha cUF=40 (código de UF que não existe), AAMM com
+ * mês 49 (impossível), modelo 02 (não é NF-e) e CNPJ com dígitos
+ * verificadores inválidos — mesmo assim avançava para a revisão como se
+ * fosse uma NF-e confiável. Esta função é o novo critério de "válida" usado
+ * por TODO o módulo (interpretarChave, findValidNfeKeys, analyzeNfeKey,
+ * classifyDecodedText) — não é um filtro paralelo que algum chamador possa
+ * esquecer de aplicar.
+ *
+ * Não impõe política de ano mínimo/máximo (não há necessidade comprovada
+ * ainda) — só que o mês exista (01–12).
+ */
+export function validarChaveNFe(chaveRaw) {
+  const chave = normalizarChave(chaveRaw)
+  if (!validarDvChaveNFe(chave)) return false
+
+  const cUF = chave.slice(0, 2)
+  if (!UF_POR_CODIGO[cUF]) return false
+
+  const mes = Number(chave.slice(4, 6))
+  if (mes < 1 || mes > 12) return false
+
+  const modelo = chave.slice(20, 22)
+  if (modelo !== MODELO_NFE) return false
+
+  const cnpj = chave.slice(6, 20)
+  if (!validarCnpjDigitos(cnpj)) return false
+
+  return true
 }
 
 export function formatarCnpj(digits) {
@@ -95,4 +170,18 @@ export function findValidNfeKeys(texto) {
  */
 export function buscarChaveNoTexto(texto) {
   return findValidNfeKeys(texto)[0] || null
+}
+
+/**
+ * Verdadeiro se o texto contém qualquer sequência de 44 dígitos — válida ou
+ * não. Usado só para distinguir, em `extractor.js`, "nada parecido com uma
+ * chave foi encontrado" de "algo de 44 dígitos foi encontrado, mas não é uma
+ * chave válida" (o caso do falso positivo real de OCR que motivou a
+ * validação semântica acima) — a Portaria trata os dois casos de forma
+ * diferente (ver scannerBridge.js/PortariaScanner.jsx).
+ */
+export function encontrouSequenciaDe44Digitos(texto) {
+  if (!texto) return false
+  const candidatos = texto.match(/(?:\d[\s.-]?){44,88}/g) || []
+  return candidatos.some((bruto) => normalizarChave(bruto).length >= 44)
 }

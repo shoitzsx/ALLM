@@ -44,7 +44,7 @@ function todayLocalDate() {
  * scanner ao vivo), esses campos ficam corretamente como "não encontrado" em
  * vez de inventados.
  */
-export function buildAnalysisFromKey(chave, origens = [], { text = '', fontesCruzadas = false, warnings = [] } = {}) {
+export function buildAnalysisFromKey(chave, origens = [], { text = '', fontesCruzadas = false, warnings = [], candidataInvalidaEncontrada = false } = {}) {
   const interpretada = chave ? interpretarChave(chave) : null
   const origin = origens.join(' + ')
   const fromChave = (value) => (interpretada ? field(value, CONFIDENCE.ALTA, origin) : notFound())
@@ -87,6 +87,12 @@ export function buildAnalysisFromKey(chave, origens = [], { text = '', fontesCru
     fields,
     referenciaNfe,
     warnings,
+    // Verdadeiro quando ALGUMA fonte achou 44 dígitos (válida ou não) mas o
+    // resultado final não é uma chave válida — distingue "nada parecido foi
+    // encontrado" de "achou algo de 44 dígitos, mas não é NF-e" (ver
+    // chaveNFe.js/encontrouSequenciaDe44Digitos e extractor.js). Sempre
+    // false quando `chave` resolveu (nada a avisar).
+    candidataInvalidaEncontrada: Boolean(!interpretada && candidataInvalidaEncontrada),
   }
 }
 
@@ -134,8 +140,16 @@ export function buildReliableReceiptPrefill(analysis, currentValues = {}) {
 export function analyzeNfeKey(chaveRaw, origem = 'scanner ao vivo, código de barras') {
   const chave = normalizarChave(chaveRaw)
   if (!validarChaveNFe(chave)) {
+    // Motivo genérico de propósito: validarChaveNFe agora reprova tanto por
+    // DV incorreto quanto por incoerência semântica (cUF/AAMM/CNPJ/modelo —
+    // ver chaveNFe.js) — esta mensagem é só o aviso técnico interno
+    // (analysis.warnings), não o texto mostrado ao operador na Portaria.
     return buildAnalysisFromKey(null, [], {
-      warnings: ['O código lido não corresponde a uma chave de NF-e válida (dígito verificador incorreto).'],
+      warnings: ['O código lido não corresponde a uma chave de NF-e válida.'],
+      // 44 dígitos normalizados é exatamente o "achou algo, não é válido"
+      // (ver buildAnalysisFromKey) — um código/chave mais curto ou mais
+      // longo nem chega a ser um candidato plausível.
+      candidataInvalidaEncontrada: chave.length === 44,
     })
   }
   return buildAnalysisFromKey(chave, [origem])

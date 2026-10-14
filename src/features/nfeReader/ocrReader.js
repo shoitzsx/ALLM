@@ -22,7 +22,7 @@
  * reconhecer o texto inteiro da página.
  */
 import { createWorker, PSM } from 'tesseract.js'
-import { findValidNfeKeys } from './chaveNFe.js'
+import { encontrouSequenciaDe44Digitos, findValidNfeKeys } from './chaveNFe.js'
 import { cloneToDomCanvas, cropCanvas, upscaleCanvas } from './canvasUtils.js'
 
 const ASSETS_BASE = `${import.meta.env.BASE_URL}tesseract/`
@@ -70,12 +70,18 @@ function logUnexpectedError(context, err) {
  * encontradas — reaproveitando a mesma validação de `findValidNfeKeys` usada
  * para o texto do PDF. Nunca lança: uma falha em uma região não pode impedir
  * as próximas, e o método como um todo nunca deve derrubar quem o chamou.
+ *
+ * `candidataInvalidaEncontrada` distingue "nenhuma região tinha nada
+ * parecido com 44 dígitos" de "alguma região tinha uma sequência de 44
+ * dígitos, mas nenhuma passou na validação (DV ou semântica)" — foi assim
+ * que um falso positivo real passou pela Portaria antes da validação
+ * semântica existir (ver chaveNFe.js, validarChaveNFe).
  */
 export async function findNfeKeysWithOcr(sourceCanvas) {
-  if (!sourceCanvas) return []
+  if (!sourceCanvas) return { chaves: [], candidataInvalidaEncontrada: false }
   if (typeof document === 'undefined' || typeof sourceCanvas.getContext !== 'function') {
     console.error('[NFe][ocr] Ambiente sem suporte a Canvas DOM válido.')
-    return []
+    return { chaves: [], candidataInvalidaEncontrada: false }
   }
 
   let worker
@@ -83,8 +89,10 @@ export async function findNfeKeysWithOcr(sourceCanvas) {
     worker = await getWorker()
   } catch (err) {
     logUnexpectedError('inicializar worker', err)
-    return []
+    return { chaves: [], candidataInvalidaEncontrada: false }
   }
+
+  let candidataInvalidaEncontrada = false
 
   for (const variant of CROP_VARIANTS) {
     let candidate
@@ -110,14 +118,15 @@ export async function findNfeKeysWithOcr(sourceCanvas) {
       const texto = data?.text || ''
       console.log(`[NFe] OCR (${variant.label}) reconheceu ${texto.replace(/\s+/g, '').length} caractere(s).`)
       const chaves = findValidNfeKeys(texto)
-      if (chaves.length) return chaves
+      if (chaves.length) return { chaves, candidataInvalidaEncontrada: false }
+      if (encontrouSequenciaDe44Digitos(texto)) candidataInvalidaEncontrada = true
     } catch (err) {
       logUnexpectedError(`reconhecer região "${variant.label}"`, err)
     }
   }
 
   console.log('[NFe] OCR não encontrou uma chave válida em nenhuma região tentada.')
-  return []
+  return { chaves: [], candidataInvalidaEncontrada }
 }
 
 /** Libera o worker do tesseract.js. Chame ao desmontar a tela, se aplicável. */
