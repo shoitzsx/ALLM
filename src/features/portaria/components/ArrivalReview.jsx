@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { METODO_LEITURA_LABELS, CONFIANCA_META } from '../mockPortariaData.js'
 
 function formatChave(chave) {
@@ -22,6 +22,17 @@ export function ArrivalReview({ arrival, onChange, onBack, onConfirm }) {
       </header>
 
       <div className="form-card-body">
+        {arrival.warnings?.length ? (
+          <div className="nfe-warning-list">
+            {arrival.warnings.map((warning) => (
+              <div className="info-strip warning" key={warning}>
+                <AlertTriangle size={14} />
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="definition-grid portaria-definition-grid">
           <div className="definition-item field-full">
             <span>Chave NF-e</span>

@@ -58,7 +58,7 @@ export const CONFIANCA = {
 //
 // ORIGEM_MANUAL não existe no scanner (NfeReaderPage não tem digitação
 // manual) — é uma origem definida pela própria Portaria, passada por
-// PortariaStart.jsx para analyzeNfeKey ao validar a chave digitada pelo
+// PortariaScanner.jsx para analyzeNfeKey ao validar a chave digitada pelo
 // operador. Exportada para os dois lados usarem a MESMA string, sem
 // duplicar o literal.
 export const ORIGEM_MANUAL = 'chave digitada manualmente'
@@ -144,5 +144,9 @@ export function mapAnalysisToArrivalDraft(analysis) {
     fornecedor: fields.fornecedor?.value || '',
     metodoLeitura: origemPrincipal(analysis?.origensChave),
     confianca: calcularConfianca(analysis),
+    // Avisos crus do scanner (ex.: "nenhum código de barras foi detectado")
+    // — já influenciam `confianca` acima, mas o texto em si era descartado;
+    // a Revisão agora mostra isto como contexto para o "Conferir".
+    warnings: analysis?.warnings || [],
   }
 }

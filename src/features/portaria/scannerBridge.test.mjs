@@ -171,3 +171,37 @@ test('texto do PDF com aviso de uma etapa anterior falhada também vira CONFERIR
   assert.equal(draft.metodoLeitura, METODO_LEITURA.TEXTO_PDF)
   assert.equal(draft.confianca, CONFIANCA.CONFERIR)
 })
+
+test('mapAnalysisToArrivalDraft nunca deriva NF/CNPJ/fornecedor de uma análise com 44 dígitos semanticamente inválidos (candidataInvalidaEncontrada)', () => {
+  // Formato real que buildAnalysisFromKey produz quando a chave é rejeitada
+  // pela validação semântica de chaveNFe.js (cUF/AAMM/CNPJ/modelo) — mesmo
+  // passando no DV, chaveInterpretada é null e todos os campos ficam vazios.
+  const analiseFalsoPositivo = {
+    chaveValida: false,
+    chaveInterpretada: null,
+    candidataInvalidaEncontrada: true,
+    origensChave: ['OCR'],
+    fields: {
+      numeroNf: field('', 'nao_encontrado'),
+      serieNf: field('', 'nao_encontrado'),
+      cnpjFornecedor: field('', 'nao_encontrado'),
+      fornecedor: field('', 'nao_encontrado'),
+    },
+    referenciaNfe: { chaveAcesso: field('', 'nao_encontrado') },
+    warnings: ['Uma sequência de 44 dígitos foi encontrada por OCR, mas não corresponde a uma chave de NF-e válida.'],
+  }
+  const draft = mapAnalysisToArrivalDraft(analiseFalsoPositivo)
+  assert.equal(draft.nfeChaveAcesso, '')
+  assert.equal(draft.numeroNf, '')
+  assert.equal(draft.cnpjEmitente, '')
+  assert.equal(draft.fornecedor, '')
+  assert.equal(draft.confianca, CONFIANCA.NAO_ENCONTRADO, 'nunca deve parecer uma chegada confiável')
+})
+
+test('warnings do scanner são repassados ao rascunho (texto, não só o efeito na confiança)', () => {
+  const comAviso = mapAnalysisToArrivalDraft(analiseSemChave)
+  assert.deepEqual(comAviso.warnings, ['Nenhum código de barras foi detectado. Enquadre o código inteiro, deixando espaço em branco nas laterais.'])
+
+  const semAviso = mapAnalysisToArrivalDraft(analiseCompletaViaPdf)
+  assert.deepEqual(semAviso.warnings, [])
+})

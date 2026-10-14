@@ -1724,6 +1724,15 @@ button {
   background: var(--brand-50);
 }
 
+/* O input real cobre toda a zona mas é opacity:0 — sem isto, focar por
+   teclado (Tab) não mostra nenhum indicador visível, já que o outline nativo
+   do input também fica invisível junto com ele. */
+.upload-zone:focus-within {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  box-shadow: 0 0 0 3px rgba(49, 97, 224, 0.15);
+}
+
 .upload-zone input {
   position: absolute;
   inset: 0;
