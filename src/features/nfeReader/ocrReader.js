@@ -20,25 +20,33 @@
  * (tessedit_char_whitelist) para focar exatamente no que interessa (a chave
  * de 44 dígitos) — isso também acelera bastante o OCR comparado a
  * reconhecer o texto inteiro da página.
+ *
+ * Regiões tentadas, em ordem (`CROP_VARIANTS` = `OCR_CROP_ORDER`, ver
+ * pageRegions.js): "topo direito", "topo 35%", "página inteira" — a
+ * primeira é nova e mais restrita que "topo 35%" (mesma geometria usada
+ * pelo código de barras), reduzindo o texto de outras colunas da página que
+ * acaba sendo reconhecido junto. Um recorte estreito é ampliado com um
+ * fator calculado (`computeUpscaleFactor`, canvasUtils.js — 2× a 3×
+ * conforme a largura), não fixo em 2×.
  */
 import { createWorker, PSM } from 'tesseract.js'
 import { encontrouSequenciaDe44Digitos, findValidNfeKeys } from './chaveNFe.js'
-import { cloneToDomCanvas, cropCanvas, upscaleCanvas } from './canvasUtils.js'
+import { cloneToDomCanvas, computeUpscaleFactor, cropCanvas, upscaleCanvas } from './canvasUtils.js'
+import { OCR_CROP_ORDER } from './pageRegions.js'
+import { agora, devLogGroup } from './devLog.js'
 
 const ASSETS_BASE = `${import.meta.env.BASE_URL}tesseract/`
 
 const MIN_OCR_WIDTH = 1400
-const UPSCALE_FACTOR = 2
+const MAX_OCR_UPSCALE_FACTOR = 3
 
-// OCR é bem mais lento que o ZXing, então o conjunto de regiões tentadas é
-// deliberadamente menor que o do código de barras: a chave costuma estar
-// impressa perto do topo da página (abaixo/perto do próprio código de
-// barras), então tentamos aí primeiro e só recorremos à página inteira por
-// último.
-const CROP_VARIANTS = [
-  { label: 'topo 35%', region: (width, height) => ({ x: 0, y: 0, width, height: Math.round(height * 0.35) }) },
-  { label: 'página inteira', region: null },
-]
+// OCR é bem mais lento que o ZXing, então o conjunto de regiões tentadas
+// continua pequeno (3, não um salto grande): "topo direito" (geometria
+// compartilhada com o código de barras — ver pageRegions.js — mais estreita
+// que "topo 35%", logo com menos texto de outras colunas da página) tentada
+// primeiro, depois as duas regiões de sempre como fallback (nunca perde
+// capacidade: só adiciona uma tentativa mais específica antes delas).
+const CROP_VARIANTS = OCR_CROP_ORDER
 
 let workerPromise = null
 
@@ -93,6 +101,11 @@ export async function findNfeKeysWithOcr(sourceCanvas) {
   }
 
   let candidataInvalidaEncontrada = false
+  // Resumo agrupado por região — só impresso em DEV (ver devLog.js); a
+  // antiga linha "analisando região..." por tentativa foi removida (OCR só
+  // tem 3 regiões agora, não é a fonte do log excessivo, mas mantém o mesmo
+  // formato de diagnóstico do código de barras).
+  const tentativas = []
 
   for (const variant of CROP_VARIANTS) {
     let candidate
@@ -104,28 +117,34 @@ export async function findNfeKeysWithOcr(sourceCanvas) {
           })()
         : cloneToDomCanvas(sourceCanvas)
 
-      if (candidate.width < MIN_OCR_WIDTH) {
-        candidate = upscaleCanvas(candidate, UPSCALE_FACTOR)
-      }
+      const factor = computeUpscaleFactor(candidate.width, MIN_OCR_WIDTH, MAX_OCR_UPSCALE_FACTOR)
+      if (factor > 1) candidate = upscaleCanvas(candidate, factor)
     } catch (err) {
       logUnexpectedError(`preparar região "${variant.label}"`, err)
       continue
     }
 
+    const inicio = agora()
     try {
-      console.debug(`[NFe] OCR analisando região "${variant.label}" (${candidate.width}x${candidate.height})...`)
       const { data } = await worker.recognize(candidate)
       const texto = data?.text || ''
-      console.log(`[NFe] OCR (${variant.label}) reconheceu ${texto.replace(/\s+/g, '').length} caractere(s).`)
+      const totalCaracteres = texto.replace(/\s+/g, '').length
+      tentativas.push(`${variant.label}: ${totalCaracteres} chars (${Math.round(agora() - inicio)}ms)`)
       const chaves = findValidNfeKeys(texto)
-      if (chaves.length) return { chaves, candidataInvalidaEncontrada: false }
+      if (chaves.length) {
+        console.log(`[NFe] Chave encontrada por OCR na região "${variant.label}".`)
+        devLogGroup('OCR', tentativas)
+        return { chaves, candidataInvalidaEncontrada: false }
+      }
       if (encontrouSequenciaDe44Digitos(texto)) candidataInvalidaEncontrada = true
     } catch (err) {
       logUnexpectedError(`reconhecer região "${variant.label}"`, err)
+      tentativas.push(`${variant.label}: erro`)
     }
   }
 
   console.log('[NFe] OCR não encontrou uma chave válida em nenhuma região tentada.')
+  devLogGroup('OCR', tentativas)
   return { chaves: [], candidataInvalidaEncontrada }
 }
 

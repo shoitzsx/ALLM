@@ -81,6 +81,27 @@ test('findValidNfeKeys nunca aceita 44 dígitos sem dígito verificador válido'
   assert.deepEqual(findValidNfeKeys(digitosSemDvValido), [])
 })
 
+// --- Priorização por rótulo "CHAVE DE ACESSO" (extração, não validação) ---
+
+const CHAVE_REAL_DANFE_WGS = '43240104994734000518550020000398041864220514'
+const BLOCO_CHAVE_REAL_DANFE_WGS = '4324 0104 9947 3400 0518 5500 2000 0398 0418 6422 0514'
+
+test('findValidNfeKeys reconstrói a chave real logo após o rótulo "CHAVE DE ACESSO" (caso real relatado)', () => {
+  const texto = `DANFE\nCHAVE DE ACESSO\n${BLOCO_CHAVE_REAL_DANFE_WGS}\nCNPJ: 04.994.734/0005-18`
+  assert.deepEqual(findValidNfeKeys(texto), [CHAVE_REAL_DANFE_WGS])
+})
+
+test('findValidNfeKeys sem o rótulo "CHAVE DE ACESSO" continua funcionando (nenhuma regressão)', () => {
+  assert.deepEqual(findValidNfeKeys(CHAVE_METALFORT_FORMATADA), [CHAVE_METALFORT])
+})
+
+test('findValidNfeKeys prioriza a chave perto do rótulo mesmo havendo outra chave válida distante no texto (números de outras áreas não ganham prioridade)', () => {
+  const texto = `Texto de rodapé qualquer, nada a ver. ${CHAVE_METALFORT_FORMATADA} mais texto solto.\n\nCHAVE DE ACESSO\n${BLOCO_CHAVE_REAL_DANFE_WGS}`
+  const encontradas = findValidNfeKeys(texto)
+  assert.equal(encontradas[0], CHAVE_REAL_DANFE_WGS, 'a chave perto do rótulo vem primeiro')
+  assert.ok(encontradas.includes(CHAVE_METALFORT), 'mas a outra chave válida do texto não é descartada, só desempatada depois')
+})
+
 test('findValidNfeKeys deduplica a mesma chave repetida no texto', () => {
   const textoComRepeticao = `Via 1: ${CHAVE_METALFORT} ... Via 2 (canhoto): ${CHAVE_METALFORT}`
   assert.deepEqual(findValidNfeKeys(textoComRepeticao), [CHAVE_METALFORT])

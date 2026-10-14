@@ -146,13 +146,15 @@ export function interpretarChave(chaveRaw) {
  * tamanho: cada candidata é validada pelo DV antes de entrar no resultado.
  * Retorna as chaves válidas únicas, na ordem em que aparecem no texto.
  */
-export function findValidNfeKeys(texto) {
-  if (!texto) return []
-  // Uma "corrida" de dígitos com até um separador (espaço/tab/quebra de linha,
-  // ponto ou hífen) entre cada um — folga suficiente para chaves formatadas em
-  // blocos de 4, mas ainda restrita a dígito-separador-dígito-... (não pega
-  // frases inteiras cheias de números soltos).
-  const candidatos = texto.match(/(?:\d[\s.-]?){44,88}/g) || []
+// Uma "corrida" de dígitos com até um separador (espaço/tab/quebra de linha,
+// ponto ou hífen) entre cada um — folga suficiente para chaves formatadas em
+// blocos de 4, mas ainda restrita a dígito-separador-dígito-... (não pega
+// frases inteiras cheias de números soltos).
+const PADRAO_CORRIDA_DE_DIGITOS = /(?:\d[\s.-]?){44,88}/g
+
+/** Toda janela de 44 dígitos, dentro de cada "corrida" de dígitos do texto, que passa em validarChaveNFe (DV + semântica). Núcleo de findValidNfeKeys, sem a priorização de rótulo abaixo — usado também para buscar só dentro de um recorte de texto já restrito. */
+function buscarChavesValidasNoTexto(texto) {
+  const candidatos = texto.match(PADRAO_CORRIDA_DE_DIGITOS) || []
   const encontradas = new Set()
   for (const bruto of candidatos) {
     const limpo = normalizarChave(bruto)
@@ -162,6 +164,43 @@ export function findValidNfeKeys(texto) {
     }
   }
   return [...encontradas]
+}
+
+// Rótulo impresso no DANFE imediatamente antes da chave — só para PRIORIZAR
+// onde procurar primeiro, nunca para exigir (nem todo texto/OCR vai conter
+// isto limpo). Chave de acesso formatada em blocos de 4 com espaços tem ~54
+// caracteres; 160 dá folga para ruído de OCR entre o rótulo e os dígitos
+// sem chegar a abranger outras seções da página (datas, totais, telefone).
+const ROTULO_CHAVE_ACESSO = /chave\s+de\s+acesso/i
+const JANELA_APOS_ROTULO = 160
+
+/**
+ * Busca chaves de 44 dígitos válidas num texto livre (PDF ou OCR).
+ *
+ * Quando o texto contém o rótulo "CHAVE DE ACESSO", busca PRIMEIRO numa
+ * janela imediatamente após o rótulo — reduz o risco de colar dígitos de uma
+ * região totalmente diferente da página (data, totais, telefone) só porque
+ * ficaram "vizinhos" na mesma corrida de dígitos do texto corrido do OCR (foi
+ * assim que um falso positivo real se formou: o OCR perdeu parte da chave
+ * impressa e completou os 44 dígitos com números próximos no documento).
+ * Resultados perto do rótulo vêm primeiro; o restante do texto continua
+ * sendo buscado também (nunca perde uma chave válida que só apareça fora da
+ * janela) — a MESMA validação de sempre (validarChaveNFe), nunca mais
+ * permissiva, só reordenada por prioridade.
+ */
+export function findValidNfeKeys(texto) {
+  if (!texto) return []
+  const todasNoTexto = buscarChavesValidasNoTexto(texto)
+
+  const rotulo = ROTULO_CHAVE_ACESSO.exec(texto)
+  if (!rotulo) return todasNoTexto
+
+  const inicioJanela = rotulo.index + rotulo[0].length
+  const janela = texto.slice(inicioJanela, inicioJanela + JANELA_APOS_ROTULO)
+  const proximasDoRotulo = buscarChavesValidasNoTexto(janela)
+  if (!proximasDoRotulo.length) return todasNoTexto
+
+  return [...new Set([...proximasDoRotulo, ...todasNoTexto])]
 }
 
 /**

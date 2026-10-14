@@ -186,11 +186,13 @@ logo abaixo para o raciocínio e as evidências.
    navegador suportar `code_128` — sem crops nem rotações manuais, o próprio
    navegador decodifica. Depois, ZXing na **imagem inteira**, original +
    contraste, 4 rotações cardeais (0°/90°/180°/270°).
-2. **Recortes de página inteira** (`CROP_VARIANTS`, `barcodeReader.js`): topo
-   25%, topo 35%, topo direito, topo esquerdo, metade superior — para fotos da
-   NF inteira, onde o código de barras é só uma faixa pequena da imagem
-   ("página inteira" já foi coberta no Estágio 1, não se repete aqui). Cada
-   recorte, original + contraste, 4 rotações.
+2. **Recortes de página inteira** (`CROP_VARIANTS`, `barcodeReader.js` —
+   geometria em `pageRegions.js`): **topo direito** primeiro (onde o DANFE
+   costuma posicionar o código de barras e a chave), depois topo 25%, topo
+   35%, topo esquerdo, metade superior — para fotos da NF inteira, onde o
+   código de barras é só uma faixa pequena da imagem ("página inteira" já
+   foi coberta no Estágio 1, não se repete aqui). Cada recorte, original +
+   contraste, 4 rotações.
 2b. **Margem artificial** (`padCanvasWithWhite`, `canvasUtils.js`): a imagem
    inteira com uma borda branca acrescentada (8% de cada lado) — recupera
    fotos em que o código foi enquadrado rente demais, sem quiet zone real
@@ -202,11 +204,16 @@ logo abaixo para o raciocínio e as evidências.
    recupera (e o que não recupera) na próxima seção.
 
 Um recorte/imagem com menos de `MIN_DECODE_WIDTH = 1200` px de largura é
-ampliado 2× (`upscaleCanvas`, com `imageSmoothingEnabled = false` para não
-borrar as barras finas) antes de qualquer tentativa. Cada tentativa
-individual é logada em `console.debug` e classificada via
+ampliado (`upscaleCanvas`, com `imageSmoothingEnabled = false` para não
+borrar as barras finas) antes de qualquer tentativa — com um fator
+calculado por `computeUpscaleFactor` (`canvasUtils.js`), de 2× a 3×
+conforme a largura, não um fator fixo: um recorte bem mais estreito que a
+imagem inteira (ex. "topo direito", ~65% da largura) ainda ficava abaixo do
+mínimo só dobrando. Cada tentativa individual é classificada via
 `onAttempt(outcome)` (`decodeDiagnostics.js`) — usado para instrumentação
-(nunca visível ao usuário; ver [Log de diagnóstico](#log-de-diagnóstico)).
+(nunca visível ao usuário) — mas só é **logada no console** em grupo, uma
+linha por estágio nomeado (não por rotação), e só em DEV; ver
+[Log de diagnóstico](#log-de-diagnóstico).
 
 ### Investigando a robustez do scanner (e de onde vieram os estágios)
 
@@ -264,10 +271,13 @@ mesmo canvas já obtido na etapa 2, sem renderizar nada de novo.
   `tessedit_pageseg_mode: PSM.SINGLE_BLOCK` — o OCR nem tenta reconhecer o
   resto do texto da nota, só o que poderia ser a chave. Isso acelera bastante
   o reconhecimento comparado a OCR de página inteira.
-- **2 regiões tentadas**, na ordem (`CROP_VARIANTS`, `ocrReader.js:38`): "topo
-  35%" primeiro (a chave costuma estar perto do código de barras, no topo),
-  depois "página inteira" como último recurso. Um recorte menor que
-  `MIN_OCR_WIDTH = 1400` px é ampliado 2×.
+- **3 regiões tentadas**, na ordem (`CROP_VARIANTS` = `OCR_CROP_ORDER`,
+  `pageRegions.js`): "topo direito" primeiro (mesma geometria do código de
+  barras — mais restrita que "topo 35%", logo com menos texto de outras
+  colunas da página misturado no reconhecimento), depois "topo 35%", depois
+  "página inteira" como último recurso. Um recorte menor que
+  `MIN_OCR_WIDTH = 1400` px é ampliado por `computeUpscaleFactor` (2× a 3×
+  conforme a largura, não fixo).
 - O texto reconhecido em cada tentativa passa pela **mesma**
   `findValidNfeKeys` usada para o texto do PDF — nenhuma chave é aceita só por
   ter "parecido" com 44 dígitos; o DV é sempre conferido.
@@ -773,14 +783,26 @@ benchmark:
 ## Log de diagnóstico
 
 Todo o pipeline loga no console do navegador com prefixo `[NFe]` — fluxo
-normal via `console.log`/`console.debug`, e qualquer erro inesperado (não o
-"não achei nada" esperado de uma tentativa) via `console.error` com
-`{ name, message, stack }` completos. Não há `catch {}` silencioso em nenhum
-ponto do pipeline: uma falha em uma etapa (ex. um recorte específico que não
-consegue rotacionar) só pula aquela tentativa e segue para a próxima, sempre
-com o motivo registrado. Isso foi decisão deliberada para que um problema em
-produção seja diagnosticável a partir do console, sem precisar reproduzir
-localmente.
+normal via `console.log`, e qualquer erro inesperado (não o "não achei nada"
+esperado de uma tentativa) via `console.error` com `{ name, message, stack }`
+completos. Não há `catch {}` silencioso em nenhum ponto do pipeline: uma
+falha em uma etapa (ex. um recorte específico que não consegue rotacionar)
+só pula aquela tentativa e segue para a próxima, sempre com o motivo
+registrado. Isso foi decisão deliberada para que um problema em produção
+seja diagnosticável a partir do console, sem precisar reproduzir localmente.
+
+**Resumo agrupado por estágio, só em DEV** (`devLog.js`, `devLogGroup`):
+antes, cada tentativa individual de recorte/rotação/contraste virava uma
+linha de `console.debug` própria — numa foto só, até ~115 linhas, quase
+todas o `NotFoundException` esperado (não um erro). Isso foi substituído por
+um `console.groupCollapsed('[NFe] Barcode:')`/`[NFe] OCR:` com uma linha por
+estágio NOMEADO (ex. `topo direito: falhou (42ms)`), em vez de uma por
+rotação — só quando `import.meta.env.DEV` é verdadeiro, nunca em produção.
+`NotFoundException` continua sendo tratada como o desfecho esperado da
+maioria das tentativas (silenciada, não escondida: ainda é contada por
+`onAttempt`/`decodeDiagnostics.js`) — só o `console.debug` por tentativa foi
+removido; qualquer erro genuinamente inesperado continua em
+`console.error`, sempre, independente de DEV.
 
 Além do log de fluxo, `decodeDiagnostics.js` classifica CADA tentativa de
 decodificação em um de cinco desfechos (não_encontrado/formato_errado/
