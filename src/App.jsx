@@ -76,6 +76,7 @@ import { clearPendingReceiptPrefill, peekPendingReceiptPrefill } from './feature
 import { attachmentDownloadHref } from './api.js'
 import { friendlyAttachmentError } from './features/attachments/errorMessages.js'
 import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile } from './features/attachments/constraints.js'
+import { LoginPage } from './features/auth/LoginPage.jsx'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
 // a quem abrir esta tela experimental. `receiptHandoff.js` acima é importado
@@ -1374,11 +1375,13 @@ function PendingPage({ store }) {
   )
 }
 
-export default function App() {
-  const route = useHashRoute()
+// Tudo que depende do domínio de Recebimentos (store, toasts das páginas
+// autenticadas, AppShell) vive aqui, não em App(). Assim useRecebimentosStore()
+// só é chamado quando esta função é efetivamente renderizada — ou seja, nunca
+// na rota /login. App() decide a rota antes de montar este componente.
+function AuthenticatedApp({ route, theme, toggleTheme }) {
   const store = useRecebimentosStore()
   const [toasts, setToasts] = useState([])
-  const { theme, toggleTheme } = useTheme()
 
   const pushToast = (title, message, type = 'success') => {
     const id = `${Date.now()}-${Math.random()}`
@@ -1430,4 +1433,25 @@ export default function App() {
       <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
     </>
   )
+}
+
+export default function App() {
+  const route = useHashRoute()
+  // useTheme fica aqui (fora de AuthenticatedApp) porque é infraestrutura
+  // global — aplica data-theme em document.documentElement independente da
+  // rota. auth.css depende disso para o modo escuro funcionar mesmo ao abrir
+  // /login direto, sem nunca ter passado pelo app autenticado.
+  const { theme, toggleTheme } = useTheme()
+
+  // Rota de preview/dev (#/login) — fora do AppShell de propósito (sem
+  // sidebar/topbar) e sem inicializar o domínio de recebimentos: AuthenticatedApp
+  // (onde mora useRecebimentosStore) só é montado no branch abaixo, então abrir
+  // /login direto nunca dispara o carregamento inicial de recebimentos. Nenhum
+  // guard, nenhum redirecionamento: é só uma tela isolada, acessada manualmente.
+  // Ver src/features/auth/.
+  if (route.path === ROUTES.login) {
+    return <LoginPage />
+  }
+
+  return <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />
 }

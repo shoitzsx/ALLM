@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import {
   DEMO_CURRENT_USER,
   DOCUMENT_TYPE_OPTIONS,
@@ -1013,6 +1013,16 @@ export function retryInitialLoad() {
  * Se filtros/paginação forem passados, o resultado derivado vem em `view`.
  */
 export function useRecebimentosStore(options = {}) {
+  // Inicialização do domínio amarrada ao hook, não ao import do módulo: a
+  // hidratação só começa quando algo realmente monta e lê o store (hoje,
+  // AuthenticatedApp). hydrateRecebimentosFromApi() já é idempotente (guarda
+  // em `initialHydration`), então chamadas repetidas — múltiplos componentes,
+  // remontagens, o double-invoke de efeitos do StrictMode em dev — nunca
+  // disparam um segundo fetch.
+  useEffect(() => {
+    void hydrateRecebimentosFromApi()
+  }, [])
+
   const snapshot = useSyncExternalStore(
     subscribeToRecebimentos,
     getStoreSnapshot,
@@ -1080,7 +1090,3 @@ export function useRecebimentosStore(options = {}) {
 
 export const useReceiptStore = useRecebimentosStore
 export default useRecebimentosStore
-
-if (typeof window !== 'undefined') {
-  void hydrateRecebimentosFromApi()
-}

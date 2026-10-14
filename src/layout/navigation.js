@@ -9,6 +9,10 @@ export const ROUTES = {
   nfeReader: '/leitura-automatica',
   portaria: '/portaria',
   visualizacao: '/visualizacao',
+  // Rota de preview/dev para a tela de login (ver src/features/auth/).
+  // Deliberadamente fora de NAV_ITEMS — não faz parte da navegação real
+  // ainda, só é acessada digitando #/login na URL.
+  login: '/login',
 }
 
 export const NAV_ITEMS = [
