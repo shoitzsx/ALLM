@@ -127,6 +127,10 @@ BEGIN
     UPDATE alm.recebimentos SET status='CONFERIDO_FINALIZADO' WHERE id=f::uuid;
     PERFORM pg_temp.ok('historico status preservado', EXISTS(SELECT 1 FROM alm.recebimento_status_historico WHERE recebimento_id=f::uuid AND status_novo='CONFERIDO_FINALIZADO'));
     PERFORM pg_temp.rejeita('edicao finalizado', format('UPDATE alm.recebimentos SET observacoes=%L WHERE id=%L','Alterada',f), 'P0001');
+    PERFORM pg_temp.rejeita('finalizado nao aceita exclusao logica',
+        format('UPDATE alm.recebimentos SET excluido_em=now(), excluido_por=%L, motivo_exclusao=%L WHERE id=%L',u,'Teste',f), 'P0001');
+    PERFORM pg_temp.rejeita('anexo de finalizado nao aceita exclusao logica',
+        format('UPDATE alm.arquivos SET excluido_em=now(), excluido_por=%L, motivo_exclusao=%L WHERE recebimento_id=%L',u,'Teste',f), 'P0001');
     PERFORM pg_temp.rejeita('reabrir e editar', format('UPDATE alm.recebimentos SET status=%L, numero_nf=%L WHERE id=%L','EM_CONFERENCIA','456',f), 'P0001');
     PERFORM pg_temp.rejeita('filho finalizado para aberto', format('UPDATE alm.recebimento_itens SET recebimento_id=%L, numero_item=99 WHERE recebimento_id=%L',b,f), 'P0001');
     PERFORM pg_temp.rejeita('filho aberto para finalizado', format('UPDATE alm.recebimento_itens SET recebimento_id=%L, numero_item=99 WHERE recebimento_id=%L AND excluido_em IS NULL',f,b), 'P0001');
