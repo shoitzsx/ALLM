@@ -59,6 +59,21 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
   prefixos temporais dos arquivos locais. Não executar `supabase db push`
   no staging até reconciliar explicitamente esse histórico.
 
+### Validacao manual simplificada (15/10/2026)
+
+- Adicionado `supabase/tests/testar-banco.sh`. O comando
+  `bash supabase/tests/testar-banco.sh` executa a suite completa no PGlite
+  e instala, se necessario, as dependencias em pasta temporaria fora do repo.
+- O disparo automatico por `push` foi removido do workflow
+  `.github/workflows/alm-database-ci.yml` enquanto a conta proprietaria
+  estiver bloqueada para GitHub Actions por faturamento.
+  `workflow_dispatch` permanece, mas tambem depende do desbloqueio.
+- Isso evita novas falhas automaticas em `push`, sem alterar os checks
+  antigos, sem simular aprovacao da CI e sem validar PostgreSQL 17 real.
+- Processo provisório: executar testes manuais antes de integrar
+  alteracoes de banco e registrar os resultados. PostgreSQL 17 real e
+  reconciliacao de historico seguem pendentes.
+
 ### Pendências para fechamento do MVP
 
 1. **Decidido e testado:** recebimento finalizado deve ser reaberto antes de exclusão/restauração lógica, sem exceção para perfis superiores; anexos de recebimento finalizado também são protegidos.
