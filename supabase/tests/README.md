@@ -39,6 +39,31 @@ Essa fixture é confirmada para permitir a disputa e removida ao final; o
 runner exige que o ano esteja vazio antes do teste. As demais fixtures SQL
 são revertidas. Sequences/identities podem avançar mesmo após ROLLBACK.
 
+
+## Supabase staging
+
+Para testar o projeto real `Almoxarifado ALM` sem expor a senha no histórico
+do terminal, use o modo `--staging`. O runner aceita somente o host fixo
+`db.uxfstabcpvmujvzijyqw.supabase.co` e o database `postgres`.
+
+No Git Bash:
+
+```bash
+npm.cmd install --prefix "$LOCALAPPDATA/Temp/opencode" libpg-query @electric-sql/pglite pg
+export ALM_DB_TEST_DEPS="$LOCALAPPDATA/Temp/opencode"
+read -s -p "Senha do banco Supabase: " ALM_STAGING_DB_PASSWORD
+echo
+export ALM_STAGING_DB_PASSWORD
+node supabase/tests/run-database.mjs --staging
+unset ALM_STAGING_DB_PASSWORD
+```
+
+A senha e digitada de forma oculta e nao deve ser enviada para o chat, salva no
+repositorio ou escrita diretamente na linha de comando. O modo staging nao
+aplica migrations. Ele roda a suite SQL dentro de transacao com ROLLBACK e,
+depois, abre duas conexoes PostgreSQL reais para disputar o numerador reservado
+`9997`. O runner exige que esse ano esteja vazio e remove a fixture ao final.
+
 ## Sintaxe
 
 O validador do projeto é `docs/alm2/sql/validate-sql.mjs`. Ele exige
