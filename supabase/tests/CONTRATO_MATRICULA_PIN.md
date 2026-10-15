@@ -1,6 +1,6 @@
 # ALM — contrato de integracao: matricula + PIN / PostgreSQL 17
 
-**Status:** preparacao de conexao (somente banco/documentacao). **Nao implantado.**
+**Status:** prova local de conexao tecnica **APROVADA** em 15/10/2026; criacao de credenciais no Supabase staging **NAO REALIZADA** (somente banco/documentacao nesta branch).
 **Escopo:** somente `supabase/` na branch `audit/alm-pin-login-pg17-20261015`.
 **Projeto de staging autorizado para consulta:** Almoxarifado ALM (`uxfstabcpvmujvzijyqw`).
 **Nao alterar:** backend, frontend, Supabase remoto, roles existentes ou credenciais reais nesta etapa.
@@ -39,7 +39,7 @@
 
 ## Precondicoes antes de integrar no backend
 
-- [ ] Prova local de login tecnico, `SET LOCAL ROLE`, RLS e separacao API/job aprovada.
+- [x] Prova local de login tecnico e `SET LOCAL ROLE` para API/job aprovada; acessos indevidos negados. RLS tambem coberta na suite anterior de 137 testes PostgreSQL 17.
 - [ ] Politicas de comprimento do PIN, bloqueio, expiracao e recuperacao aprovadas pela equipe.
 - [ ] Credenciais tecnicas reais criadas **somente apos autorizacao especifica**, com backup e plano de revogacao.
 - [ ] Conexao real no Supabase com usuario customizado e Supavisor validada com `SELECT session_user,current_user` (nao divulgar segredos).
@@ -70,5 +70,5 @@ node supabase/tests/test-role-login.mjs
 unset PGPASSWORD ALM_LOCAL_DATABASE_URL
 ```
 
-**Resultado esperado:** prova dos dois logins aprovada e logins temporarios apagados.
-Nenhum dado de negocio sera gravado. Se o teste falhar, nao avancar para staging.
+**Execucao registrada em 15/10/2026:** prova aprovada em PostgreSQL 17.11 local, com logs `NEGADO CORRETAMENTE` antes do `SET ROLE`, `APROVADO` para `alm_api` e `alm_job`, e negacao da leitura de PIN e `token_hash` ao job. Nenhum erro de limpeza apareceu no resultado; a verificacao independente do catalogo de roles temporarias permanece opcional.
+Nenhum dado de negocio foi gravado. **Nao equivale a autenticacao PIN implementada no backend nem valida conectividade com Supavisor remoto.**
