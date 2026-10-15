@@ -1,4 +1,4 @@
--- Executar depois das tres migrations. Fixtures e funcoes temporarias: ROLLBACK.
+-- Executar depois das migrations. Fixtures e funcoes temporarias: ROLLBACK.
 BEGIN;
 SELECT set_config('app.ator_sistema', 'test:database', true);
 SELECT set_config('app.request_id', '00000000-0000-0000-0000-000000000099', true);
@@ -187,7 +187,66 @@ BEGIN
         PERFORM pg_temp.rejeita('portaria NF vazia '||length(s),format('INSERT INTO alm.chegadas_portaria (numero_nf,cnpj_emitente,metodo_leitura,criado_por,alterado_por) VALUES (%L,''12345678901234'',''MANUAL'',''00000000-0000-0000-0000-000000000001'',''00000000-0000-0000-0000-000000000001'')',s),'23514');
     END LOOP;
 END;
-$$;
+$;
+
+-- Contrato atomico CHG -> REC: 1:1, autoria pelo contexto e retry idempotente.
+DO $
+DECLARE
+    u constant uuid := '00000000-0000-0000-0000-000000000001';
+    c constant uuid := '00000000-0000-0000-0000-000000000060';
+    c2 constant uuid := '00000000-0000-0000-0000-000000000061';
+    r1 record;
+    r2 record;
+    v_erro text;
+BEGIN
+    PERFORM set_config('app.ator_sistema','',true);
+    PERFORM set_config('app.usuario_id',u::text,true);
+
+    INSERT INTO alm.chegadas_portaria (
+        id,nfe_chave_acesso,metodo_leitura,confianca,criado_por,alterado_por
+    ) VALUES (
+        c,'98765432109876543210987654321098765432109876',
+        'MANUAL','MANUAL',u,u
+    );
+
+    SELECT * INTO r1 FROM alm.criar_recebimento_da_chegada(c);
+    SELECT * INTO r2 FROM alm.criar_recebimento_da_chegada(c);
+
+    PERFORM pg_temp.ok('CHG cria REC atomico', r1.recebimento_id IS NOT NULL AND NOT r1.reutilizado);
+    PERFORM pg_temp.ok('CHG fica vinculada', EXISTS(
+        SELECT 1 FROM alm.chegadas_portaria
+        WHERE id=c AND status='VINCULADA'
+          AND recebimento_id=r1.recebimento_id
+          AND vinculada_por=u AND vinculada_em IS NOT NULL
+    ));
+    PERFORM pg_temp.ok('CHG copia chave NF-e para REC', EXISTS(
+        SELECT 1 FROM alm.recebimentos
+        WHERE id=r1.recebimento_id
+          AND nfe_chave_acesso='98765432109876543210987654321098765432109876'
+    ));
+    PERFORM pg_temp.ok('retry CHG retorna mesmo REC',
+        r2.recebimento_id = r1.recebimento_id AND r2.reutilizado);
+
+    INSERT INTO alm.chegadas_portaria (
+        id,numero_nf,cnpj_emitente,metodo_leitura,criado_por,alterado_por
+    ) VALUES (c2,'999','12345678901234','MANUAL',u,u);
+
+    BEGIN
+        UPDATE alm.chegadas_portaria
+           SET status='VINCULADA',
+               recebimento_id=r1.recebimento_id,
+               vinculada_em=clock_timestamp(),
+               vinculada_por=u
+         WHERE id=c2;
+    EXCEPTION WHEN unique_violation THEN
+        v_erro := SQLSTATE;
+    END;
+    PERFORM pg_temp.ok('REC nao aceita segunda CHG', v_erro='23505');
+
+    PERFORM set_config('app.usuario_id','',true);
+    PERFORM set_config('app.ator_sistema','test:database',true);
+END;
+$;
 
 SET LOCAL ROLE alm_api;
 SELECT alm.proximo_codigo_recebimento(9998::smallint);
