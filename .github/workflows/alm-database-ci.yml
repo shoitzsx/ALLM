@@ -1,13 +1,9 @@
 name: ALM Database - instalacao limpa PG17
 
+# Execucao automatica pausada: GitHub Actions do repositorio bloqueado
+# por faturamento. Manter possibilidade de disparo manual quando regularizado.
+# Enquanto isso: bash supabase/tests/testar-banco.sh (Git Bash, testes em memoria).
 on:
-  push:
-    branches: [supabase-kobner-clean]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/tests/**"
-      - "ARQUITETURA_TECNICA_ALM.md"
-      - ".github/workflows/alm-database-ci.yml"
   workflow_dispatch:
 
 permissions:
