@@ -1,3 +1,42 @@
+# Revisão das migrations ALM — status consolidado 15/10/2026
+
+## Estado atual
+
+Esta seção substitui o status operacional das rodadas históricas abaixo.
+
+- Branch atual: `supabase-kobner-clean`.
+- Staging real Supabase: `Almoxarifado ALM` (`uxfstabcpvmujvzijyqw`), PostgreSQL 17.11.
+- 28 tabelas em `alm`; 28 com RLS ativa; 28 policies técnicas.
+- Security Advisor: **0 alertas**.
+- Todas as funções do schema `alm` têm `search_path` fixado.
+- `pgcrypto`, `pg_trgm` e `unaccent` estão no schema `extensions`.
+- Fluxo CHG -> REC atômico/idempotente aplicado, com unicidade CHG↔REC.
+- Suíte real de staging: **86 testes SQL aprovados**.
+- Concorrência real do numerador REC: **aprovada com duas conexões PostgreSQL**, com espera de lock e códigos distintos.
+- Índices prioritários do MVP adicionados em duas rodadas; os avisos restantes de FKs sem índice são informativos e devem ser tratados conforme uso real.
+- `SET ROLE alm_api/alm_job` não pode ser exercitado pelo usuário do Session pooler; grants continuam verificados por catálogo e o teste prático permanece reservado ao ambiente local/administrativo compatível.
+
+### Migrations atuais
+
+1. `20261007160000_alm_v1_base.sql`
+2. `20261007160100_alm2_delta.sql`
+3. `20261007160200_alm_integridade.sql`
+4. `20261015010000_alm_chg_rec_atomico.sql`
+5. `20261015012000_alm_function_search_path_hardening.sql`
+6. `20261015013000_alm_extensions_schema_hardening.sql`
+7. `20261015014500_alm_mvp_fk_indexes.sql`
+8. `20261015021500_alm_mvp_fk_indexes_round2.sql`
+
+### Pendências para fechamento do MVP
+
+1. Decisão de negócio: recebimento finalizado deve obrigatoriamente ser reaberto antes de exclusão/restauração lógica, ou perfis superiores terão exceção?
+2. Decisão de negócio: arquivo em estado `PURGADO` não possui mais bytes; definir formalmente que não pode ser restaurado logicamente como ativo sem novo upload/recuperação externa.
+3. Validar `alm_api` e `alm_job` com `SET ROLE` em ambiente que permita role switching.
+4. Antes da produção, aplicar as migrations do zero em banco limpo e conferir o histórico de migrations do ambiente alvo.
+5. Revisar novamente os índices após carga/uso real; não criar todos os índices sugeridos pelo linter sem evidência de consulta.
+
+---
+
 # Revisão das migrations ALM — 07/10/2026
 
 **Estado atual (rodada 2):** os seis achados abaixo foram corrigidos na
