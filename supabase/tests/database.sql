@@ -259,6 +259,43 @@ BEGIN
         SELECT NOT temporario FROM alm.credenciais_pin WHERE usuario_id=u::uuid
     ));
 
+    -- Sessoes: revogacao e limites continuam aplicaveis.
+    UPDATE alm.sessoes
+       SET revogada_em=clock_timestamp(), motivo_revogacao='MANUAL'
+     WHERE usuario_id=u::uuid;
+    PERFORM pg_temp.ok('sessao revogada permanece identificavel', EXISTS (
+        SELECT 1 FROM alm.sessoes
+        WHERE usuario_id=u::uuid AND revogada_em IS NOT NULL
+          AND motivo_revogacao='MANUAL'
+    ));
+    PERFORM pg_temp.rejeita('sessao sem janela minima ociosa',
+        format('UPDATE alm.sessoes SET ocioso_max_segundos=59 WHERE usuario_id=%L',u),
+        '23514');
+    PERFORM pg_temp.rejeita('sessao expira antes de criada',
+        format('UPDATE alm.sessoes SET expira_em=criada_em WHERE usuario_id=%L',u),
+        '23514');
+
+    -- Eventos de autenticacao sao append-only.
+    INSERT INTO alm.eventos_autenticacao
+        (tipo, usuario_id, matricula_informada, sucesso)
+    VALUES ('LOGIN_FALHA',u::uuid,'TEST001',false);
+    PERFORM pg_temp.rejeita('evento auth sem UPDATE',
+        'UPDATE alm.eventos_autenticacao SET sucesso=true', 'P0001');
+    PERFORM pg_temp.rejeita('evento auth sem DELETE',
+        'DELETE FROM alm.eventos_autenticacao', 'P0001');
+
+    -- Contrato existente da funcao: usuario inativo nao cria REC por CHG.
+    INSERT INTO alm.usuarios (id,nome,perfil,matricula,ativo)
+    VALUES ('00000000-0000-0000-0000-000000000090',
+            'Teste inativo','CONSULTA','TEST002',false);
+    PERFORM set_config('app.ator_sistema','',true);
+    PERFORM set_config('app.usuario_id','00000000-0000-0000-0000-000000000090',true);
+    PERFORM pg_temp.rejeita('usuario inativo nao cria REC por CHG',
+        'SELECT * FROM alm.criar_recebimento_da_chegada(''00000000-0000-0000-0000-000000000060''::uuid)',
+        'P0001');
+    PERFORM set_config('app.usuario_id','',true);
+    PERFORM set_config('app.ator_sistema','test:database',true);
+
     PERFORM pg_temp.ok('auditoria nova sem derivados', NOT EXISTS(SELECT 1 FROM alm.historico_alteracoes WHERE request_id='00000000-0000-0000-0000-000000000099' AND coalesce(dados_depois,'{}') ?| ARRAY['busca_fts','nome_busca','numero_nf_busca','pedido_busca','fornecedor_busca','codigo_produto_busca','descricao_busca']));
     PERFORM pg_temp.ok('default usuario novo', (SELECT NOT legado FROM alm.usuarios WHERE id=u::uuid));
     PERFORM pg_temp.rejeita('novo usuario sem matricula', 'INSERT INTO alm.usuarios (nome,perfil) VALUES (''Sem matricula'',''CONSULTA'')', '23514');
