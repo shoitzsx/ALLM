@@ -15,6 +15,31 @@ Compara também a base com os quatro blocos SQL da seção 3 e as cópias do del
 Executa `database.sql`, cuja transação termina em ROLLBACK. Os testes não
 executam serviços externos: nomes de tipos de evento/estado são dados SQL.
 
+## Comando unico recomendado (Git Bash)
+
+Para validar **todas as migrations do zero no PGlite** e executar a suite SQL,
+sem Docker, sem senha e sem acessar o Supabase:
+
+```bash
+bash supabase/tests/testar-banco.sh
+```
+
+O script reutiliza as dependencias temporarias de
+`$LOCALAPPDATA/Temp/opencode` quando presentes; se faltarem, instala as
+dependencias **fora do repositorio**. Falhas retornam codigo diferente de zero.
+Pode ser executado antes de um commit ou de integrar a branch.
+
+Este comando valida banco em memoria e **nao substitui**:
+- concorrencia real em duas conexoes (ja testada separadamente no staging);
+- instalacao limpa em PostgreSQL 17 real;
+- a revisao do historico de migrations do staging.
+
+O GitHub Actions automatico foi pausado enquanto a conta proprietaria
+apresenta bloqueio de faturamento. O arquivo
+`.github/workflows/alm-database-ci.yml` continua disponivel para execucao
+manual **somente quando o GitHub Actions for desbloqueado**. Checks antigos
+podem permanecer vermelhos, e esse ajuste nao os torna aprovados.
+
 ## Supabase local
 
 Com Docker Desktop em execução, na raiz do repositório:
@@ -97,9 +122,9 @@ um container **PostgreSQL 17 novo**, isolado do Supabase de staging. Ele:
    `SET LOCAL ROLE alm_api` e `alm_job`, RLS e concorrência em duas conexões.
 
 Esse fluxo **não acessa nem reseta o projeto Supabase**. A instalação
-limpa só pode ser considerada aprovada após uma execução bem-sucedida do
-workflow. Caso o GitHub Actions não inicie os passos por questão de runner
-ou configuração da conta, o resultado continua **pendente**.
+limpa em PostgreSQL 17 só pode ser considerada aprovada após uma execução
+bem-sucedida em ambiente descartável, seja no workflow (quando desbloqueado),
+seja em PostgreSQL local descartável. Até lá, o resultado continua **pendente**.
 
 Para reproduzir em um PostgreSQL local descartável, crie previamente um
 database vazio chamado `alm_ci_clean` e configure:
