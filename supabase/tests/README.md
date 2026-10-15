@@ -140,9 +140,33 @@ unset ALM_LOCAL_DATABASE_URL
 Não rode `apply-clean.mjs` em banco com dados: o script recusa hostname
 não local, nome de banco diferente e schema/roles já existentes.
 
-### Pendência de histórico do staging
+### Histórico do staging e revisão de segurança (15/10/2026)
 
-As versões registradas em `supabase_migrations.schema_migrations` no staging
-diferem dos prefixos dos nomes locais em alguns arquivos. Não usar
-`supabase db push`/reaplicação automática no staging até reconciliar o
-histórico. Essa reconciliação não faz parte do teste de instalação limpa.
+A reconciliação das 10 versões anteriores com `supabase_migrations.schema_migrations`
+no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
+A **11ª migration** `20261015030000_alm_seguranca_auth.sql` está na branch
+`audit/alm-seguranca-auth-20261015`, **não foi aplicada no staging** e ainda
+não tem validação PostgreSQL 17 local registrada. Os 119 testes aprovados
+anteriormente se referem às 10 migrations originais.
+
+A revisão adiciona regressões para:
+- `token_hash` de sessão com comprimento SHA-256 (32 bytes);
+- função de trigger sem `EXECUTE` por `PUBLIC`;
+- auditoria de PIN/algoritmo, expiração e bloqueio sem copiar hashes nem motivo;
+- alterações operacionais (contadores/login) sem gerar auditoria duplicada;
+- proibição de alterar metadados sensíveis sem ator transacional.
+
+**Para rodar os testes da branch de revisão no seu computador:**
+
+```bash
+git fetch origin
+git switch --track origin/audit/alm-seguranca-auth-20261015
+bash supabase/tests/testar-banco.sh
+```
+
+Depois do teste em PGlite, ainda é necessário aprovar uma instalação limpa
+**real PostgreSQL 17** em banco local descartável `alm_ci_clean`, com os
+scripts `apply-clean.mjs` e `run-database.mjs --local` documentados acima.
+O instalador recusa um banco que já tenha schema `alm`. Não executar
+`apply-clean.mjs` em bancos reais, em outras bases nem no Supabase staging.
+Não executar `supabase db push` até conclusão e aprovação da revisão.
