@@ -9,14 +9,20 @@ trigger, exige token de sessão SHA-256 com **32 bytes** e amplia a auditoria
 só de campos sensíveis de PIN e bloqueio, sem copiar o hash ou o texto do
 motivo. A suíte SQL de regressão foi ampliada na mesma branch.
 
-**Validação aprovada em 15/10/2026:** instalação das **11 migrations do zero
-no PGlite** e **137 testes SQL aprovados**. No PostgreSQL 17.11 local
-(`alm_ci_clean`, ambiente descartável), a 11ª migration foi aplicada
-**incrementalmente** sobre as 10 anteriores e foram aprovados **137 testes
-SQL**, inclusive papéis técnicos e **concorrência real entre duas conexões**.
-Isso **não equivale** a uma instalação limpa de 11 migrations no PostgreSQL
-17 real, que permanece validação complementar. A 11ª migration **não foi
-aplicada** no Supabase staging; o deploy exige autorização separada.
+**Validação completa aprovada em 15/10/2026:**
+- PGlite: **11/11 migrations instaladas do zero**, **137 testes SQL aprovados**.
+- PostgreSQL **17.11 real**, instância **isolada** em `127.0.0.1:55433`:
+  banco novo `alm_ci_clean`, **11/11 migrations instaladas do zero** via
+  `apply-clean.mjs`; **28 tabelas, RLS em 28, roles e usuário legado v1**
+  preservados. `run-database.mjs --local` aprovou **137 testes SQL** e
+  **concorrência real entre duas conexões**, com espera de lock e códigos
+  distintos; extensões `pg_trgm`, `pgcrypto` e `unaccent` em `extensions`.
+- Também foi aprovada a aplicação **incremental** da 11ª migration sobre o
+  banco local descartável anteriormente preparado.
+
+**Atenção:** a 11ª migration **não foi aplicada no Supabase staging**; sua
+implantação exige autorização separada. Teste local não substitui a
+verificação pós-deploy no staging.
 
 ## Estado atual
 
@@ -46,6 +52,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 8. `20261015021500_alm_mvp_fk_indexes_round2.sql`
 9. `20261015023000_alm_bloquear_restauracao_purgado.sql`
 10. `20261015024500_alm_extensions_role_usage.sql`
+11. `20261015030000_alm_seguranca_auth.sql` — validada localmente; pendente no staging
 
 ### Auditoria de instalação limpa (15/10/2026)
 
