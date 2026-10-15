@@ -8,6 +8,12 @@ alteração de backend/frontend, deploy Vercel ou dados de negócio.**
 **Situação:** acesso técnico pronto no staging. A autenticação de matrícula + PIN
 **não está implementada no backend**.
 
+**Arquitetura vigente (15/10/2026):** PostgreSQL/Supabase é a fonte oficial
+dos dados estruturados; Google Drive guarda bytes de anexos. Sheets é somente
+persistência legada a migrar, **sem espelho novo**. Frontend/backend serão
+desenvolvidos e testados localmente; **Vercel fica fora do escopo atual**.
+Ver `supabase/ARQUITETURA_ATUAL_2026-10-15.md`.
+
 ## Matriz de testes de conexão (evidência: saída de psql fornecida pelo operador)
 
 | Papel de conexão | Supavisor Session :5432 | Supavisor Transaction :6543 | Resultado |
@@ -61,10 +67,12 @@ escrita auditada e carga concorrente através do pooler) ainda não foi feita.
    **somente SHA-256 (32 bytes)** em `alm.sessoes`; cookie
    `HttpOnly; Secure; SameSite=Lax`; implementar validade absoluta,
    inatividade, revogação e logout. Tratar CSRF em endpoints mutáveis.
-4. Conectar somente no backend, usando TLS e segredo gerenciado. Para Vercel
-   Functions, começar a avaliação pelo **Supavisor Transaction pooler :6543**
-   (host copiado do Dashboard); jamais usar `postgres` ou `service_role`
-   como identidade de execução da API.
+4. Conectar somente no backend Node.js **em execução local**, usando TLS
+   e segredo gerenciado. Os modos **Supavisor Session :5432** e
+   **Transaction :6543** foram testados, mas a escolha depende de driver,
+   padrão de conexões e testes de carga reais — **não da Vercel**.
+   Usar host oficial copiado do Dashboard. Jamais usar `postgres` ou
+   `service_role` como identidade de execução da API.
 5. Toda operação que requer role técnica e trilha auditável deve usar **o
    mesmo cliente PostgreSQL e uma transação explícita**. Exemplo esquemático
    para operação de usuário *já autenticado*:
@@ -88,9 +96,13 @@ escrita auditada e carga concorrente através do pooler) ainda não foi feita.
    statements nomeados e testar compatibilidade do driver `pg`.
 7. Adaptar domínio atual: `USR-001` não é UUID; perfis de UI como
    `Administrador` devem ser mapeados aos valores SQL como
-   `ADMINISTRADOR`. Substituir o repositório Google Sheets por PostgreSQL
-   **apenas após testes e plano de migração de dados**. Google Drive pode
-   continuar para bytes de anexos, segundo arquitetura aprovada.
+   `ADMINISTRADOR`. **PostgreSQL/Supabase é a persistência principal
+   definida**, não uma opção futura. O backend atual ainda grava no Sheets;
+   substituí-lo pelo PostgreSQL mediante testes e plano de migração
+   preservando dados, sem criar espelho ou sincronização novos.
+   Google Drive permanece responsável pelos bytes de anexos; os metadados
+   e vínculos ficam no Supabase. A consulta tipo planilha no dashboard
+   será somente leitura, com exportação CSV pela aplicação.
 8. Não manter transação ou lock PostgreSQL aberto durante uploads ao Drive.
 
 ## Check-list de aceite antes de usar dados reais
