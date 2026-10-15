@@ -1,0 +1,50 @@
+name: ALM Database - instalacao limpa PG17
+
+# Execucao automatica pausada: GitHub Actions do repositorio bloqueado
+# por faturamento. Manter possibilidade de disparo manual quando regularizado.
+# Enquanto isso: bash supabase/tests/testar-banco.sh (Git Bash, testes em memoria).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-clean-install:
+    name: Migrations + RLS + roles + concorrencia
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: alm_ci_clean
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d alm_ci_clean"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ALM_DB_TEST_DEPS: /tmp/alm-db-deps
+      ALM_LOCAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/alm_ci_clean
+    steps:
+      - name: Checkout do projeto
+        uses: actions/checkout@v4
+
+      - name: Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Dependencias apenas para testes
+        run: npm install --prefix "$ALM_DB_TEST_DEPS" --no-save --no-audit --no-fund pg @electric-sql/pglite libpg-query
+
+      - name: Aplicar migrations do zero no PG17 isolado
+        run: node supabase/tests/apply-clean.mjs
+
+      - name: Testar SQL, SET ROLE real e concorrencia
+        run: node supabase/tests/run-database.mjs --local
