@@ -1,5 +1,19 @@
 # Testes de banco ALM
 
+> **Arquitetura vigente (15/10/2026):** PostgreSQL/Supabase é a fonte
+> principal dos dados operacionais; Sheets é legado do backend atual e não
+> deve receber novos espelhos, eventos ou jobs. O desenvolvimento é local;
+> Vercel não é requisito. Ver
+> `supabase/ARQUITETURA_ATUAL_2026-10-15.md`.
+>
+> A suíte `database.sql` ainda exercita `alm.espelho_sheets` e o tipo
+> `SHEETS_ESPELHO` por compatibilidade com a migration histórica já
+> aplicada. Isso **não representa decisão de manter Sheets**. Quando houver
+> migration autorizada para desativar/remover o legado, atualizar os testes
+> no mesmo PR, preservar `alm.outbox` para `DRIVE_*` e validar novamente
+> instalação limpa em PostgreSQL 17 local. Não alterar os testes
+> antecipadamente de forma a mascarar regressões no schema vigente.
+
 Requisitos: Node 24 e dependências `libpg-query`, `@electric-sql/pglite`, `pg`.
 Podem ser instaladas em uma pasta temporária, sem mudar os packages da aplicação:
 
