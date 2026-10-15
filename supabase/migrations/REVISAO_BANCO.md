@@ -1,5 +1,29 @@
 # Revisão das migrations ALM — status consolidado 15/10/2026
 
+## Atualização de infraestrutura: logins técnicos no staging (15/10/2026)
+
+Após autorização específica, foram criados **somente** `alm_runtime_api` e
+`alm_runtime_job` no Supabase **Almoxarifado ALM**
+(`uxfstabcpvmujvzijyqw`), inicialmente com **`PASSWORD NULL`**.
+A ferramenta registrou a operação como a **12ª entrada** do histórico:
+`20261015045033_alm_runtime_logins_bootstrap`. O SQL exato, sem senhas,
+está versionado em
+`supabase/infrastructure/20261015045033_alm_runtime_logins_bootstrap.sql`.
+As **11 migrations do domínio ALM** continuam inalteradas em
+`supabase/migrations/`; scripts de instalação limpa local não foram modificados.
+
+Verificações após criação: ambas roles `LOGIN NOINHERIT NOBYPASSRLS` sem
+`SUPERUSER` ou `CREATEROLE`, com `SET TRUE` exclusivamente para a role
+correspondente (`alm_api` ou `alm_job`), sem privilégios de schema herdados.
+Continuam 28 tabelas e 28 policies RLS, nenhum usuário/PIN/sessão cadastrados,
+Security Advisor com **0 alertas**.
+
+**Pendentes:** usuário deve configurar duas senhas distintas em canal privado;
+testar autenticação e `SET LOCAL ROLE` com Supavisor Session/Transaction.
+Nenhum backend, frontend, Vercel ou dado de negócio foi alterado.
+A autenticação funcional matrícula + PIN ainda não está implementada no backend.
+
+
 ## Hardening de segurança validado localmente (15/10/2026)
 
 Foi criada a
