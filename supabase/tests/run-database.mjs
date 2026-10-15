@@ -23,14 +23,33 @@ assert.equal(read('20261007160100_alm2_delta.sql').replace(/\r\n/g, '\n'),
   fs.readFileSync(path.join(here, '../../docs/alm2/sql/001_alm2_delta.sql'), 'utf8').replace(/\r\n/g, '\n'))
 let db
 let pool
-if (process.argv.includes('--local')) {
-  const url = new URL(process.env.ALM_LOCAL_DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')
-  if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('Somente banco LOCAL permitido')
+const localMode = process.argv.includes('--local')
+const stagingMode = process.argv.includes('--staging')
+if (localMode && stagingMode) throw new Error('Use apenas um modo: --local OU --staging')
+
+if (localMode || stagingMode) {
+  let url
+  if (localMode) {
+    url = new URL(process.env.ALM_LOCAL_DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')
+    if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('Somente banco LOCAL permitido em --local')
+  } else {
+    const expectedHost = 'db.uxfstabcpvmujvzijyqw.supabase.co'
+    const password = process.env.ALM_STAGING_DB_PASSWORD
+    if (!password) throw new Error('Defina ALM_STAGING_DB_PASSWORD sem colocar a senha no comando')
+    url = new URL('postgresql://postgres@' + expectedHost + ':5432/postgres')
+    url.password = password
+    url.searchParams.set('sslmode', 'require')
+    if (url.hostname !== expectedHost || url.pathname !== '/postgres') {
+      throw new Error('Destino de staging inesperado; teste abortado')
+    }
+  }
   const { Pool } = require('pg')
-  pool = new Pool({ connectionString: url.href, connectionTimeoutMillis: 5000, query_timeout: 15000 })
+  pool = new Pool({ connectionString: url.href, connectionTimeoutMillis: 10000, query_timeout: 20000 })
   const client = await pool.connect()
   db = { query: async sql => client.query(sql), close: async () => { client.release(); await pool.end() } }
-  console.log('LOCAL: migrations devem estar aplicadas por supabase db reset --local')
+  console.log(localMode
+    ? 'LOCAL: migrations devem estar aplicadas por supabase db reset --local'
+    : 'STAGING: Almoxarifado ALM; migrations ja devem estar aplicadas')
 } else {
   const { PGlite } = require('@electric-sql/pglite')
   const { pgcrypto } = require('@electric-sql/pglite/contrib/pgcrypto')
@@ -88,5 +107,5 @@ try {
       if (ownsFixture) await a.query('DELETE FROM alm.recebimento_numeradores WHERE ano=9997')
       a.release(); b.release()
     }
-  } else console.log('CONCORRENCIA REAL: pendente; PGlite usa uma conexao, execute --local')
+  } else console.log('CONCORRENCIA REAL: pendente; PGlite usa uma conexao, execute --local ou --staging')
 } finally { await db.close() }
