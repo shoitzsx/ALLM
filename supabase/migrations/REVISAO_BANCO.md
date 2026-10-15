@@ -18,10 +18,23 @@ correspondente (`alm_api` ou `alm_job`), sem privilégios de schema herdados.
 Continuam 28 tabelas e 28 policies RLS, nenhum usuário/PIN/sessão cadastrados,
 Security Advisor com **0 alertas**.
 
-**Pendentes:** usuário deve configurar duas senhas distintas em canal privado;
-testar autenticação e `SET LOCAL ROLE` com Supavisor Session/Transaction.
-Nenhum backend, frontend, Vercel ou dado de negócio foi alterado.
-A autenticação funcional matrícula + PIN ainda não está implementada no backend.
+**Conexões reais validadas após o bootstrap:** o operador configurou
+senhas distintas para os logins técnicos usando `psql \password` em canal
+privado, sem registrar credenciais no GitHub. As quatro provas por
+`psql` com `PGSSLMODE=require`, `BEGIN`, `SET LOCAL ROLE` e `ROLLBACK`
+foram aprovadas: API e JOB no **Supavisor Session :5432** e no
+**Supavisor Transaction :6543**. `session_user` e `current_user`
+corresponderam às identidades esperadas; a consulta de `alm.usuarios`
+retornou zero linhas, e `has_column_privilege` do job retornou
+`false` para `pin_hash` e `token_hash`. Essas últimas verificações
+foram feitas por metadados de permissão, não por uma leitura proibida
+direta no staging.
+
+**Pendentes:** autenticação real matrícula + PIN, sessões, autorização
+por usuário humano, escritas auditadas e testes de ponta a ponta no backend;
+testes de carga e concorrência através do pooler; nenhuma mudança na
+aplicação, frontend, Vercel ou dados de negócio foi feita nesta etapa.
+Documento para a equipe: `supabase/tests/HANDOFF_BACKEND_MATRICULA_PIN.md`.
 
 
 ## Hardening de segurança validado localmente (15/10/2026)
