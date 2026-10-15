@@ -34,7 +34,8 @@ const requiredMigrations = [
   '20261015014500_alm_mvp_fk_indexes.sql',
   '20261015021500_alm_mvp_fk_indexes_round2.sql',
   '20261015023000_alm_bloquear_restauracao_purgado.sql',
-  '20261015024500_alm_extensions_role_usage.sql'
+  '20261015024500_alm_extensions_role_usage.sql',
+  '20261015030000_alm_seguranca_auth.sql'
 ]
 for (const required of requiredMigrations) {
   if (!migrationNames.includes(required)) throw new Error('Migration obrigatoria ausente: ' + required)
