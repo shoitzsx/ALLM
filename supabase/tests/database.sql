@@ -173,6 +173,129 @@ BEGIN
     INSERT INTO alm.credenciais_pin (usuario_id,pin_hash,algoritmo) VALUES (u::uuid,'SEGREDO_PIN_TESTE','scrypt');
     INSERT INTO alm.sessoes (usuario_id,token_hash,ocioso_max_segundos,expira_em) VALUES (u::uuid,decode(repeat('ab',32),'hex'),1800,now()+interval '8 hours');
     PERFORM pg_temp.ok('auditoria sem hashes', NOT EXISTS(SELECT 1 FROM alm.historico_alteracoes WHERE coalesce(dados_antes,'{}') ?| ARRAY['pin_hash','token_hash'] OR coalesce(dados_depois,'{}') ?| ARRAY['pin_hash','token_hash'] OR coalesce(dados_depois,'{}')::text LIKE '%SEGREDO_PIN_TESTE%'));
+    -- Regressao de seguranca: PIN e sessoes, sem alterar o contrato do backend.
+    PERFORM pg_temp.ok('hash de sessao com 32 bytes', (
+        SELECT octet_length(token_hash)=32 FROM alm.sessoes WHERE usuario_id=u::uuid
+    ));
+    PERFORM pg_temp.ok('constraint hash de sessao validada', EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid='alm.sessoes'::regclass
+          AND conname='ck_sessoes_token_hash_32' AND convalidated
+    ));
+    PERFORM pg_temp.rejeita('token de sessao 1 byte negado',
+        format('INSERT INTO alm.sessoes(usuario_id,token_hash,ocioso_max_segundos,expira_em) VALUES (%L,decode(%L,%L),1800,now()+interval %L)',u,'aa','hex','8 hours'),
+        '23514');
+    PERFORM pg_temp.ok('funcao de trigger sem EXECUTE PUBLIC', NOT EXISTS (
+        SELECT 1 FROM pg_proc p
+        CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+        WHERE p.oid='alm.bloquear_restauracao_arquivo_purgado()'::regprocedure
+          AND acl.grantee=0 AND acl.privilege_type='EXECUTE'
+    ));
+    PERFORM pg_temp.ok('api nao executa diretamente trigger de purga',
+        NOT has_function_privilege('alm_api','alm.bloquear_restauracao_arquivo_purgado()','EXECUTE'));
+
+    -- Contadores, ultimo login e falha nao geram auditoria duplicada;
+    -- eventos de autenticacao sao registrados em sua tabela especifica.
+    SELECT count(*) INTO antes FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u;
+    UPDATE alm.credenciais_pin
+       SET falhas_consecutivas=1, ultima_falha_em=clock_timestamp(),
+           ultimo_login_em=clock_timestamp()
+     WHERE usuario_id=u::uuid;
+    PERFORM pg_temp.ok('contador e login nao geram auditoria duplicada', (
+        SELECT count(*)=antes FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u
+    ));
+
+    -- Troca de PIN/algoritmo e metadados deve auditar campos, jamais o hash.
+    UPDATE alm.credenciais_pin
+       SET pin_hash='SEGREDO_PIN_TROCADO', algoritmo='argon2id',
+           pepper_versao=2, temporario=false,
+           expira_em=clock_timestamp()+interval '30 days'
+     WHERE usuario_id=u::uuid;
+    PERFORM pg_temp.ok('troca PIN e algoritmo auditada', EXISTS (
+        SELECT 1 FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u
+          AND acao='ALTERACAO'
+          AND campos_alterados @> ARRAY['pin_hash','algoritmo','pepper_versao','temporario','expira_em']::text[]
+          AND dados_antes->>'algoritmo'='scrypt'
+          AND dados_depois->>'algoritmo'='argon2id'
+    ));
+    PERFORM pg_temp.ok('hash nunca copiado ao historico', NOT EXISTS (
+        SELECT 1 FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u
+          AND (coalesce(dados_antes,'{}'::jsonb) ? 'pin_hash'
+            OR coalesce(dados_depois,'{}'::jsonb) ? 'pin_hash'
+            OR coalesce(dados_antes,'{}'::jsonb)::text LIKE '%SEGREDO_PIN_%'
+            OR coalesce(dados_depois,'{}'::jsonb)::text LIKE '%SEGREDO_PIN_%')
+    ));
+
+    -- Bloqueio e motivo tambem geram trilha, mas o texto nao e copiado.
+    UPDATE alm.credenciais_pin
+       SET bloqueado_em=clock_timestamp(),
+           motivo_bloqueio='MOTIVO_SIGILOSO_TESTE'
+     WHERE usuario_id=u::uuid;
+    PERFORM pg_temp.ok('bloqueio de PIN auditado', EXISTS (
+        SELECT 1 FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u
+          AND acao='ALTERACAO'
+          AND campos_alterados @> ARRAY['bloqueado_em','motivo_bloqueio']::text[]
+          AND dados_depois->>'motivo_bloqueio_presente'='true'
+    ));
+    PERFORM pg_temp.ok('motivo sigiloso nao copiado ao historico', NOT EXISTS (
+        SELECT 1 FROM alm.historico_alteracoes
+        WHERE entidade='alm.credenciais_pin' AND entidade_id=u
+          AND (coalesce(dados_antes,'{}'::jsonb)::text LIKE '%MOTIVO_SIGILOSO_TESTE%'
+            OR coalesce(dados_depois,'{}'::jsonb)::text LIKE '%MOTIVO_SIGILOSO_TESTE%')
+    ));
+
+    -- Mutacao sensivel exige ator transacional de usuario ou sistema.
+    PERFORM set_config('app.ator_sistema','',true);
+    PERFORM pg_temp.rejeita('PIN sem ator nao altera metadados',
+        format('UPDATE alm.credenciais_pin SET temporario=true WHERE usuario_id=%L',u),
+        'P0001');
+    PERFORM set_config('app.ator_sistema','test:database',true);
+    PERFORM pg_temp.ok('PIN rejeitado sem ator mantem estado', (
+        SELECT NOT temporario FROM alm.credenciais_pin WHERE usuario_id=u::uuid
+    ));
+
+    -- Sessoes: revogacao e limites continuam aplicaveis.
+    UPDATE alm.sessoes
+       SET revogada_em=clock_timestamp(), motivo_revogacao='MANUAL'
+     WHERE usuario_id=u::uuid;
+    PERFORM pg_temp.ok('sessao revogada permanece identificavel', EXISTS (
+        SELECT 1 FROM alm.sessoes
+        WHERE usuario_id=u::uuid AND revogada_em IS NOT NULL
+          AND motivo_revogacao='MANUAL'
+    ));
+    PERFORM pg_temp.rejeita('sessao sem janela minima ociosa',
+        format('UPDATE alm.sessoes SET ocioso_max_segundos=59 WHERE usuario_id=%L',u),
+        '23514');
+    PERFORM pg_temp.rejeita('sessao expira antes de criada',
+        format('UPDATE alm.sessoes SET expira_em=criada_em WHERE usuario_id=%L',u),
+        '23514');
+
+    -- Eventos de autenticacao sao append-only.
+    INSERT INTO alm.eventos_autenticacao
+        (tipo, usuario_id, matricula_informada, sucesso)
+    VALUES ('LOGIN_FALHA',u::uuid,'TEST001',false);
+    PERFORM pg_temp.rejeita('evento auth sem UPDATE',
+        'UPDATE alm.eventos_autenticacao SET sucesso=true', 'P0001');
+    PERFORM pg_temp.rejeita('evento auth sem DELETE',
+        'DELETE FROM alm.eventos_autenticacao', 'P0001');
+
+    -- Contrato existente da funcao: usuario inativo nao cria REC por CHG.
+    INSERT INTO alm.usuarios (id,nome,perfil,matricula,ativo)
+    VALUES ('00000000-0000-0000-0000-000000000090',
+            'Teste inativo','CONSULTA','TEST002',false);
+    PERFORM set_config('app.ator_sistema','',true);
+    PERFORM set_config('app.usuario_id','00000000-0000-0000-0000-000000000090',true);
+    PERFORM pg_temp.rejeita('usuario inativo nao cria REC por CHG',
+        'SELECT * FROM alm.criar_recebimento_da_chegada(''00000000-0000-0000-0000-000000000060''::uuid)',
+        'P0001');
+    PERFORM set_config('app.usuario_id','',true);
+    PERFORM set_config('app.ator_sistema','test:database',true);
+
     PERFORM pg_temp.ok('auditoria nova sem derivados', NOT EXISTS(SELECT 1 FROM alm.historico_alteracoes WHERE request_id='00000000-0000-0000-0000-000000000099' AND coalesce(dados_depois,'{}') ?| ARRAY['busca_fts','nome_busca','numero_nf_busca','pedido_busca','fornecedor_busca','codigo_produto_busca','descricao_busca']));
     PERFORM pg_temp.ok('default usuario novo', (SELECT NOT legado FROM alm.usuarios WHERE id=u::uuid));
     PERFORM pg_temp.rejeita('novo usuario sem matricula', 'INSERT INTO alm.usuarios (nome,perfil) VALUES (''Sem matricula'',''CONSULTA'')', '23514');

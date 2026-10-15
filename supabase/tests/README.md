@@ -140,9 +140,36 @@ unset ALM_LOCAL_DATABASE_URL
 Não rode `apply-clean.mjs` em banco com dados: o script recusa hostname
 não local, nome de banco diferente e schema/roles já existentes.
 
-### Pendência de histórico do staging
+### Histórico do staging e revisão de segurança (15/10/2026)
 
-As versões registradas em `supabase_migrations.schema_migrations` no staging
-diferem dos prefixos dos nomes locais em alguns arquivos. Não usar
-`supabase db push`/reaplicação automática no staging até reconciliar o
-histórico. Essa reconciliação não faz parte do teste de instalação limpa.
+A reconciliação das 10 versões anteriores com `supabase_migrations.schema_migrations`
+no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
+A **11ª migration** `20261015030000_alm_seguranca_auth.sql` já foi
+validada localmente, mas **não foi aplicada no staging**.
+Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)** e
+**137 testes SQL**. No PostgreSQL 17.11 local descartável, a migration nova
+foi aplicada **incrementalmente** sobre a instalação anterior, e novamente
+**137 testes SQL mais concorrência real** foram aprovados. Falta apenas,
+como validação complementar, a instalação limpa das 11 migrations em um
+PostgreSQL 17 real vazio. Os 119 testes anteriores correspondiam às 10
+migrations originais.
+
+A revisão adiciona regressões para:
+- `token_hash` de sessão com comprimento SHA-256 (32 bytes);
+- função de trigger sem `EXECUTE` por `PUBLIC`;
+- auditoria de PIN/algoritmo, expiração e bloqueio sem copiar hashes nem motivo;
+- alterações operacionais (contadores/login) sem gerar auditoria duplicada;
+- proibição de alterar metadados sensíveis sem ator transacional.
+
+**Para executar a suíte da branch atual no seu computador:**
+
+```bash
+bash supabase/tests/testar-banco.sh
+```
+
+Uma instalação limpa das 11 migrations em **PostgreSQL 17 real** segue como
+validação complementar, com os scripts `apply-clean.mjs` e
+`run-database.mjs --local` documentados acima.
+O instalador recusa um banco que já tenha schema `alm`. Não executar
+`apply-clean.mjs` em bancos reais, em outras bases nem no Supabase staging.
+Não executar `supabase db push` até conclusão e aprovação da revisão.
