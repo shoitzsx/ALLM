@@ -2,9 +2,10 @@
 
 **Estado em 15/10/2026:** criacao dos dois logins tecnicos **APROVADA e EXECUTADA**
 no projeto `Almoxarifado ALM` (`uxfstabcpvmujvzijyqw`).
-Ambos foram criados com `PASSWORD NULL`, portanto **ainda nao autenticam
-por senha**; credenciais privadas e teste de conexao real com Supavisor
-**PENDENTES**. Esta nota nao contem credenciais.
+Ambos foram criados originalmente com `PASSWORD NULL`. Depois, o
+operador configurou senhas distintas de forma interativa via `psql \password`
+e comprovou autenticação real pelos poolers **Session :5432** e
+**Transaction :6543** para API e JOB. Nenhuma senha consta nesta nota.
 
 A ferramenta Supabase registrou a operacao como migration
 `20261015045033_alm_runtime_logins_bootstrap`. O SQL exato consta em
@@ -34,22 +35,22 @@ nao modificar a instalacao limpa local. O historico remoto tem agora 12 entradas
 
 1. **Concluido:** confirmados projeto, roles, memberships e historico; criados
    apenas `alm_runtime_api` e `alm_runtime_job`.
-2. **Pendente:** guardar senhas fortes e diferentes no gerenciador de segredos.
-   Nao passar
-   senhas na linha de comando, no Git, em tickets, em prints ou neste chat.
-3. Obter o host oficial do Supavisor em **Connect** no dashboard, sem inventar
-   nome de host. Para teste: modo Session na porta **5432**; para avaliacao
-   serverless depois: modo Transaction na **6543**.
-4. Testar autenticacao do login personalizado no pooler; nomes de usuario
-   customizados devem seguir a sintaxe exibida no Dashboard/Supavisor.
-   Nao presumir que uma conexao direta aprovada implica pooler aprovado.
+2. **Concluido:** o operador configurou senhas distintas no `psql \password`
+   e autenticou ambas as contas sem informar os segredos nesta conversa.
+   **Confirmar que as senhas estejam guardadas** no gerenciador de segredos;
+   não inserir senha em CLI, Git, tickets, prints ou frontend.
+3. **Concluido:** obtido host do Supavisor pelo Dashboard; validada conexão
+   criptografada via Session na porta **5432**.
+4. **Concluido:** logins personalizados API e JOB validaram `SET LOCAL ROLE`
+   também no modo Transaction na porta **6543**.
+   Ainda pendem testes E2E, concorrencia sob carga e integraçao da aplicação.
 
 ## DDL aplicada — APENAS REFERENCIA, NAO REEXECUTAR
 
 Esses comandos ja foram executados por meio da ferramenta de migration
 com guards preventivos e `PASSWORD NULL`. **Nao executar novamente**.
-As senhas serao configuradas separadamente de forma privada no `psql`, e
-nao serao adicionadas a migrations ou ao historico Git.
+As senhas foram configuradas separadamente, de forma privada, no `psql`,
+sem serem adicionadas a migrations ou ao historico Git.
 
 ```sql
 -- REFERENCIA DO ESTADO JA APLICADO; NAO EXECUTAR NOVAMENTE.
@@ -67,16 +68,42 @@ GRANT alm_job TO alm_runtime_job
   WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 ```
 
-Com `psql` conectado ao staging, rodar separadamente:
+Com `psql` conectado ao staging, **os seguintes comandos ja foram
+executados** pelo operador (nao precisam ser repetidos):
 
 ```text
 \password alm_runtime_api
 \password alm_runtime_job
 ```
 
-O comando `\password` coleta o segredo interativamente e pode aplicar
-hash no cliente; nunca ecoar ou versionar as senhas. Enquanto
-`PASSWORD NULL`, o login nao autentica via senha.
+O comando `\password` coletou as senhas sem expor o texto no GitHub.
+O `PASSWORD NULL` descrito no SQL acima representa **somente o estado do
+bootstrap**, não o estado atual. Os dois logins ja autenticaram no staging.
+
+## Evidencias dos testes reais (15/10/2026)
+
+Todos os quatro testes foram executados pelo operador com `psql`,
+`PGSSLMODE=require`, conexoes autenticadas pelos usernames personalizados
+na forma `role.project-ref` e cada consulta em
+`BEGIN; SET LOCAL ROLE ...; ...; ROLLBACK;`:
+
+| Login tecnico | Session :5432 | Transaction :6543 | Identidade dentro da transacao |
+|---|---|---|---|
+| `alm_runtime_api` | PASSOU | PASSOU | `session_user=alm_runtime_api`, `current_user=alm_api` |
+| `alm_runtime_job` | PASSOU | PASSOU | `session_user=alm_runtime_job`, `current_user=alm_job` |
+
+API: `SELECT count(*) FROM alm.usuarios` retornou `0` nos dois modos.
+JOB: `SELECT id, ultimo_uso_em FROM alm.sessoes LIMIT 1` retornou 0
+linhas; `has_column_privilege(..., 'pin_hash', 'SELECT')` e
+`has_column_privilege(..., 'token_hash', 'SELECT')` retornaram `false`
+nos dois modos. Todos os testes encerraram com `ROLLBACK`, sem erros.
+O banco nao recebeu dados de negocio nesses testes.
+
+**Limite da evidência:** foi testada conectividade e identidade de role,
+não um fluxo funcional de matricula + PIN nem concorrência sob carga.
+A leitura direta dos campos proibidos foi efetivamente negada nos testes
+locais anteriores; no staging a negativa foi validada via
+`has_column_privilege`.
 
 ## Teste de privilegios apos autorizacao
 
