@@ -48,7 +48,7 @@ async function assertDenied(client, sql, label) {
 try {
   await admin.connect()
   const { rows: [p] } = await admin.query(String.raw`
-    SELECT current_database() AS db, inet_server_addr()::text AS addr,
+    SELECT current_database() AS db, host(inet_server_addr()) AS addr,
            inet_server_port() AS port, current_setting('server_version_num')::int AS version,
            (SELECT count(*) FROM pg_roles WHERE rolname IN ('alm_api','alm_job'))::int AS role_count,
            (SELECT count(*) FROM pg_roles WHERE rolname IN ('alm_ci_prova_login_api','alm_ci_prova_login_job'))::int AS temporary_roles,
