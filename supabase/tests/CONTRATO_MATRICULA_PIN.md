@@ -2,6 +2,10 @@
 
 **Status:** prova local **APROVADA**; logins técnicos provisionados no staging, senhas configuradas privadamente pelo operador e testes Supavisor **Session :5432 / Transaction :6543 APROVADOS para API e JOB**, em 15/10/2026. Integração funcional do backend e do login matrícula + PIN **PENDENTE**. Nenhuma credencial versionada.
 **Escopo:** somente `supabase/` na branch `audit/alm-pin-login-pg17-20261015`.
+**Decisão de arquitetura vigente:** Supabase/PostgreSQL é a persistência
+oficial; Sheets é legado em migração, Drive guarda bytes dos anexos; o
+desenvolvimento e a validação são locais. Vercel não é requisito atual.
+Ver `supabase/ARQUITETURA_ATUAL_2026-10-15.md`.
 **Projeto de staging validado:** Almoxarifado ALM (`uxfstabcpvmujvzijyqw`).
 **Escopo:** backend e frontend não alterados. Provisionamento de logins no Supabase ocorreu sob autorização específica; **não realizar novas mutações remotas sem nova aprovação**.
 
@@ -34,7 +38,7 @@
 - PostgreSQL 17 suporta `GRANT ... WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`; os dois grants corretos foram criados e comprovados com conexões reais nos dois modos do pooler. **Não reaplicar a DDL**; ver `supabase/tests/STAGING_LOGINS_RUNBOOK.md`.
 - Nunca dar `BYPASSRLS`, `CREATEROLE`, `SUPERUSER`, `OWNER`, `CREATE ON SCHEMA alm` ou privilégio de login direto nas tabelas.
 - Dentro de transacao, backend usa `SET LOCAL ROLE alm_api` ou `SET LOCAL ROLE alm_job` e volta ao estado normal automaticamente ao terminar `COMMIT`/`ROLLBACK`.
-- Armazenar conexoes de API e job **somente no servidor**, com TLS, limites de pool, timeout e rotacao. Para serverless, avaliar Supavisor **transaction mode** (:6543) e testar usuario customizado/papel no ambiente real. Nao presumir que Session pooler (:5432) e transaction pooler tenham mesmos detalhes de login.
+- Armazenar conexões de API e job **somente no servidor**, com TLS, limites de pool, timeout e rotação. O desenvolvimento deve funcionar com backend **local**, sem pressupor Vercel/serverless. Os modos Supavisor Session (:5432) e Transaction (:6543) foram aprovados nos testes técnicos com usuários customizados; escolher a conexão de execução após validar driver e carga reais.
 - A primeira prova e o script `supabase/tests/test-role-login.mjs`, **apenas em** `127.0.0.1:55433/alm_ci_clean`. Ele cria dois logins de teste com senhas aleatorias em memoria, verifica autenticacao e `SET LOCAL ROLE`, testa acesso permitido/negado e remove os logins. **Nao usar o script no Supabase remoto**.
 
 ## Precondicoes antes de integrar no backend
