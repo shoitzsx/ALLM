@@ -45,6 +45,11 @@ Criada em `20261015010000_alm_chg_rec_atomico.sql` como
 - **NÃO** preenche `pedido_compra`, `tipo_recebimento_id`,
   `recebido_em`, itens, anexos nem outros detalhes que não estavam na CHG.
   `fornecedor_id` só vem preenchido se a CHG tiver esse campo.
+- **Decisão ainda aberta:** como `recebido_em` inicialmente é NULL, o
+  trigger gera o ano do código REC a partir do relógio em
+  `America/Sao_Paulo`. Preencher `recebido_em` depois **não renumera**
+  o REC. Se o contrato exigir código no ano de uma chegada antiga,
+  aprovar antes uma alteração específica; não corrigir o código manualmente.
 - Atualiza CHG para `status='VINCULADA'`, define
   `recebimento_id`, `vinculada_em`, `vinculada_por` e `alterado_por`.
 - Retorna `reutilizado=false`.
@@ -107,11 +112,12 @@ SELECT * FROM alm.criar_recebimento_da_chegada($3::uuid);
 UPDATE alm.recebimentos
    SET pedido_compra = $4,
        tipo_recebimento_id = $5::smallint,
-       fornecedor_id = $6::uuid,
+       fornecedor_id = COALESCE($6::uuid, fornecedor_id),
        alterado_por = $1::uuid
  WHERE id = $recebimento_id
    AND status = 'EM_DIGITACAO'
-   AND excluido_em IS NULL;
+   AND excluido_em IS NULL
+   AND ($6::uuid IS NULL OR fornecedor_id IS NULL OR fornecedor_id = $6::uuid);
 -- Confirmar exatamente 1 linha afetada; se não, ROLLBACK.
 COMMIT;
 ```
