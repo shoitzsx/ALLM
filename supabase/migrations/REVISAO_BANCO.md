@@ -9,11 +9,15 @@ trigger, exige token de sessão SHA-256 com **32 bytes** e amplia a auditoria
 só de campos sensíveis de PIN e bloqueio, sem copiar o hash ou o texto do
 motivo. A suíte SQL de regressão foi ampliada na mesma branch.
 
-**Situação da validação:** ainda falta executar os novos testes no PostgreSQL
-17 local descartável. Os resultados históricos de 119 testes e instalação
-limpa referem-se às **10 migrations anteriores**. A 11ª migration **não foi
+**Validação aprovada em 15/10/2026:** instalação das **11 migrations do zero
+no PGlite** e **137 testes SQL aprovados**. No PostgreSQL 17.11 local
+(`alm_ci_clean`, ambiente descartável), a 11ª migration foi aplicada
+**incrementalmente** sobre as 10 anteriores e foram aprovados **137 testes
+SQL**, inclusive papéis técnicos e **concorrência real entre duas conexões**.
+Isso **não equivale** a uma instalação limpa de 11 migrations no PostgreSQL
+17 real, que permanece validação complementar. A 11ª migration **não foi
 aplicada** no Supabase staging nem incorporada na branch
-`supabase-kobner-clean`; o deploy deve aguardar os testes e a revisão.
+`supabase-kobner-clean`; o deploy exige autorização separada.
 
 ## Estado atual
 
