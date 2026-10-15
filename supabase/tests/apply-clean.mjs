@@ -24,7 +24,21 @@ const migrationNames = fs.readdirSync(migrationsDir)
   .filter(name => /^\d+.*\.sql$/.test(name))
   .sort()
 
-if (migrationNames.length < 9) throw new Error('Conjunto incompleto de migrations ALM')
+const requiredMigrations = [
+  '20261007160000_alm_v1_base.sql',
+  '20261007160100_alm2_delta.sql',
+  '20261007160200_alm_integridade.sql',
+  '20261015010000_alm_chg_rec_atomico.sql',
+  '20261015012000_alm_function_search_path_hardening.sql',
+  '20261015013000_alm_extensions_schema_hardening.sql',
+  '20261015014500_alm_mvp_fk_indexes.sql',
+  '20261015021500_alm_mvp_fk_indexes_round2.sql',
+  '20261015023000_alm_bloquear_restauracao_purgado.sql',
+  '20261015024500_alm_extensions_role_usage.sql'
+]
+for (const required of requiredMigrations) {
+  if (!migrationNames.includes(required)) throw new Error('Migration obrigatoria ausente: ' + required)
+}
 
 try {
   await client.connect()
