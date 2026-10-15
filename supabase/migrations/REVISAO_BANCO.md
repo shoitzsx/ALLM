@@ -20,9 +20,29 @@ motivo. A suíte SQL de regressão foi ampliada na mesma branch.
 - Também foi aprovada a aplicação **incremental** da 11ª migration sobre o
   banco local descartável anteriormente preparado.
 
-**Atenção:** a 11ª migration **não foi aplicada no Supabase staging**; sua
-implantação exige autorização separada. Teste local não substitui a
-verificação pós-deploy no staging.
+**Implantação no Supabase staging concluída em 15/10/2026** (projeto
+`Almoxarifado ALM`, ID `uxfstabcpvmujvzijyqw`, PostgreSQL 17.11):
+- Aplicada exclusivamente a migration `20261015030000_alm_seguranca_auth.sql`
+  com a ferramenta de migrations. O histórico gerado automaticamente recebeu
+  versão distinta; foi corrigido **somente o registro novo**, com validações
+  transacionais. Agora há **11/11 versões e nomes correspondentes ao GitHub**.
+- Backup **pontual pré-migration** (função original de auditoria, ACL de trigger,
+  contagens e histórico) e roteiro de rollback preservados fora do repositório.
+  Não constitui cópia `pg_dump` integral do banco.
+- Pré-validação: nenhuma sessão ou credencial PIN existente; 28 tabelas com RLS.
+- Pós-validação: **114 testes SQL aprovados no staging**, executados em
+  transação com `ROLLBACK`; os **23 testes restantes de role** foram
+  aprovados no PostgreSQL 17.11 local (total da suíte: **137**).
+- Concorrência real (duas conexões) aprovada anteriormente no staging e na
+  instalação limpa PostgreSQL 17.11 local.
+- Integridade: as **10 migrations anteriores intactas**, por versão e MD5
+  do SQL registrado; 11ª migration conferida por versão, nome e MD5;
+  28/28 tabelas com RLS; nenhuma sessão, PIN ou fixture de teste persistida;
+  `ck_sessoes_token_hash_32` validada; permissão `EXECUTE PUBLIC` revogada.
+- Security Advisor pós-migration: **0 alertas**.
+
+**Escopo restante:** integração real do backend, regras definitivas de PIN e
+sessão com a equipe e automação do GitHub Actions (ainda bloqueada).
 
 ## Estado atual
 
@@ -35,7 +55,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 - Todas as funções do schema `alm` têm `search_path` fixado.
 - `pgcrypto`, `pg_trgm` e `unaccent` estão no schema `extensions`.
 - Fluxo CHG -> REC atômico/idempotente aplicado, com unicidade CHG↔REC.
-- Suíte real de staging: **96 testes SQL aprovados**.
+- Suíte real de staging: **114 testes SQL aprovados** após a 11ª migration (96 no marco anterior).
 - Concorrência real do numerador REC: **aprovada com duas conexões PostgreSQL**, com espera de lock e códigos distintos.
 - Índices prioritários do MVP adicionados em duas rodadas; os avisos restantes de FKs sem índice são informativos e devem ser tratados conforme uso real.
 - No staging, o usuário do Session pooler não pode assumir `alm_api`/`alm_job`; **o teste prático de ambas as roles foi aprovado no PostgreSQL 17.11 local**, usando `SET LOCAL ROLE`.
@@ -52,7 +72,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 8. `20261015021500_alm_mvp_fk_indexes_round2.sql`
 9. `20261015023000_alm_bloquear_restauracao_purgado.sql`
 10. `20261015024500_alm_extensions_role_usage.sql`
-11. `20261015030000_alm_seguranca_auth.sql` — validada localmente; pendente no staging
+11. `20261015030000_alm_seguranca_auth.sql` — aplicada e verificada no staging
 
 ### Auditoria de instalação limpa (15/10/2026)
 
