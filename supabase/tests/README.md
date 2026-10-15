@@ -10,8 +10,7 @@ $env:ALM_DB_TEST_DEPS = 'C:\Users\kobne\AppData\Local\Temp\opencode'
 node supabase/tests/run-database.mjs
 ```
 
-O modo padrão cria PostgreSQL PGlite em memória, aplica base → delta →
-integridade, insere um usuário v1 entre base e delta e verifica sua preservação.
+O modo padrão cria PostgreSQL PGlite em memória, aplica base → delta → integridade → CHG/REC atomico, insere um usuário v1 entre base e delta e verifica sua preservação.
 Compara também a base com os quatro blocos SQL da seção 3 e as cópias do delta.
 Executa `database.sql`, cuja transação termina em ROLLBACK. Os testes não
 executam serviços externos: nomes de tipos de evento/estado são dados SQL.
@@ -45,7 +44,7 @@ são revertidas. Sequences/identities podem avançar mesmo após ROLLBACK.
 O validador do projeto é `docs/alm2/sql/validate-sql.mjs`. Ele exige
 `libpg-query` resolvível a partir da pasta do script. Conforme o seu cabeçalho,
 pode ser copiado para a pasta temporária das dependências e executado de lá
-com o caminho absoluto de cada SQL. Validar as três migrations e
+com o caminho absoluto de cada SQL. Validar todas as migrations e
 `supabase/tests/database.sql`.
 
 ## Limites
