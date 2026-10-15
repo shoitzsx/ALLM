@@ -8,6 +8,12 @@ LANGUAGE plpgsql
 SET search_path = pg_catalog, alm
 AS $$
 BEGIN
+    IF NEW.armazenamento_estado = 'PURGADO' AND NEW.excluido_em IS NULL THEN
+        RAISE EXCEPTION 'Arquivo PURGADO nao pode estar logicamente ativo; realize novo upload';
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN RETURN NEW; END IF;
+
     IF OLD.armazenamento_estado = 'PURGADO' THEN
         IF NEW.armazenamento_estado IS DISTINCT FROM 'PURGADO' THEN
             RAISE EXCEPTION 'Arquivo PURGADO nao pode voltar a estado fisico ativo; realize novo upload';
@@ -23,7 +29,7 @@ END;
 $$;
 
 CREATE TRIGGER trg_arquivo_zz_bloquear_restauracao_purgado
-BEFORE UPDATE ON alm.arquivos
+BEFORE INSERT OR UPDATE ON alm.arquivos
 FOR EACH ROW
 EXECUTE FUNCTION alm.bloquear_restauracao_arquivo_purgado();
 
