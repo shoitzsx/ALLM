@@ -68,6 +68,8 @@ if (localMode || stagingMode) {
   const { unaccent } = require('@electric-sql/pglite/contrib/unaccent')
   const { pg_trgm } = require('@electric-sql/pglite/contrib/pg_trgm')
   db = new PGlite({ extensions: { pgcrypto, unaccent, pg_trgm } })
+  // Em Supabase, o schema extensions ja existe no banco zerado.
+  await db.exec('CREATE SCHEMA IF NOT EXISTS extensions;')
   for (const name of names) {
     await db.exec(read(name))
     console.log('Migration OK:', name)
