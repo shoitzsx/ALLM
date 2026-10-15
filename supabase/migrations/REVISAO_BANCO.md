@@ -64,9 +64,11 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
   `unaccent` observadas em `extensions`.
   O GitHub Actions permanece bloqueado por faturamento, mas isso **não impede**
   considerar o teste local real aprovado.
-- O histórico de versões Supabase no staging não corresponde a todos os
-  prefixos temporais dos arquivos locais. Não executar `supabase db push`
-  no staging até reconciliar explicitamente esse histórico.
+- **Histórico de migrations reconciliado no staging em 15/10/2026:**
+  9 identificadores de versão foram alinhados aos arquivos locais;
+  `alm_integridade` já coincidia e foi preservada. As 10 versões,
+  nomes e checksums do SQL registrado foram conferidos após a transação.
+  Não houve reaplicação de migrations nem alteração do schema de negócio.
 
 ### Validacao manual simplificada (15/10/2026)
 
@@ -81,16 +83,40 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
   antigos ou simular aprovacao da CI. A instalação limpa com PostgreSQL 17
   real foi **aprovada manualmente**, conforme evidência acima.
 - Processo provisório: executar testes manuais antes de integrar
-  alteracoes de banco e registrar os resultados. **A reconciliação de
-  histórico de migrations no staging segue pendente**; não confundir
-  com a instalação limpa local já aprovada.
+  alteracoes de banco e registrar os resultados. A **reconciliação do
+  histórico no staging foi concluída**; a instalação limpa no PostgreSQL 17
+  local também está aprovada. A CI segue indisponível por faturamento.
+
+### Reconciliação do histórico do Supabase staging (15/10/2026)
+
+- Projeto **exclusivo**: `Almoxarifado ALM` (`uxfstabcpvmujvzijyqw`),
+  PostgreSQL 17.11. Nenhum outro projeto foi alterado.
+- Antes da intervenção: histórico com **10 registros**; **9 versões**
+  divergiam dos nomes versionados dos arquivos GitHub. O SQL armazenado
+  nesses nove registros era **exatamente igual** ao SQL versionado.
+- Backup externo **JSON e CSV dos 10 registros**, incluindo `statements`,
+  salvo e conferido por SHA-256 antes da alteração; manifesto e plano
+  de reversão mantidos fora do repositório.
+- `alm_integridade` já usava a versão `20261007160200`. Seu campo
+  `statements` contém uma anotação da aplicação manual; os objetos de
+  integridade relevantes foram verificados no catálogo, sem reaplicar SQL.
+- A intervenção **excepcional**, com autorização expressa, atualizou
+  **somente `version`** em 9 linhas da tabela interna
+  `supabase_migrations.schema_migrations`, dentro de transação,
+  com verificação prévia de contagem, nome e MD5 do SQL e validação posterior.
+  Não adotar alteração direta nessa tabela como fluxo regular de deploy.
+- Resultado remoto após COMMIT: **10/10 versões, nomes e MD5 conferidos;
+  zero divergências**, **28 tabelas** no schema `alm`, **28 com RLS**.
+  `statements` e `created_by` mantidos; nenhuma migration reaplicada.
+- A partir daqui, novas migrations devem seguir o fluxo versionado e o
+  histórico remoto deve ser conferido antes de qualquer `db push`.
 
 ### Pendências para fechamento do MVP
 
 1. **Decidido e testado:** recebimento finalizado deve ser reaberto antes de exclusão/restauração lógica, sem exceção para perfis superiores; anexos de recebimento finalizado também são protegidos.
 2. **Decidido e implementado:** arquivo em `PURGADO` não pode voltar ao estado físico anterior ou ser restaurado logicamente como ativo. Um novo upload deve criar um novo registro.
 3. **Concluído:** `alm_api` e `alm_job` validadas com `SET LOCAL ROLE` no PostgreSQL 17.11 local.
-4. **Concluído no ambiente local:** 10 migrations instaladas do zero. **Pendente para implantação:** reconciliar histórico de migrations do ambiente Supabase alvo antes de `db push` ou novas instalações gerenciadas.
+4. **Concluído:** 10 migrations instaladas do zero no PostgreSQL 17 local e 10/10 versões reconciliadas no Supabase staging. Antes de futuros `db push`, conferir o vínculo e o histórico do ambiente destino; esta validação não autoriza push em outros ambientes.
 5. Revisar novamente os índices após carga/uso real; não criar todos os índices sugeridos pelo linter sem evidência de consulta.
 
 ---
