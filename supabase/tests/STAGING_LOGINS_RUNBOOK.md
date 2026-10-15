@@ -1,49 +1,58 @@
-# ALM — plano de staging para logins tecnicos (sem execucao remota)
+# ALM — provisao e validacao de logins tecnicos no staging
 
-**Estado em 15/10/2026:** preflight de leitura **APROVADO**. Criacao de logins
-**NAO AUTORIZADA NEM EXECUTADA**. Esta nota nao contem credenciais.
+**Estado em 15/10/2026:** criacao dos dois logins tecnicos **APROVADA e EXECUTADA**
+no projeto `Almoxarifado ALM` (`uxfstabcpvmujvzijyqw`).
+Ambos foram criados com `PASSWORD NULL`, portanto **ainda nao autenticam
+por senha**; credenciais privadas e teste de conexao real com Supavisor
+**PENDENTES**. Esta nota nao contem credenciais.
+
+A ferramenta Supabase registrou a operacao como migration
+`20261015045033_alm_runtime_logins_bootstrap`. O SQL exato consta em
+`supabase/infrastructure/20261015045033_alm_runtime_logins_bootstrap.sql`,
+separado das **11 migrations de dominio** sob `supabase/migrations/` para
+nao modificar a instalacao limpa local. O historico remoto tem agora 12 entradas.
 
 ## Escopo e garantias
 
 - **Unico destino permitido:** Supabase `Almoxarifado ALM`, ID `uxfstabcpvmujvzijyqw`, PG 17.11.
 - **Nao tocar:** outros projetos Supabase; `backend/`, `src/`, Vercel, Google Sheets/Drive, registros de usuarios/PIN.
-- **Sem aplicar migration agora:** contas de conexao sao recursos de infraestrutura,
-  provisionados separadamente apos autorizacao explicita, com segredo em gerenciador seguro.
+- **Migration de infraestrutura aplicada e registrada em staging**: criadas duas roles
+  de login, sem senhas, e dois memberships com `SET TRUE`/`INHERIT FALSE`.
+  Nenhuma role de negocio nem tabela foi alterada; nao repetir essa DDL.
 - Roles de permissao preexistentes: `alm_api` e `alm_job`, ambas `NOLOGIN` e `NOBYPASSRLS`.
 - `postgres` tem membership com `ADMIN OPTION=true`, `INHERIT=false` e `SET=false`
   para ambas as roles (verificado no catalogo do staging). **Nao usar
   `SET ROLE` diretamente como `postgres` no runtime.**
-- O staging tinha 11 migrations, 28 tabelas e 28 policies; nenhuma linha em
-  `alm.usuarios`, `alm.credenciais_pin` ou `alm.sessoes`.
+- Antes da criacao, o staging tinha 11 migrations, 28 tabelas e 28 policies;
+  depois, 12 entradas no historico, as mesmas 28 tabelas e 28 policies.
+  Nao foram criados usuarios humanos, PINs ou sessoes.
 - Dois logins temporarios e `SET LOCAL ROLE` passaram no PostgreSQL 17.11
   local na porta 55433, com acessos proibidos negados; limpeza validada (0
   logins temporarios). **Isso nao prova conectividade via Supavisor.**
 
-## Contratos a validar ANTES de escrever no staging
+## Contratos restantes antes de habilitar os logins
 
-1. Confirmar o nome/ID do projeto no Dashboard e exportar snapshot de
-   `pg_roles`, `pg_auth_members` e privileges atuais (sem acessar senhas).
-2. Autorizar separadamente **somente** dois logins novos:
-   `alm_runtime_api` e `alm_runtime_job`.
-3. Guardar senhas fortes e diferentes no gerenciador de segredos. Nao passar
+1. **Concluido:** confirmados projeto, roles, memberships e historico; criados
+   apenas `alm_runtime_api` e `alm_runtime_job`.
+2. **Pendente:** guardar senhas fortes e diferentes no gerenciador de segredos.
+   Nao passar
    senhas na linha de comando, no Git, em tickets, em prints ou neste chat.
-4. Obter o host oficial do Supavisor em **Connect** no dashboard, sem inventar
+3. Obter o host oficial do Supavisor em **Connect** no dashboard, sem inventar
    nome de host. Para teste: modo Session na porta **5432**; para avaliacao
    serverless depois: modo Transaction na **6543**.
-5. Testar autenticação do login personalizado no pooler; nomes de usuario
+4. Testar autenticacao do login personalizado no pooler; nomes de usuario
    customizados devem seguir a sintaxe exibida no Dashboard/Supavisor.
    Nao presumir que uma conexao direta aprovada implica pooler aprovado.
 
-## DDL previsto — RASCUNHO, nao executar sem autorizacao nova
+## DDL aplicada — APENAS REFERENCIA, NAO REEXECUTAR
 
-Conectar via `psql` ao projeto de staging como operador administrativo
-autorizado. Validar `current_database()`, host do Dashboard e roles antes de
-criar contas. As senhas sao configuradas em **passo interativo separado** para
-nao entrarem na migration ou no historico Git.
+Esses comandos ja foram executados por meio da ferramenta de migration
+com guards preventivos e `PASSWORD NULL`. **Nao executar novamente**.
+As senhas serao configuradas separadamente de forma privada no `psql`, e
+nao serao adicionadas a migrations ou ao historico Git.
 
 ```sql
--- APENAS APLICAR DEPOIS DA CONFIRMACAO EXPLICITA DE EXECUCAO REMOTA.
--- psql em staging com o usuario administrativo autorizado.
+-- REFERENCIA DO ESTADO JA APLICADO; NAO EXECUTAR NOVAMENTE.
 CREATE ROLE alm_runtime_api LOGIN NOINHERIT NOSUPERUSER
   NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
   CONNECTION LIMIT 5 PASSWORD NULL;
