@@ -3,6 +3,8 @@
 **Data de conferência:** 15/10/2026.
 **Destino autorizado para revisão:** `main`. **Não fazer merge automático**.
 **Branch de origem:** `audit/alm-pin-login-pg17-20261015`.
+**Pull Request aberto:** [#2 — entrega consolidada do banco](https://github.com/shoitzsx/ALLM/pull/2), base `main`, sujeito à revisão da equipe.
+**Commit testado e apresentado na abertura do PR:** `8b92ba57330984160c4deff51b5055a3903c404e` (`8b92ba5`). A atualização deste checklist gera commit **posterior, apenas de documentação**, sem refazer o teste; portanto, não tratar os 137 testes como executados novamente nesse commit posterior.
 Este documento não aplica migrations nem altera dados.
 
 ## 1. Decisões confirmadas pela equipe
@@ -21,18 +23,23 @@ Este documento não aplica migrations nem altera dados.
   bootstrap do primeiro administrador são **pendências de negócio**.
 - Backend local pode começar validando Session pooler :5432;
   testar driver/carga antes de decisão definitiva.
+- Preview da Vercel criado automaticamente pela integração GitHub/Vercel
+  após o PR: **não** é validação do backend, autenticação ou banco e
+  **não** muda a decisão de desenvolver e validar localmente.
 
-## 2. Conferência do GitHub (registrada antes do PR)
+## 2. Conferência do GitHub e PR aberto
 
 | Comparação | Resultado observado |
 |---|---|
-| `main...` branch de auditoria | Branch de auditoria 71 commits à frente e 0 atrás na conferência de 15/10, **antes destes novos documentos** |
-| `supabase-kobner-clean...` auditoria | Auditoria 19 commits à frente e 0 atrás **antes destes novos documentos** |
-| Arquivos diff `main...` auditoria | Todos `supabase/`, com exceção apenas de `.github/workflows/alm-database-ci.yml` |
-| Pull Requests abertos ao conferir | Nenhum naquele instante |
+| `main...` branch de auditoria no commit `8b92ba5` | 78 commits à frente e 0 atrás na conferência de 15/10 |
+| `supabase-kobner-clean...` auditoria | A branch consolidada contém integralmente a base anterior; conferência antes dos contratos adicionais mostrou 19 commits à frente e 0 atrás |
+| Arquivos do diff no commit `8b92ba5` | 30 arquivos; somente `supabase/`, exceto `.github/workflows/alm-database-ci.yml` (autorizado) |
+| Pull Request | [#2](https://github.com/shoitzsx/ALLM/pull/2), aberto para revisão, `audit/alm-pin-login-pg17-20261015` → `main`; **sem merge** |
 
-Os números mudam após commits de documentação; **refazer a comparação
-no SHA final**, não copiar as contagens antigas para a descrição final.
+A comparação e os testes acima se referem ao commit `8b92ba5`.
+A alteração posterior deste próprio checklist não muda migrations,
+backend ou testes, mas altera o HEAD da branch; confirmar o diff do
+PR novamente antes do merge.
 
 ## 3. Migrations instaladas no staging (12 entradas confirmadas)
 
@@ -66,7 +73,7 @@ recriar logins por causa do merge do PR.** O backend que usar esse
 staging deve partir do estado já aplicado. A instalação em novo
 ambiente precisa de plano de bootstrap e credenciais próprias.
 
-## 4. Resultados anteriores verificados — não confundir com reteste final
+## 4. Teste final registrado e evidências anteriores
 
 - **137 testes SQL PostgreSQL 17 local** aprovados anteriormente.
 - **114 testes SQL no staging** aprovados anteriormente.
@@ -83,9 +90,27 @@ ambiente precisa de plano de bootstrap e credenciais próprias.
 - CI GitHub Actions **bloqueado por faturamento**; workflow manual
   não foi aprovado por execução no GitHub.
 
-**PENDENTE:** repetir a suíte local no commit final do PR e registrar
-saída exata. Adições de documentação não executam automaticamente
-qualquer teste. **Não marcar como concluído sem saída real.**
+**RETESTE CONCLUÍDO em 15/10/2026, commit `8b92ba5`, pelo operador
+no Git Bash (saída enviada à equipe):**
+
+- `git status --short`: saída vazia, antes do fast-forward.
+- `git pull --ff-only`: atualização até `8b92ba5`, sem conflitos.
+- `git log -1 --oneline`: confirma `8b92ba5` na branch local e remota.
+- `git diff --check main...HEAD`: nenhuma mensagem de erro.
+- `bash supabase/tests/testar-banco.sh`: **11 migrations de domínio OK**
+  em **PGlite 0.5.10 / PostgreSQL 18.6 (WASM)**; usuário v1
+  preservado, **137 testes SQL aprovados**, execução concluída com sucesso.
+- Aviso **não fatal**: referência opcional
+  `docs/alm2/sql/001_alm2_delta.sql` ausente na branch; comparação
+  adicional do delta foi ignorada.
+- **Limite desse reteste:** PGlite usa uma conexão; concorrência real,
+  instalação limpa em PostgreSQL 17 e teste E2E de backend **não**
+  foram repetidos neste commit. Permanecem evidências **anteriores**
+  distintas (PG17 local, 114 testes no staging, pooler).
+
+Este checklist foi atualizado após a abertura do PR, em commit
+**exclusivamente documental**. Não declarar o novo HEAD como tendo
+sido retestado até que exista saída real de novo teste.
 
 ## 5. Comandos para o operador executar localmente (Git Bash)
 
@@ -143,19 +168,23 @@ Nenhum item acima justifica **por si só** aplicar migration agora.
 Se uma decisão demandar mudança do schema, propor migration,
 impacto nos dados, teste local e rollback antes de qualquer execução.
 
-## 7. Checklist de liberação para criar o PR
+## 7. Checklist de entrega e revisão do PR #2
 
 - [x] Um único branch com base e auditoria; escopo de arquivos revisado
   na comparação anterior.
 - [x] Aprovação da equipe para workflow e manutenção do legado.
 - [x] Contratos SQL e pendências funcionais documentados.
 - [x] 12 migrations registradas no staging em conferência anterior.
-- [ ] Retestar commit final localmente e guardar saída.
-- [ ] Confirmar `git diff --check main...HEAD` e branch limpa no commit
-  final, sem arquivos adicionais fora do escopo.
-- [ ] Confirmar nova comparação `main...` branch, HEAD e inexistência
-  de PR duplicado.
-- [ ] Abrir **um único PR para revisão**, anexando diff, testes reais,
-  limitações do CI, migrations aplicadas, pendências e contrato.
-- [ ] Aguardar revisão/merge autorizado pela equipe; **nunca**
-  fazer push direto na `main`, nem aplicar migrations por merge.
+- [x] Reteste PGlite do commit `8b92ba5` registrado: 137 testes SQL,
+  11 migrations de domínio aprovadas; limitações explicitadas acima.
+- [x] `git diff --check main...HEAD` sem erros e branch limpa antes
+  do fast-forward para o commit testado.
+- [x] Comparação `main...8b92ba5` conferida: 78 commits à frente,
+  0 atrás, apenas arquivos autorizados; não havia PR duplicado.
+- [x] **PR #2 aberto** para revisão, com diff, testes reais,
+  limitações do CI, migrations aplicadas e contratos.
+- [ ] Revisão da equipe e aprovação de merge; **não** fazer merge
+  automaticamente nem reaplicar migrations por causa do merge.
+- [ ] Se houver mudanças de SQL ou código após `8b92ba5`, retestar
+  no novo commit antes do merge; esta atualização apenas documental
+  não equivale a novo teste.
