@@ -144,8 +144,8 @@ não local, nome de banco diferente e schema/roles já existentes.
 
 A reconciliação das 10 versões anteriores com `supabase_migrations.schema_migrations`
 no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
-A **11ª migration** `20261015030000_alm_seguranca_auth.sql` está na branch
-`audit/alm-seguranca-auth-20261015` e **não foi aplicada no staging**.
+A **11ª migration** `20261015030000_alm_seguranca_auth.sql` já foi
+validada localmente, mas **não foi aplicada no staging**.
 Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)** e
 **137 testes SQL**. No PostgreSQL 17.11 local descartável, a migration nova
 foi aplicada **incrementalmente** sobre a instalação anterior, e novamente
@@ -161,17 +161,15 @@ A revisão adiciona regressões para:
 - alterações operacionais (contadores/login) sem gerar auditoria duplicada;
 - proibição de alterar metadados sensíveis sem ator transacional.
 
-**Para rodar os testes da branch de revisão no seu computador:**
+**Para executar a suíte da branch atual no seu computador:**
 
 ```bash
-git fetch origin
-git switch --track origin/audit/alm-seguranca-auth-20261015
 bash supabase/tests/testar-banco.sh
 ```
 
-Depois do teste em PGlite, ainda é necessário aprovar uma instalação limpa
-**real PostgreSQL 17** em banco local descartável `alm_ci_clean`, com os
-scripts `apply-clean.mjs` e `run-database.mjs --local` documentados acima.
+Uma instalação limpa das 11 migrations em **PostgreSQL 17 real** segue como
+validação complementar, com os scripts `apply-clean.mjs` e
+`run-database.mjs --local` documentados acima.
 O instalador recusa um banco que já tenha schema `alm`. Não executar
 `apply-clean.mjs` em bancos reais, em outras bases nem no Supabase staging.
 Não executar `supabase db push` até conclusão e aprovação da revisão.
