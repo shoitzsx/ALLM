@@ -14,6 +14,16 @@ persistência legada a migrar, **sem espelho novo**. Frontend/backend serão
 desenvolvidos e testados localmente; **Vercel fica fora do escopo atual**.
 Ver `supabase/ARQUITETURA_ATUAL_2026-10-15.md`.
 
+## Contratos complementares
+
+- `supabase/tests/CONTRATO_SQL_AUTENTICACAO.md`
+- `supabase/tests/CONTRATO_CHG_REC_SCANNER.md`
+- `supabase/tests/MAPEAMENTO_LEGADO_E_RASCUNHOS.md`
+
+Esses contratos especificam a estrutura **já existente** e separam
+propostas de integração/regras **pendentes de aprovação**. Nenhum deles
+constitui implementação de API ou migration aplicada.
+
 ## Matriz de testes de conexão (evidência: saída de psql fornecida pelo operador)
 
 | Papel de conexão | Supavisor Session :5432 | Supavisor Transaction :6543 | Resultado |
