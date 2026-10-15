@@ -122,20 +122,30 @@ um container **PostgreSQL 17 novo**, isolado do Supabase de staging. Ele:
    `SET LOCAL ROLE alm_api` e `alm_job`, RLS e concorrência em duas conexões.
 
 Esse fluxo **não acessa nem reseta o projeto Supabase**. A instalação
-limpa em PostgreSQL 17 só pode ser considerada aprovada após uma execução
-bem-sucedida em ambiente descartável, seja no workflow (quando desbloqueado),
-seja em PostgreSQL local descartável. Até lá, o resultado continua **pendente**.
+limpa foi **aprovada em 15/10/2026** em uma instância PostgreSQL 17.11
+isolada na porta local `55433`: 11/11 migrations do zero, 28/28 tabelas
+com RLS, 137 testes SQL e concorrência real em duas conexões. Isso não
+significa que a 11ª migration já foi aplicada no Supabase staging.
 
-Para reproduzir em um PostgreSQL local descartável, crie previamente um
-database vazio chamado `alm_ci_clean` e configure:
+Para reproduzir em uma **nova instância PostgreSQL 17 isolada** (sem as
+roles `alm_api` e `alm_job`), crie o banco vazio `alm_ci_clean` e configure.
+Use a porta da instância de teste, por exemplo `55433`. O PostgreSQL pode
+solicitar uma senha configurada apenas para essa instância:
 
 ```bash
 export ALM_DB_TEST_DEPS="$LOCALAPPDATA/Temp/opencode"
-export ALM_LOCAL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/alm_ci_clean"
+export ALM_LOCAL_DATABASE_URL="postgresql://postgres@127.0.0.1:55433/alm_ci_clean"
+read -s -p "Senha do PostgreSQL isolado: " PGPASSWORD
+echo
+export PGPASSWORD
 node supabase/tests/apply-clean.mjs
 node supabase/tests/run-database.mjs --local
+unset PGPASSWORD
 unset ALM_LOCAL_DATABASE_URL
 ```
+
+**Não rode o instalador de novo** no mesmo banco após a instalação;
+ele só é válido na primeira execução em ambiente descartável vazio.
 
 Não rode `apply-clean.mjs` em banco com dados: o script recusa hostname
 não local, nome de banco diferente e schema/roles já existentes.
@@ -146,13 +156,13 @@ A reconciliação das 10 versões anteriores com `supabase_migrations.schema_mig
 no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
 A **11ª migration** `20261015030000_alm_seguranca_auth.sql` já foi
 validada localmente, mas **não foi aplicada no staging**.
-Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)** e
-**137 testes SQL**. No PostgreSQL 17.11 local descartável, a migration nova
-foi aplicada **incrementalmente** sobre a instalação anterior, e novamente
-**137 testes SQL mais concorrência real** foram aprovados. Falta apenas,
-como validação complementar, a instalação limpa das 11 migrations em um
-PostgreSQL 17 real vazio. Os 119 testes anteriores correspondiam às 10
-migrations originais.
+Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)**
+e **137 testes SQL**. Também passou na instalação **limpa real PostgreSQL
+17.11** em instância isolada na porta `55433`: 11/11 migrations,
+28 tabelas com RLS, 137 testes SQL e concorrência de duas conexões aprovada.
+Anteriormente, a 11ª migration também havia sido validada de forma
+incremental em banco local descartável. Os 119 testes anteriores
+correspondiam às 10 migrations originais.
 
 A revisão adiciona regressões para:
 - `token_hash` de sessão com comprimento SHA-256 (32 bytes);
@@ -167,9 +177,10 @@ A revisão adiciona regressões para:
 bash supabase/tests/testar-banco.sh
 ```
 
-Uma instalação limpa das 11 migrations em **PostgreSQL 17 real** segue como
-validação complementar, com os scripts `apply-clean.mjs` e
-`run-database.mjs --local` documentados acima.
-O instalador recusa um banco que já tenha schema `alm`. Não executar
-`apply-clean.mjs` em bancos reais, em outras bases nem no Supabase staging.
-Não executar `supabase db push` até conclusão e aprovação da revisão.
+A instalação limpa das 11 migrations em **PostgreSQL 17 real já foi
+aprovada**, com os scripts `apply-clean.mjs` e `run-database.mjs --local`.
+O instalador recusa bancos que já tenham schema `alm` ou as roles técnicas.
+Não executar `apply-clean.mjs` em ambientes com dados, no Supabase
+staging ou em outros projetos. **Não executar `supabase db push`**:
+a implantação da 11ª migration no staging requer autorização separada
+e verificação de segurança após a aplicação.
