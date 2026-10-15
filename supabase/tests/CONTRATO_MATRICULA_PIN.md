@@ -1,6 +1,6 @@
 # ALM — contrato de integracao: matricula + PIN / PostgreSQL 17
 
-**Status:** prova local de conexao tecnica **APROVADA** em 15/10/2026; criacao de credenciais no Supabase staging **NAO REALIZADA** (somente banco/documentacao nesta branch).
+**Status:** prova local de conexao tecnica **APROVADA**; logins tecnicos **criados sem senha no staging** em 15/10/2026. Configuracao privada de senhas, testes no pooler e integracao do backend **PENDENTES**. Nenhuma credencial versionada.
 **Escopo:** somente `supabase/` na branch `audit/alm-pin-login-pg17-20261015`.
 **Projeto de staging autorizado para consulta:** Almoxarifado ALM (`uxfstabcpvmujvzijyqw`).
 **Nao alterar:** backend, frontend, Supabase remoto, roles existentes ou credenciais reais nesta etapa.
@@ -41,7 +41,7 @@
 
 - [x] Prova local de login tecnico e `SET LOCAL ROLE` para API/job aprovada; acessos indevidos negados. RLS tambem coberta na suite anterior de 137 testes PostgreSQL 17.
 - [ ] Politicas de comprimento do PIN, bloqueio, expiracao e recuperacao aprovadas pela equipe.
-- [ ] Credenciais tecnicas reais criadas **somente apos autorizacao especifica**, com backup e plano de revogacao.
+- [x] Logins tecnicos criados apos autorizacao especifica, com `PASSWORD NULL` e plano de revogacao. Senhas privadas e testes de pooler pendentes.
 - [ ] Conexao real no Supabase com usuario customizado e Supavisor validada com `SELECT session_user,current_user` (nao divulgar segredos).
 - [ ] Regras de papel funcional por operacao definidas no backend; `p_tecnico` autoriza roles tecnicas, **nao** substitui autorizacao por usuario humano.
 - [ ] Backend troca `X-User-Id` por login e cookie de sessao verificado no servidor.
