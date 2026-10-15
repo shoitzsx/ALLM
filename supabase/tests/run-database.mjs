@@ -38,13 +38,19 @@ if (localMode || stagingMode) {
     url = new URL(process.env.ALM_LOCAL_DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres')
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('Somente banco LOCAL permitido em --local')
   } else {
-    const expectedHost = 'db.uxfstabcpvmujvzijyqw.supabase.co'
+    const projectRef = 'uxfstabcpvmujvzijyqw'
+    const directHost = 'db.' + projectRef + '.supabase.co'
+    const poolerHost = process.env.ALM_STAGING_DB_HOST
     const password = process.env.ALM_STAGING_DB_PASSWORD
     if (!password) throw new Error('Defina ALM_STAGING_DB_PASSWORD sem colocar a senha no comando')
-    url = new URL('postgresql://postgres@' + expectedHost + ':5432/postgres')
+    if (!poolerHost) throw new Error('Defina ALM_STAGING_DB_HOST com o host do Session pooler copiado do painel Supabase')
+    if (!/^[a-z0-9.-]+\.pooler\.supabase\.com$/i.test(poolerHost)) {
+      throw new Error('ALM_STAGING_DB_HOST deve ser um host oficial *.pooler.supabase.com')
+    }
+    url = new URL('postgresql://postgres.' + projectRef + '@' + poolerHost + ':5432/postgres')
     url.password = password
-    url.searchParams.set('sslmode', 'require')
-    if (url.hostname !== expectedHost || url.pathname !== '/postgres') {
+    url.searchParams.set('sslmode', 'verify-full')
+    if (url.hostname === directHost || url.pathname !== '/postgres') {
       throw new Error('Destino de staging inesperado; teste abortado')
     }
   }
