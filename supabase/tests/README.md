@@ -10,7 +10,7 @@ $env:ALM_DB_TEST_DEPS = 'C:\Users\kobne\AppData\Local\Temp\opencode'
 node supabase/tests/run-database.mjs
 ```
 
-O modo padrão cria PostgreSQL PGlite em memória, aplica base → delta → integridade → CHG/REC atomico, insere um usuário v1 entre base e delta e verifica sua preservação.
+O modo padrão cria PostgreSQL PGlite em memória, aplica todas as migrations em ordem, insere um usuário v1 entre base e delta e verifica sua preservação.
 Compara também a base com os quatro blocos SQL da seção 3 e as cópias do delta.
 Executa `database.sql`, cuja transação termina em ROLLBACK. Os testes não
 executam serviços externos: nomes de tipos de evento/estado são dados SQL.
@@ -43,19 +43,20 @@ são revertidas. Sequences/identities podem avançar mesmo após ROLLBACK.
 ## Supabase staging
 
 Para testar o projeto real `Almoxarifado ALM` sem expor a senha no histórico
-do terminal, use o modo `--staging`. O runner aceita somente o host fixo
-`db.uxfstabcpvmujvzijyqw.supabase.co` e o database `postgres`.
+do terminal, use o modo `--staging`. O runner aceita somente hosts oficiais `*.pooler.supabase.com`, usa a identidade fixa do projeto `uxfstabcpvmujvzijyqw` e o database `postgres`. O host correto deve ser copiado da opção **Session pooler** do painel Supabase.
 
 No Git Bash:
 
 ```bash
 npm.cmd install --prefix "$LOCALAPPDATA/Temp/opencode" libpg-query @electric-sql/pglite pg
 export ALM_DB_TEST_DEPS="$LOCALAPPDATA/Temp/opencode"
+export ALM_STAGING_DB_HOST="aws-1-sa-east-1.pooler.supabase.com"
 read -s -p "Senha do banco Supabase: " ALM_STAGING_DB_PASSWORD
 echo
 export ALM_STAGING_DB_PASSWORD
 node supabase/tests/run-database.mjs --staging
 unset ALM_STAGING_DB_PASSWORD
+unset ALM_STAGING_DB_HOST
 ```
 
 A senha e digitada de forma oculta e nao deve ser enviada para o chat, salva no
@@ -79,3 +80,44 @@ O usuário v1 é validado no modo em memória; a suíte SQL local assume o schem
 final, após reset. RLS é verificada tanto no catálogo quanto com uma role sem
 policy, criada apenas dentro da transação de teste. Os grants são exercitados
 com `SET LOCAL ROLE alm_api/alm_job`.
+
+## Instalação limpa em PostgreSQL 17 (CI)
+
+O workflow `.github/workflows/alm-database-ci.yml` foi preparado para usar
+um container **PostgreSQL 17 novo**, isolado do Supabase de staging. Ele:
+
+1. Instala dependências Node em pasta temporária.
+2. Executa `supabase/tests/apply-clean.mjs`, que exige conexão **loopback**
+   com o banco dedicado **`alm_ci_clean`**, sem schema `alm` e sem roles
+   técnicas preexistentes. O script cria o schema `extensions` e a extensão
+   `pgcrypto` para reproduzir as pré-condições do Supabase.
+3. Aplica **todas** as migrations em ordem, preservando fixture v1 entre a
+   base e o delta, e verifica integridade/RLS/membership de extensões.
+4. Executa `run-database.mjs --local` com PostgreSQL real, incluindo
+   `SET LOCAL ROLE alm_api` e `alm_job`, RLS e concorrência em duas conexões.
+
+Esse fluxo **não acessa nem reseta o projeto Supabase**. A instalação
+limpa só pode ser considerada aprovada após uma execução bem-sucedida do
+workflow. Caso o GitHub Actions não inicie os passos por questão de runner
+ou configuração da conta, o resultado continua **pendente**.
+
+Para reproduzir em um PostgreSQL local descartável, crie previamente um
+database vazio chamado `alm_ci_clean` e configure:
+
+```bash
+export ALM_DB_TEST_DEPS="$LOCALAPPDATA/Temp/opencode"
+export ALM_LOCAL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/alm_ci_clean"
+node supabase/tests/apply-clean.mjs
+node supabase/tests/run-database.mjs --local
+unset ALM_LOCAL_DATABASE_URL
+```
+
+Não rode `apply-clean.mjs` em banco com dados: o script recusa hostname
+não local, nome de banco diferente e schema/roles já existentes.
+
+### Pendência de histórico do staging
+
+As versões registradas em `supabase_migrations.schema_migrations` no staging
+diferem dos prefixos dos nomes locais em alguns arquivos. Não usar
+`supabase db push`/reaplicação automática no staging até reconciliar o
+histórico. Essa reconciliação não faz parte do teste de instalação limpa.
