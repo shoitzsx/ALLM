@@ -14,7 +14,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 - Suíte real de staging: **96 testes SQL aprovados**.
 - Concorrência real do numerador REC: **aprovada com duas conexões PostgreSQL**, com espera de lock e códigos distintos.
 - Índices prioritários do MVP adicionados em duas rodadas; os avisos restantes de FKs sem índice são informativos e devem ser tratados conforme uso real.
-- `SET ROLE alm_api/alm_job` não pode ser exercitado pelo usuário do Session pooler; grants continuam verificados por catálogo e o teste prático permanece reservado ao ambiente local/administrativo compatível.
+- No staging, o usuário do Session pooler não pode assumir `alm_api`/`alm_job`; **o teste prático de ambas as roles foi aprovado no PostgreSQL 17.11 local**, usando `SET LOCAL ROLE`.
 
 ### Migrations atuais
 
@@ -51,10 +51,19 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
   (PostgreSQL 18.6 WASM). Extensões observadas no PGlite: `pg_trgm` e
   `unaccent` em `extensions`, `pgcrypto` em `public` — diferença
   ambiental do staging, onde as três estão em `extensions`.
-- **Instalação limpa com PostgreSQL 17 real e troca de role nesse ambiente
-  ainda não comprovadas**:
-  a execução GitHub Actions falhou antes de registrar qualquer etapa,
-  sem log disponível; não confundir configuração criada com teste aprovado.
+- **Instalação limpa com PostgreSQL 17.11 real APROVADA (Windows x86-64):**
+  banco local descartável `alm_ci_clean`; execução de
+  `node supabase/tests/apply-clean.mjs` aplicou **10/10 migrations** sem erros,
+  confirmou **28 tabelas com RLS**, preservação do usuário v1 e acesso
+  das roles ao schema `extensions`.
+  Depois, `node supabase/tests/run-database.mjs --local` aprovou
+  **119 testes SQL**, inclusive os blocos reais de `SET LOCAL ROLE alm_api`
+  e `alm_job`, e a **concorrência real com duas conexões**, incluindo espera
+  por lock e códigos REC distintos. Versão confirmada:
+  `PostgreSQL 17.11 on x86_64-windows`; `pg_trgm`, `pgcrypto` e
+  `unaccent` observadas em `extensions`.
+  O GitHub Actions permanece bloqueado por faturamento, mas isso **não impede**
+  considerar o teste local real aprovado.
 - O histórico de versões Supabase no staging não corresponde a todos os
   prefixos temporais dos arquivos locais. Não executar `supabase db push`
   no staging até reconciliar explicitamente esse histórico.
@@ -69,17 +78,19 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
   estiver bloqueada para GitHub Actions por faturamento.
   `workflow_dispatch` permanece, mas tambem depende do desbloqueio.
 - Isso evita novas falhas automaticas em `push`, sem alterar os checks
-  antigos, sem simular aprovacao da CI e sem validar PostgreSQL 17 real.
+  antigos ou simular aprovacao da CI. A instalação limpa com PostgreSQL 17
+  real foi **aprovada manualmente**, conforme evidência acima.
 - Processo provisório: executar testes manuais antes de integrar
-  alteracoes de banco e registrar os resultados. PostgreSQL 17 real e
-  reconciliacao de historico seguem pendentes.
+  alteracoes de banco e registrar os resultados. **A reconciliação de
+  histórico de migrations no staging segue pendente**; não confundir
+  com a instalação limpa local já aprovada.
 
 ### Pendências para fechamento do MVP
 
 1. **Decidido e testado:** recebimento finalizado deve ser reaberto antes de exclusão/restauração lógica, sem exceção para perfis superiores; anexos de recebimento finalizado também são protegidos.
 2. **Decidido e implementado:** arquivo em `PURGADO` não pode voltar ao estado físico anterior ou ser restaurado logicamente como ativo. Um novo upload deve criar um novo registro.
-3. Validar `alm_api` e `alm_job` com `SET ROLE` em ambiente que permita role switching.
-4. Antes da produção, aplicar as migrations do zero em banco limpo e conferir o histórico de migrations do ambiente alvo.
+3. **Concluído:** `alm_api` e `alm_job` validadas com `SET LOCAL ROLE` no PostgreSQL 17.11 local.
+4. **Concluído no ambiente local:** 10 migrations instaladas do zero. **Pendente para implantação:** reconciliar histórico de migrations do ambiente Supabase alvo antes de `db push` ou novas instalações gerenciadas.
 5. Revisar novamente os índices após carga/uso real; não criar todos os índices sugeridos pelo linter sem evidência de consulta.
 
 ---
