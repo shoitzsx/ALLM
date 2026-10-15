@@ -1,8 +1,8 @@
 # Revisão das migrations ALM — status consolidado 15/10/2026
 
-## Revisão de hardening em andamento (15/10/2026)
+## Hardening de segurança validado localmente (15/10/2026)
 
-**Somente na branch `audit/alm-seguranca-auth-20261015`**, foi criada a
+Foi criada a
 11ª migration `20261015030000_alm_seguranca_auth.sql`, após as 10 já
 reconciliadas no staging. O ajuste revoga `EXECUTE PUBLIC` de uma função de
 trigger, exige token de sessão SHA-256 com **32 bytes** e amplia a auditoria
@@ -16,8 +16,7 @@ no PGlite** e **137 testes SQL aprovados**. No PostgreSQL 17.11 local
 SQL**, inclusive papéis técnicos e **concorrência real entre duas conexões**.
 Isso **não equivale** a uma instalação limpa de 11 migrations no PostgreSQL
 17 real, que permanece validação complementar. A 11ª migration **não foi
-aplicada** no Supabase staging nem incorporada na branch
-`supabase-kobner-clean`; o deploy exige autorização separada.
+aplicada** no Supabase staging; o deploy exige autorização separada.
 
 ## Estado atual
 
