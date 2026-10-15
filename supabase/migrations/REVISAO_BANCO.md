@@ -1,5 +1,20 @@
 # Revisão das migrations ALM — status consolidado 15/10/2026
 
+## Revisão de hardening em andamento (15/10/2026)
+
+**Somente na branch `audit/alm-seguranca-auth-20261015`**, foi criada a
+11ª migration `20261015030000_alm_seguranca_auth.sql`, após as 10 já
+reconciliadas no staging. O ajuste revoga `EXECUTE PUBLIC` de uma função de
+trigger, exige token de sessão SHA-256 com **32 bytes** e amplia a auditoria
+só de campos sensíveis de PIN e bloqueio, sem copiar o hash ou o texto do
+motivo. A suíte SQL de regressão foi ampliada na mesma branch.
+
+**Situação da validação:** ainda falta executar os novos testes no PostgreSQL
+17 local descartável. Os resultados históricos de 119 testes e instalação
+limpa referem-se às **10 migrations anteriores**. A 11ª migration **não foi
+aplicada** no Supabase staging nem incorporada na branch
+`supabase-kobner-clean`; o deploy deve aguardar os testes e a revisão.
+
 ## Estado atual
 
 Esta seção substitui o status operacional das rodadas históricas abaixo.
