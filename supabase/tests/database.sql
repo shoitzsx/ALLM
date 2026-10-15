@@ -187,10 +187,10 @@ BEGIN
         PERFORM pg_temp.rejeita('portaria NF vazia '||length(s),format('INSERT INTO alm.chegadas_portaria (numero_nf,cnpj_emitente,metodo_leitura,criado_por,alterado_por) VALUES (%L,''12345678901234'',''MANUAL'',''00000000-0000-0000-0000-000000000001'',''00000000-0000-0000-0000-000000000001'')',s),'23514');
     END LOOP;
 END;
-$;
+$$;
 
 -- Contrato atomico CHG -> REC: 1:1, autoria pelo contexto e retry idempotente.
-DO $
+DO $$
 DECLARE
     u constant uuid := '00000000-0000-0000-0000-000000000001';
     c constant uuid := '00000000-0000-0000-0000-000000000060';
@@ -246,7 +246,7 @@ BEGIN
     PERFORM set_config('app.usuario_id','',true);
     PERFORM set_config('app.ator_sistema','test:database',true);
 END;
-$;
+$$;
 
 SET LOCAL ROLE alm_api;
 SELECT alm.proximo_codigo_recebimento(9998::smallint);
