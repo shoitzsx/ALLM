@@ -14,6 +14,18 @@
 > instalação limpa em PostgreSQL 17 local. Não alterar os testes
 > antecipadamente de forma a mascarar regressões no schema vigente.
 
+## Documentos para a integracao (15/10/2026)
+
+- [Contrato SQL de matricula/PIN e sessoes](CONTRATO_SQL_AUTENTICACAO.md):
+  tabelas, grants, contexto, erros e decisoes pendentes.
+- [Contrato CHG -> REC e scanner](CONTRATO_CHG_REC_SCANNER.md):
+  funcao existente, enriquecimento atomico, origem da leitura,
+  duplicidade de chave NF-e e pontos a decidir.
+- [Mapeamento legado e rascunhos](MAPEAMENTO_LEGADO_E_RASCUNHOS.md):
+  dados Sheets -> PostgreSQL, obrigatoriedade, itens e anexos.
+- [Checklist de entrega e PR](ENTREGA_PR_BANCO_2026-10-15.md):
+  comparacoes de branches, migrations e verificacoes pendentes.
+
 Requisitos: Node 24 e dependências `libpg-query`, `@electric-sql/pglite`, `pg`.
 Podem ser instaladas em uma pasta temporária, sem mudar os packages da aplicação:
 
