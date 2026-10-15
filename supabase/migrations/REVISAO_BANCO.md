@@ -11,7 +11,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 - Todas as funções do schema `alm` têm `search_path` fixado.
 - `pgcrypto`, `pg_trgm` e `unaccent` estão no schema `extensions`.
 - Fluxo CHG -> REC atômico/idempotente aplicado, com unicidade CHG↔REC.
-- Suíte real de staging: **92 testes SQL aprovados**.
+- Suíte real de staging: **96 testes SQL aprovados**.
 - Concorrência real do numerador REC: **aprovada com duas conexões PostgreSQL**, com espera de lock e códigos distintos.
 - Índices prioritários do MVP adicionados em duas rodadas; os avisos restantes de FKs sem índice são informativos e devem ser tratados conforme uso real.
 - `SET ROLE alm_api/alm_job` não pode ser exercitado pelo usuário do Session pooler; grants continuam verificados por catálogo e o teste prático permanece reservado ao ambiente local/administrativo compatível.
@@ -27,6 +27,28 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 7. `20261015014500_alm_mvp_fk_indexes.sql`
 8. `20261015021500_alm_mvp_fk_indexes_round2.sql`
 9. `20261015023000_alm_bloquear_restauracao_purgado.sql`
+10. `20261015024500_alm_extensions_role_usage.sql`
+
+### Auditoria de instalação limpa (15/10/2026)
+
+- Detectado no staging que `alm_api` e `alm_job` não tinham `USAGE`
+  no schema `extensions` após mover a extensão `unaccent`.
+  Isso afetaria funções normalizadoras `SECURITY INVOKER`.
+- Criada e aplicada a migration
+  `20261015024500_alm_extensions_role_usage.sql`, com
+  `GRANT USAGE ON SCHEMA extensions TO alm_api, alm_job`.
+  Catálogo do PostgreSQL confirmou o acesso de ambas as roles.
+- Suíte transacional de staging ampliada: **96 testes SQL aprovados**
+  (exclui blocos `SET ROLE` indisponíveis ao usuário do pooler).
+- Preparado instalador isolado `supabase/tests/apply-clean.mjs` e workflow
+  `.github/workflows/alm-database-ci.yml` usando PostgreSQL 17
+  descartável, testes reais de `SET ROLE` e disputa de numerador.
+- **Instalação limpa e troca efetiva de role ainda não comprovadas**:
+  a execução GitHub Actions falhou antes de registrar qualquer etapa,
+  sem log disponível; não confundir configuração criada com teste aprovado.
+- O histórico de versões Supabase no staging não corresponde a todos os
+  prefixos temporais dos arquivos locais. Não executar `supabase db push`
+  no staging até reconciliar explicitamente esse histórico.
 
 ### Pendências para fechamento do MVP
 
