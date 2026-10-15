@@ -145,9 +145,14 @@ não local, nome de banco diferente e schema/roles já existentes.
 A reconciliação das 10 versões anteriores com `supabase_migrations.schema_migrations`
 no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
 A **11ª migration** `20261015030000_alm_seguranca_auth.sql` está na branch
-`audit/alm-seguranca-auth-20261015`, **não foi aplicada no staging** e ainda
-não tem validação PostgreSQL 17 local registrada. Os 119 testes aprovados
-anteriormente se referem às 10 migrations originais.
+`audit/alm-seguranca-auth-20261015` e **não foi aplicada no staging**.
+Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)** e
+**137 testes SQL**. No PostgreSQL 17.11 local descartável, a migration nova
+foi aplicada **incrementalmente** sobre a instalação anterior, e novamente
+**137 testes SQL mais concorrência real** foram aprovados. Falta apenas,
+como validação complementar, a instalação limpa das 11 migrations em um
+PostgreSQL 17 real vazio. Os 119 testes anteriores correspondiam às 10
+migrations originais.
 
 A revisão adiciona regressões para:
 - `token_hash` de sessão com comprimento SHA-256 (32 bytes);
