@@ -154,8 +154,11 @@ não local, nome de banco diferente e schema/roles já existentes.
 
 A reconciliação das 10 versões anteriores com `supabase_migrations.schema_migrations`
 no Supabase staging **já foi concluída** e verificada (10/10, checksums intactos).
-A **11ª migration** `20261015030000_alm_seguranca_auth.sql` já foi
-validada localmente, mas **não foi aplicada no staging**.
+A **11ª migration** `20261015030000_alm_seguranca_auth.sql` foi
+validada localmente **e aplicada no Supabase staging em 15/10/2026**,
+exclusivamente no projeto `Almoxarifado ALM` (`uxfstabcpvmujvzijyqw`).
+O histórico remoto foi alinhado à versão e ao nome do arquivo no GitHub:
+**11/11**, preservando as versões e hashes das 10 anteriores.
 Em 15/10/2026, passou na instalação limpa **PGlite (11/11 migrations)**
 e **137 testes SQL**. Também passou na instalação **limpa real PostgreSQL
 17.11** em instância isolada na porta `55433`: 11/11 migrations,
@@ -163,6 +166,15 @@ e **137 testes SQL**. Também passou na instalação **limpa real PostgreSQL
 Anteriormente, a 11ª migration também havia sido validada de forma
 incremental em banco local descartável. Os 119 testes anteriores
 correspondiam às 10 migrations originais.
+
+**Pós-deploy staging:** 114 testes SQL executados em transação com
+`ROLLBACK` e aprovados; os 23 testes que dependem de troca real de roles
+foram aprovados no PostgreSQL 17 local (137/137 no total).
+Validações de banco: 28/28 tabelas com RLS, constraint de hash validada,
+ACL `PUBLIC` revogada, sem fixtures de teste persistidas; Security Advisor
+com **zero alertas**. Foi guardado backup **pontual pré-migration** da
+definição original da função e das ACLs, com roteiro de rollback fora do
+repositório; **não é um backup integral `pg_dump`**.
 
 A revisão adiciona regressões para:
 - `token_hash` de sessão com comprimento SHA-256 (32 bytes);
@@ -181,6 +193,7 @@ A instalação limpa das 11 migrations em **PostgreSQL 17 real já foi
 aprovada**, com os scripts `apply-clean.mjs` e `run-database.mjs --local`.
 O instalador recusa bancos que já tenham schema `alm` ou as roles técnicas.
 Não executar `apply-clean.mjs` em ambientes com dados, no Supabase
-staging ou em outros projetos. **Não executar `supabase db push`**:
-a implantação da 11ª migration no staging requer autorização separada
-e verificação de segurança após a aplicação.
+staging ou em outros projetos. A 11ª migration **já foi implantada**,
+logo **não reaplicar** ou executar `supabase db push` indiscriminadamente.
+Toda nova migration exige planejamento, backup adequado e autorização
+específica.
