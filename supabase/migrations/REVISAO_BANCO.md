@@ -43,7 +43,16 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 - Preparado instalador isolado `supabase/tests/apply-clean.mjs` e workflow
   `.github/workflows/alm-database-ci.yml` usando PostgreSQL 17
   descartável, testes reais de `SET ROLE` e disputa de numerador.
-- **Instalação limpa e troca efetiva de role ainda não comprovadas**:
+- **Instalação limpa com PGlite comprovada em 15/10/2026:** usuário executou
+  `node supabase/tests/run-database.mjs` após atualizar a branch.
+  As **10 migrations foram aplicadas em ordem, do zero**, usuário v1 foi
+  preservado sem alteração de matrícula/versão, e **119 testes SQL passaram**,
+  incluindo os blocos `SET LOCAL ROLE` no emulador PGlite 0.5.10
+  (PostgreSQL 18.6 WASM). Extensões observadas no PGlite: `pg_trgm` e
+  `unaccent` em `extensions`, `pgcrypto` em `public` — diferença
+  ambiental do staging, onde as três estão em `extensions`.
+- **Instalação limpa com PostgreSQL 17 real e troca de role nesse ambiente
+  ainda não comprovadas**:
   a execução GitHub Actions falhou antes de registrar qualquer etapa,
   sem log disponível; não confundir configuração criada com teste aprovado.
 - O histórico de versões Supabase no staging não corresponde a todos os
