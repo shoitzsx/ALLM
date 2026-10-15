@@ -49,7 +49,8 @@ if (localMode || stagingMode) {
     }
     url = new URL('postgresql://postgres.' + projectRef + '@' + poolerHost + ':5432/postgres')
     url.password = password
-    url.searchParams.set('sslmode', 'verify-full')
+    url.searchParams.set('uselibpqcompat', 'true')
+    url.searchParams.set('sslmode', 'require')
     if (url.hostname === directHost || url.pathname !== '/postgres') {
       throw new Error('Destino de staging inesperado; teste abortado')
     }
