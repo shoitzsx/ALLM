@@ -11,7 +11,7 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 - Todas as funções do schema `alm` têm `search_path` fixado.
 - `pgcrypto`, `pg_trgm` e `unaccent` estão no schema `extensions`.
 - Fluxo CHG -> REC atômico/idempotente aplicado, com unicidade CHG↔REC.
-- Suíte real de staging: **86 testes SQL aprovados**.
+- Suíte real de staging: **92 testes SQL aprovados**.
 - Concorrência real do numerador REC: **aprovada com duas conexões PostgreSQL**, com espera de lock e códigos distintos.
 - Índices prioritários do MVP adicionados em duas rodadas; os avisos restantes de FKs sem índice são informativos e devem ser tratados conforme uso real.
 - `SET ROLE alm_api/alm_job` não pode ser exercitado pelo usuário do Session pooler; grants continuam verificados por catálogo e o teste prático permanece reservado ao ambiente local/administrativo compatível.
@@ -26,11 +26,12 @@ Esta seção substitui o status operacional das rodadas históricas abaixo.
 6. `20261015013000_alm_extensions_schema_hardening.sql`
 7. `20261015014500_alm_mvp_fk_indexes.sql`
 8. `20261015021500_alm_mvp_fk_indexes_round2.sql`
+9. `20261015023000_alm_bloquear_restauracao_purgado.sql`
 
 ### Pendências para fechamento do MVP
 
-1. Decisão de negócio: recebimento finalizado deve obrigatoriamente ser reaberto antes de exclusão/restauração lógica, ou perfis superiores terão exceção?
-2. Decisão de negócio: arquivo em estado `PURGADO` não possui mais bytes; definir formalmente que não pode ser restaurado logicamente como ativo sem novo upload/recuperação externa.
+1. **Decidido e testado:** recebimento finalizado deve ser reaberto antes de exclusão/restauração lógica, sem exceção para perfis superiores; anexos de recebimento finalizado também são protegidos.
+2. **Decidido e implementado:** arquivo em `PURGADO` não pode voltar ao estado físico anterior ou ser restaurado logicamente como ativo. Um novo upload deve criar um novo registro.
 3. Validar `alm_api` e `alm_job` com `SET ROLE` em ambiente que permita role switching.
 4. Antes da produção, aplicar as migrations do zero em banco limpo e conferir o histórico de migrations do ambiente alvo.
 5. Revisar novamente os índices após carga/uso real; não criar todos os índices sugeridos pelo linter sem evidência de consulta.
