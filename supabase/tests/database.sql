@@ -150,6 +150,22 @@ BEGIN
     UPDATE alm.filtros_salvos SET excluido_em=NULL, excluido_por=NULL, motivo_exclusao=NULL;
     PERFORM pg_temp.ok('filtro exclui e restaura', EXISTS(SELECT 1 FROM alm.filtros_salvos WHERE nome='Teste' AND excluido_em IS NULL));
 
+    -- PURGADO e estado irreversivel deste registro. Novo arquivo exige novo upload.
+    UPDATE alm.arquivos SET excluido_em=now(), excluido_por=u::uuid,
+        motivo_exclusao='Teste de purga', armazenamento_estado='PURGADO'
+    WHERE id=a::uuid;
+    PERFORM pg_temp.rejeita('PURGADO nao restaura logicamente',
+        format('UPDATE alm.arquivos SET excluido_em=NULL, excluido_por=NULL, motivo_exclusao=NULL WHERE id=%L',a), 'P0001');
+    PERFORM pg_temp.rejeita('PURGADO nao volta fisicamente a ATIVO',
+        format('UPDATE alm.arquivos SET armazenamento_estado=%L WHERE id=%L','ATIVO',a), 'P0001');
+    PERFORM pg_temp.ok('PURGADO permanece excluido', EXISTS (
+        SELECT 1 FROM alm.arquivos WHERE id=a::uuid AND excluido_em IS NOT NULL
+            AND armazenamento_estado='PURGADO'
+    ));
+    PERFORM pg_temp.rejeita('PURGADO nao pode ficar logicamente ativo',
+        format('UPDATE alm.arquivos SET excluido_em=NULL, excluido_por=NULL, motivo_exclusao=NULL, armazenamento_estado=%L WHERE id=%L','PURGADO',a), 'P0001');
+
+
     INSERT INTO alm.credenciais_pin (usuario_id,pin_hash,algoritmo) VALUES (u::uuid,'SEGREDO_PIN_TESTE','scrypt');
     INSERT INTO alm.sessoes (usuario_id,token_hash,ocioso_max_segundos,expira_em) VALUES (u::uuid,decode(repeat('ab',32),'hex'),1800,now()+interval '8 hours');
     PERFORM pg_temp.ok('auditoria sem hashes', NOT EXISTS(SELECT 1 FROM alm.historico_alteracoes WHERE coalesce(dados_antes,'{}') ?| ARRAY['pin_hash','token_hash'] OR coalesce(dados_depois,'{}') ?| ARRAY['pin_hash','token_hash'] OR coalesce(dados_depois,'{}')::text LIKE '%SEGREDO_PIN_TESTE%'));
