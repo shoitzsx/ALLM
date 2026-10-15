@@ -183,6 +183,8 @@ BEGIN
     FOR t IN SELECT unnest(ARRAY['alm_api','alm_job']) LOOP
         PERFORM pg_temp.ok(t || ' sem numerador', NOT has_table_privilege(t,'alm.recebimento_numeradores','SELECT,INSERT,UPDATE,DELETE'));
         PERFORM pg_temp.ok(t || ' executa gerador', has_function_privilege(t,'alm.proximo_codigo_recebimento(smallint)','EXECUTE'));
+        PERFORM pg_temp.ok(t || ' usa schema extensions', has_schema_privilege(t,'extensions','USAGE'));
+        PERFORM pg_temp.ok(t || ' executa unaccent', has_function_privilege(t,'extensions.unaccent(text)','EXECUTE'));
         PERFORM pg_temp.ok(t || ' sem DELETE negocio', NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='alm' AND c.relkind='r' AND c.relname <> 'sessoes' AND has_table_privilege(t,c.oid,'DELETE')));
     END LOOP;
 END;
@@ -269,6 +271,7 @@ END;
 $$;
 
 SET LOCAL ROLE alm_api;
+SELECT pg_temp.ok('api executa normalizacao real', alm.normalizar_texto('Água') = 'agua');
 SELECT alm.proximo_codigo_recebimento(9998::smallint);
 SELECT pg_temp.rejeita('api SELECT numerador negado', 'SELECT * FROM alm.recebimento_numeradores', '42501');
 SELECT pg_temp.rejeita('api INSERT numerador negado', 'INSERT INTO alm.recebimento_numeradores VALUES (9997,1,now())', '42501');
@@ -283,6 +286,7 @@ SELECT pg_temp.rejeita('api nao apaga recebimentos', 'DELETE FROM alm.recebiment
 SELECT pg_temp.rejeita('api nao apaga arquivos', 'DELETE FROM alm.arquivos', '42501');
 RESET ROLE;
 SET LOCAL ROLE alm_job;
+SELECT pg_temp.ok('job executa normalizacao real', alm.normalizar_texto('Água') = 'agua');
 SELECT alm.proximo_codigo_recebimento(9998::smallint);
 SELECT pg_temp.rejeita('job SELECT numerador negado', 'SELECT * FROM alm.recebimento_numeradores', '42501');
 SELECT pg_temp.rejeita('job UPDATE numerador negado', 'UPDATE alm.recebimento_numeradores SET ultimo_numero=1', '42501');
