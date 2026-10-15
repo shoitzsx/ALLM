@@ -1,5 +1,19 @@
 # Revisão das migrations ALM — status consolidado 15/10/2026
 
+> **Decisão de arquitetura posterior (15/10/2026):** a fonte principal dos
+> dados operacionais do ALLM será **PostgreSQL/Supabase**. Sheets é persistência
+> legada do backend, a ser retirada com plano de migração; **não haverá
+> espelho/sincronização novos para Sheets**. Google Drive permanece para os
+> arquivos, com metadados no banco. O desenvolvimento é **local**, sem
+> dependências ou decisões de banco baseadas em Vercel. Ver
+> `supabase/ARQUITETURA_ATUAL_2026-10-15.md`.
+>
+> Trechos abaixo sobre `alm.espelho_sheets`, `SHEETS_ESPELHO`,
+> `GOOGLE_SHEETS`, nomes de branches anteriores e Vercel descrevem
+> **histórico do schema e de testes**, não a arquitetura que será construída.
+> Não reescrever migrations já aplicadas; planejar retirada do legado por nova
+> migration **somente após auditar dependências e obter autorização**.
+
 ## Atualização de infraestrutura: logins técnicos no staging (15/10/2026)
 
 Após autorização específica, foram criados **somente** `alm_runtime_api` e
