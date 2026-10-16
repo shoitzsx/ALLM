@@ -1,9 +1,11 @@
 /**
  * Lógica pura da Visualização — busca, filtro, ordenação, paginação e CSV.
- * Sem React, sem DOM, sem import de nada fora deste arquivo: pode ser
+ * Sem React e sem DOM; o único import é o serializador puro de CSV (src/csvSafe.js): pode ser
  * testado com `node --test` isoladamente, mesmo padrão já usado em
  * src/features/nfeReader/analysisBuilder.js e src/features/portaria/scannerBridge.js.
  */
+
+import { csvField } from '../../csvSafe.js'
 
 /** Remove acentos e normaliza caixa — usado só para COMPARAÇÃO de busca, nunca para exibição. */
 export function normalizeText(value) {
@@ -141,13 +143,12 @@ export function formatCellForExport(row, column) {
 // corretamente (colunas separadas) quando o delimitador de campo é ";".
 const CSV_DELIMITER = ';'
 
-/** Escapa um valor para uma célula CSV (RFC 4180): aspas quando há o delimitador, aspas internas ou quebra de linha. */
+/**
+ * Prepara um valor para uma célula CSV (RFC 4180): aspas quando há o delimitador, aspas internas ou quebra de
+ * linha, e proteção contra CSV Injection (CWE-1236) — ver src/csvSafe.js. É o único caminho de saída do CSV.
+ */
 export function escapeCsvValue(value) {
-  const text = String(value ?? '')
-  if (text.includes(CSV_DELIMITER) || /["\n\r]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`
-  }
-  return text
+  return csvField(value, CSV_DELIMITER)
 }
 
 /** Monta o texto CSV completo (cabeçalho + linhas) a partir das colunas e linhas já filtradas/ordenadas. */
