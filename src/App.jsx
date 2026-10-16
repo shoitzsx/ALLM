@@ -61,7 +61,7 @@ import {
   formatFileSize,
   getStatusMeta,
 } from './ui.jsx'
-import { ROUTES, navigate, useHashRoute } from './layout/navigation.js'
+import { AREAS, AREA_CONFIG, ROUTES, getAreaForPath, navigate, useHashRoute } from './layout/navigation.js'
 import { Sidebar } from './layout/Sidebar.jsx'
 import { MobileHeader } from './layout/MobileHeader.jsx'
 import { MobileNav } from './layout/MobileNav.jsx'
@@ -206,12 +206,17 @@ function downloadCsv(receipts) {
   URL.revokeObjectURL(url)
 }
 
-function AppShell({ route, pendingCount, currentUser, children, onToast, theme, onToggleTheme }) {
+// Um único shell para as duas áreas: a área (da rota) só troca os itens de
+// navegação e o que não faz sentido fora dela (a busca de recebimentos e o
+// atalho para Pendências são do Almoxarifado).
+function AppShell({ area, route, pendingCount, currentUser, children, onToast, theme, onToggleTheme }) {
   const [globalSearch, setGlobalSearch] = useState('')
   const searchRef = useRef(null)
+  const isAlmoxarifado = area === AREAS.almoxarifado
 
   useEffect(() => {
     const onShortcut = (event) => {
+      if (!searchRef.current) return
       if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
         event.preventDefault()
         searchRef.current?.focus()
@@ -228,32 +233,41 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar route={route} pendingCount={pendingCount} currentUser={currentUser} />
+    <div className="app-shell" data-area={area}>
+      <Sidebar area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} currentUser={currentUser} />
 
       <main className="main-shell">
         <header className="topbar">
-          <form className="top-search" onSubmit={submitGlobalSearch} role="search">
-            <Search size={17} />
-            <input
-              ref={searchRef}
-              value={globalSearch}
-              onChange={(event) => setGlobalSearch(event.target.value)}
-              placeholder="Buscar protocolo, pedido, NF, fornecedor ou material"
-              aria-label="Busca global"
-            />
-            <kbd>/</kbd>
-          </form>
+          {isAlmoxarifado ? (
+            <form className="top-search" onSubmit={submitGlobalSearch} role="search">
+              <Search size={17} />
+              <input
+                ref={searchRef}
+                value={globalSearch}
+                onChange={(event) => setGlobalSearch(event.target.value)}
+                placeholder="Buscar protocolo, pedido, NF, fornecedor ou material"
+                aria-label="Busca global"
+              />
+              <kbd>/</kbd>
+            </form>
+          ) : (
+            <div className="topbar-context">
+              <strong>{AREA_CONFIG[area].label}</strong>
+              <span>Operação de chegadas · registros simulados, sem integração real</span>
+            </div>
+          )}
           <div className="topbar-actions">
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-            <button
-              className="icon-button notification-button"
-              type="button"
-              aria-label="Ver pendências"
-              onClick={() => navigate(ROUTES.pending)}
-            >
-              <Bell size={18} />
-            </button>
+            {isAlmoxarifado ? (
+              <button
+                className="icon-button notification-button"
+                type="button"
+                aria-label="Ver pendências"
+                onClick={() => navigate(ROUTES.pending)}
+              >
+                <Bell size={18} />
+              </button>
+            ) : null}
             <span className="topbar-divider" />
             <button
               className="topbar-user"
@@ -270,12 +284,12 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
           </div>
         </header>
 
-        <MobileHeader theme={theme} onToggleTheme={onToggleTheme} />
+        <MobileHeader area={area} theme={theme} onToggleTheme={onToggleTheme} />
 
         {children}
       </main>
 
-      <MobileNav route={route} pendingCount={pendingCount} />
+      <MobileNav area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} />
     </div>
   )
 }
@@ -1387,6 +1401,7 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
   const { pushToast } = useNotifications()
 
   const pendingCount = store.receipts.filter((item) => isNfPending(item) || hasOpenDivergences(item) || item.status === RECEBIMENTO_STATUS.CONFERENCIA).length
+  const area = getAreaForPath(route.path)
   let content
 
   if (route.path === ROUTES.dashboard) {
@@ -1403,10 +1418,12 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
         <NfeReaderPage pushToast={pushToast} />
       </Suspense>
     )
-  } else if (route.path === ROUTES.portaria) {
+  } else if (route.path === ROUTES.portaria || route.path === ROUTES.portariaRegistrar) {
+    // As duas rotas no MESMO lugar da árvore: alternar entre o painel e o
+    // registro não desmonta a página (as chegadas simuladas continuam na tela).
     content = (
       <Suspense fallback={<div className="page"><EmptyState icon={ShieldCheck} title="Carregando módulo" description="Preparando a Portaria…" /></div>}>
-        <PortariaPage />
+        <PortariaPage registering={route.path === ROUTES.portariaRegistrar} />
       </Suspense>
     )
   } else if (route.path === ROUTES.visualizacao) {
@@ -1419,11 +1436,14 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
     const receiptId = decodeURIComponent(route.path.split('/').filter(Boolean)[1] || '')
     content = <DetailPage store={store} receiptId={receiptId} pushToast={pushToast} />
   } else {
-    content = <div className="page"><EmptyState icon={CircleAlert} title="Página não encontrada" description="O endereço informado não existe nesta aplicação." action={<button className="btn btn-primary" onClick={() => navigate('/')}>Ir para visão geral</button>} /></div>
+    const home = area === AREAS.portaria
+      ? { path: ROUTES.portaria, label: 'Ir para o painel da Portaria' }
+      : { path: ROUTES.dashboard, label: 'Ir para visão geral' }
+    content = <div className="page"><EmptyState icon={CircleAlert} title="Página não encontrada" description="O endereço informado não existe nesta aplicação." action={<button className="btn btn-primary" onClick={() => navigate(home.path)}>{home.label}</button>} /></div>
   }
 
   return (
-    <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
+    <AppShell area={area} route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
       {content}
     </AppShell>
   )

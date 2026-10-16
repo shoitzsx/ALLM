@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { PageHeader } from '../../components/shared/PageHeader.jsx'
+import { ROUTES, navigate } from '../../layout/navigation.js'
 import { PortariaDashboard } from './components/PortariaDashboard.jsx'
 import { PortariaScanner } from './components/PortariaScanner.jsx'
 import { ArrivalReview } from './components/ArrivalReview.jsx'
@@ -29,12 +30,27 @@ const STAGE_DESCRIPTION = {
  * visualmente igual à Leitura automática de NF-e) -> revisão -> confirmação
  * -> resultado (CHG mock). Cria chegada, nunca RECEBIMENTO — não usa
  * receiptHandoff.js nem navega para "Novo recebimento".
+ *
+ * Rotas: /portaria é o painel; /portaria/registrar é o registro (scanner ->
+ * revisão -> resultado, ainda em estado interno). `registering` vem da rota:
+ * entrar em /portaria/registrar abre o scanner, e voltar para /portaria
+ * (menu, botão Voltar do navegador) volta ao painel descartando o rascunho.
  */
-export function PortariaPage() {
-  const [stage, setStage] = useState('dashboard')
+export function PortariaPage({ registering = false }) {
+  const [stage, setStage] = useState(registering ? 'scanner' : 'dashboard')
   const [draft, setDraft] = useState(null)
   const [confirmed, setConfirmed] = useState(null)
   const [arrivals, setArrivals] = useState(mockTodayArrivals)
+
+  useEffect(() => {
+    if (registering) {
+      setStage((current) => (current === 'dashboard' ? 'scanner' : current))
+    } else {
+      setStage('dashboard')
+      setDraft(null)
+      setConfirmed(null)
+    }
+  }, [registering])
 
   /**
    * "Selecionar arquivo", "Fotografar código" e "Digitar chave manualmente"
@@ -73,9 +89,9 @@ export function PortariaPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Portaria" description={STAGE_DESCRIPTION[stage]}>
+      <PageHeader title={registering ? 'Registrar chegada' : 'Painel do dia'} description={STAGE_DESCRIPTION[stage]}>
         {stage === 'dashboard' ? (
-          <button type="button" className="btn btn-primary" onClick={() => setStage('scanner')}>
+          <button type="button" className="btn btn-primary" onClick={() => navigate(ROUTES.portariaRegistrar)}>
             <Plus size={16} /> Nova chegada
           </button>
         ) : null}
@@ -98,7 +114,7 @@ export function PortariaPage() {
         <ArrivalResult
           arrival={confirmed}
           onRegisterAnother={registerAnother}
-          onBackToStart={() => setStage('dashboard')}
+          onBackToStart={() => navigate(ROUTES.portaria)}
         />
       ) : null}
     </div>
