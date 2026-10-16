@@ -795,6 +795,128 @@ button {
   text-align: right;
 }
 
+/* D-1 — gráficos dos dashboards (BarList, MonthlyChart). Reaproveitam as
+   barras de status; a coluna de valor cresce para caber "N 40%". */
+.bar-list {
+  margin: 0;
+  list-style: none;
+}
+
+.bar-list .status-bar-row {
+  grid-template-columns: minmax(120px, 0.9fr) minmax(80px, 1.4fr) minmax(64px, auto);
+}
+
+.bar-list-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-list-share {
+  margin-left: 4px;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+.bar-fill.fill-brand,
+.status-dot.dot-brand {
+  background: var(--brand-500);
+}
+
+.chart-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chart-note {
+  margin: 0;
+  padding: 0 22px 18px;
+  color: var(--ink-500);
+  font-size: var(--font-label);
+}
+
+.dashboard-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 14px;
+  color: var(--ink-500);
+  font-size: var(--font-label);
+}
+
+.monthly-chart {
+  margin: 0;
+  padding: 20px 22px 16px;
+}
+
+.monthly-chart-plot {
+  display: grid;
+  grid-template-columns: repeat(var(--monthly-columns, 12), minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+  height: 190px;
+}
+
+.monthly-chart-col {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.monthly-chart-value {
+  color: var(--ink-800);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.monthly-chart-bar-area {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.monthly-chart-bar {
+  width: min(100%, 34px);
+  border-radius: 4px 4px 0 0;
+  background: var(--brand-500);
+  transition: height 400ms ease;
+}
+
+.monthly-chart-bar.is-zero {
+  height: 0;
+}
+
+.monthly-chart-label {
+  padding-top: 6px;
+  overflow: hidden;
+  color: var(--ink-600);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.monthly-chart-year {
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monthly-chart-bar {
+    transition: none;
+  }
+}
+
 .attention-list {
   display: grid;
 }
@@ -3105,6 +3227,35 @@ button {
   .status-bar-row {
     grid-template-columns: 1.2fr 0.8fr 25px;
     gap: 8px;
+  }
+
+  .bar-list .status-bar-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(48px, 0.8fr) auto;
+  }
+
+  .monthly-chart {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .monthly-chart-plot {
+    gap: 3px;
+    height: 160px;
+  }
+
+  /* Em tela estreita o ano só aparece na 1ª coluna e em janeiro. */
+  .monthly-chart-year.is-repeat {
+    display: none;
+  }
+
+  .monthly-chart-label,
+  .monthly-chart-value {
+    font-size: 10px;
+  }
+
+  .chart-note {
+    padding-right: 17px;
+    padding-left: 17px;
   }
 
   .panel-header {

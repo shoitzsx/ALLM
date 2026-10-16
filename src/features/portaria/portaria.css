@@ -61,7 +61,7 @@
 }
 
 .portaria-arrival-fornecedor {
-  flex: 1 1 200px;
+  flex: 1 1 140px;
   min-width: 0;
   color: var(--ink-700);
 }
@@ -182,3 +182,91 @@
     flex: 1 1 auto;
   }
 }
+
+/* D-1 — Painel do dia: aviso de simulação, atenção e o que depende de
+   integração. KPIs e barras reaproveitam .kpi-strip e BarList (styles.css). */
+.portaria-sim-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 14px;
+  color: var(--ink-500);
+  font-size: var(--font-label);
+}
+
+.portaria-sim-note strong {
+  padding: 1px 7px;
+  border-radius: var(--radius-xs);
+  color: var(--amber-700);
+  background: var(--amber-50);
+  font-size: var(--font-meta);
+  font-weight: 700;
+}
+
+.portaria-empty {
+  margin: 0;
+  padding: 20px 22px;
+  color: var(--ink-500);
+  font-size: 13px;
+}
+
+.portaria-attention-list {
+  display: grid;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.portaria-attention-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 22px;
+  color: var(--ink-800);
+  font-size: 13px;
+}
+
+.portaria-attention-list svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--amber-700);
+}
+
+.portaria-attention-list small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-500);
+  font-size: var(--font-meta);
+}
+
+.portaria-pending-integration {
+  margin-top: 18px;
+}
+
+.portaria-pending-integration dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.portaria-pending-integration dl > div {
+  padding: 14px 22px;
+  border-top: 1px solid var(--ink-100);
+}
+
+.portaria-pending-integration dt {
+  color: var(--ink-800);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.portaria-pending-integration dd {
+  margin: 3px 0 0;
+  color: var(--ink-500);
+  font-size: var(--font-label);
+}
+
+html[data-theme="dark"] .portaria-sim-note strong { color: #f0d598; background: #352e1b; }
+html[data-theme="dark"] .portaria-attention-list svg { color: #f0d598; }

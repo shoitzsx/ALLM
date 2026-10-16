@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  Database,
   ClipboardCheck,
   ClipboardList,
   Eye,
@@ -59,7 +60,6 @@ import {
   formatDate,
   formatDateTime,
   formatFileSize,
-  getStatusMeta,
 } from './ui.jsx'
 import { AREAS, AREA_CONFIG, ROUTES, getAreaForPath, navigate, useHashRoute } from './layout/navigation.js'
 import { Sidebar } from './layout/Sidebar.jsx'
@@ -68,6 +68,16 @@ import { MobileNav } from './layout/MobileNav.jsx'
 import { PageHeader } from './components/shared/PageHeader.jsx'
 import { FilterBar } from './components/shared/FilterBar.jsx'
 import { KpiStrip } from './components/dashboard/KpiStrip.jsx'
+import { BarList } from './components/dashboard/BarList.jsx'
+import { MonthlyChart } from './components/dashboard/MonthlyChart.jsx'
+import {
+  buildMonthlySeries,
+  buildStatusChart,
+  buildTopList,
+  getAttentionReceipts,
+  getRecentReceipts,
+  selectActiveReceipts,
+} from './components/dashboard/dashboardMetrics.js'
 import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
 import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
 import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
@@ -334,13 +344,16 @@ function DashboardPage({ store }) {
   }
 
   const { receipts, metrics } = store
-  const maxStatus = Math.max(1, ...metrics.porStatus.map((item) => item.total))
-  const attention = receipts
-    .filter((item) => isNfPending(item) || hasOpenDivergences(item))
-    .slice(0, 5)
-  const recent = [...receipts]
-    .sort((a, b) => String(b.atualizadoEm).localeCompare(String(a.atualizadoEm)))
-    .slice(0, 5)
+  // Mesma base de getDashboardMetrics no store (registros ativos): os gráficos
+  // somam com os KPIs. "Recentes" e "Requer atenção" seguem como antes.
+  const activeReceipts = selectActiveReceipts(receipts)
+  const statusChart = buildStatusChart(metrics)
+  const monthly = buildMonthlySeries(activeReceipts)
+  const byType = buildTopList(metrics.porTipo, 6)
+  const bySupplier = buildTopList(metrics.porFornecedor, 5)
+  // Mesmo conjunto ativo dos KPIs e gráficos: arquivado não entra em "Requer atenção" nem em "Recentes".
+  const attention = getAttentionReceipts(activeReceipts)
+  const recent = getRecentReceipts(activeReceipts)
 
   return (
     <div className="page">
@@ -353,10 +366,37 @@ function DashboardPage({ store }) {
         </button>
       </PageHeader>
 
+      <p className="dashboard-source">
+        <Database size={13} aria-hidden="true" />
+        Dados da API v1 · {metrics.totalRecebimentos} recebimento(s) ativo(s) carregado(s); arquivados não entram nos indicadores, nos gráficos nem nas listas desta página.
+      </p>
+
       <KpiStrip metrics={metrics} />
 
       <section className="dashboard-grid">
         <div className="dashboard-column">
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Evolução mensal</h2>
+                <p>Recebimentos por mês da data de recebimento{monthly.months.length ? ` · ${monthly.months[0].label} a ${monthly.months.at(-1).label}` : ''}</p>
+              </div>
+            </header>
+            {monthly.months.length ? (
+              <>
+                <MonthlyChart months={monthly.months} caption="Recebimentos ativos por mês da data de recebimento" />
+                {monthly.semDataValida || monthly.registrosAntesDoRecorte ? (
+                  <p className="chart-note">
+                    {monthly.registrosAntesDoRecorte ? `${monthly.registrosAntesDoRecorte} recebimento(s) de meses anteriores ao período exibido (últimos 12 meses com registro). ` : ''}
+                    {monthly.semDataValida ? `${monthly.semDataValida} recebimento(s) sem data de recebimento válida ficaram fora do gráfico.` : ''}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <EmptyState icon={CalendarDays} title="Sem datas para exibir" description={monthly.semDataValida ? `${monthly.semDataValida} recebimento(s) sem data de recebimento válida.` : 'Os recebimentos registrados vão aparecer aqui, por mês.'} />
+            )}
+          </article>
+
           <article className="panel">
             <header className="panel-header">
               <div>
@@ -367,23 +407,8 @@ function DashboardPage({ store }) {
                 Ver todos <ChevronRight size={14} />
               </button>
             </header>
-            <div className="status-bars">
-              {metrics.porStatus.map((item) => {
-                const suffix = STATUS_BAR_CLASSES[item.status]
-                return (
-                  <div className="status-bar-row" key={item.status}>
-                    <div className="status-bar-label">
-                      <span className={`status-dot ${suffix ? `dot-${suffix}` : ''}`} />
-                      <span>{getStatusMeta(item.status).shortLabel}</span>
-                    </div>
-                    <div className="bar-track">
-                      <div className={`bar-fill ${suffix ? `fill-${suffix}` : ''}`} style={{ width: `${Math.max(8, (item.total / maxStatus) * 100)}%` }} />
-                    </div>
-                    <span className="status-count">{item.total}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <BarList items={statusChart.items} label="Recebimentos ativos por status" toneOf={(item) => STATUS_BAR_CLASSES[item.key]} />
+            {statusChart.foraDoCatalogo ? <p className="chart-note">{statusChart.foraDoCatalogo} recebimento(s) com status fora do catálogo não aparecem nas barras.</p> : null}
           </article>
 
           <article className="panel table-panel">
@@ -457,6 +482,40 @@ function DashboardPage({ store }) {
               </div>
             ) : (
               <EmptyState icon={CheckCircle2} title="Tudo em dia" description="Nenhuma pendência operacional neste momento." />
+            )}
+          </article>
+
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Por tipo de recebimento</h2>
+                <p>Quantidade de recebimentos por classificação</p>
+              </div>
+            </header>
+            {byType.items.length ? (
+              <>
+                <BarList items={byType.items} label="Recebimentos ativos por tipo" toneOf={() => 'brand'} />
+                {byType.demais ? <p className="chart-note">Mais {byType.demais.categorias} tipo(s), somando {byType.demais.total} recebimento(s).</p> : null}
+              </>
+            ) : (
+              <EmptyState icon={PackageOpen} title="Sem recebimentos" description="A distribuição por tipo aparece quando houver registros." />
+            )}
+          </article>
+
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Principais fornecedores</h2>
+                <p>Os {Math.min(5, bySupplier.items.length) || 5} com mais recebimentos (quantidade de recebimentos, não de materiais)</p>
+              </div>
+            </header>
+            {bySupplier.items.length ? (
+              <>
+                <BarList items={bySupplier.items} label="Fornecedores com mais recebimentos ativos" toneOf={() => 'brand'} />
+                {bySupplier.demais ? <p className="chart-note">Outros {bySupplier.demais.categorias} fornecedor(es) somam {bySupplier.demais.total} recebimento(s).</p> : null}
+              </>
+            ) : (
+              <EmptyState icon={Building2} title="Sem fornecedores" description="Os fornecedores aparecem quando houver recebimentos." />
             )}
           </article>
         </div>
