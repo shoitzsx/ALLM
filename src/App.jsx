@@ -56,7 +56,6 @@ import {
   FieldError,
   Modal,
   StatusBadge,
-  ToastHost,
   formatDate,
   formatDateTime,
   formatFileSize,
@@ -77,6 +76,7 @@ import { attachmentDownloadHref } from './api.js'
 import { friendlyAttachmentError } from './features/attachments/errorMessages.js'
 import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile } from './features/attachments/constraints.js'
 import { LoginPage } from './features/auth/LoginPage.jsx'
+import { NotificationsProvider, useNotifications } from './features/notifications/index.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
 // a quem abrir esta tela experimental. `receiptHandoff.js` acima é importado
@@ -258,7 +258,7 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
             <button
               className="topbar-user"
               type="button"
-              onClick={() => onToast('Perfil demonstrativo', 'A autenticação corporativa será conectada na implantação.')}
+              onClick={() => onToast('Perfil demonstrativo', 'A autenticação corporativa será conectada na implantação.', 'info')}
             >
               <Avatar name={currentUser?.nome || currentUser?.name} />
               <span className="topbar-user-copy">
@@ -1381,13 +1381,10 @@ function PendingPage({ store }) {
 // na rota /login. App() decide a rota antes de montar este componente.
 function AuthenticatedApp({ route, theme, toggleTheme }) {
   const store = useRecebimentosStore()
-  const [toasts, setToasts] = useState([])
-
-  const pushToast = (title, message, type = 'success') => {
-    const id = `${Date.now()}-${Math.random()}`
-    setToasts((current) => [...current, { id, title, message, type }])
-    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4400)
-  }
+  // Mantém a assinatura de sempre — pushToast(title, message, type = 'success') —
+  // para as telas que já a recebem por prop. A exibição vive em
+  // features/notifications, cujo Provider fica em App().
+  const { pushToast } = useNotifications()
 
   const pendingCount = store.receipts.filter((item) => isNfPending(item) || hasOpenDivergences(item) || item.status === RECEBIMENTO_STATUS.CONFERENCIA).length
   let content
@@ -1426,12 +1423,9 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
   }
 
   return (
-    <>
-      <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
-        {content}
-      </AppShell>
-      <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
-    </>
+    <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
+      {content}
+    </AppShell>
   )
 }
 
@@ -1449,9 +1443,15 @@ export default function App() {
   // /login direto nunca dispara o carregamento inicial de recebimentos. Nenhum
   // guard, nenhum redirecionamento: é só uma tela isolada, acessada manualmente.
   // Ver src/features/auth/.
-  if (route.path === ROUTES.login) {
-    return <LoginPage />
-  }
+  const screen =
+    route.path === ROUTES.login ? (
+      <LoginPage />
+    ) : (
+      <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />
+    )
 
-  return <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />
+  // O Provider de notificações fica acima das rotas: Login, Portaria,
+  // Visualização e o app autenticado usam a mesma store e a mesma área de
+  // exibição, e os avisos sobrevivem à troca de rota. Ver src/features/notifications/.
+  return <NotificationsProvider>{screen}</NotificationsProvider>
 }

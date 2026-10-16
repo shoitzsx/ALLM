@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import {
   AlertTriangle,
-  Check,
   CheckCircle2,
   CircleDashed,
   Clock3,
@@ -119,27 +118,6 @@ export function Modal({ open, title, description, onClose, children, footer, siz
         <div className="modal-content">{children}</div>
         {footer ? <footer className="modal-footer">{footer}</footer> : null}
       </section>
-    </div>
-  )
-}
-
-export function ToastHost({ toasts, onDismiss }) {
-  return (
-    <div className="toast-host" aria-live="polite" aria-atomic="true">
-      {toasts.map((toast) => (
-        <div className={`toast toast-${toast.type || 'success'}`} key={toast.id}>
-          <span className="toast-icon">
-            {toast.type === 'error' ? <AlertTriangle size={18} /> : <Check size={18} />}
-          </span>
-          <div>
-            <strong>{toast.title}</strong>
-            {toast.message ? <p>{toast.message}</p> : null}
-          </div>
-          <button type="button" onClick={() => onDismiss(toast.id)} aria-label="Dispensar aviso">
-            <X size={16} />
-          </button>
-        </div>
-      ))}
     </div>
   )
 }
