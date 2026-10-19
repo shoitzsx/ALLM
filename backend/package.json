@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node --watch server.mjs"
+    "dev": "node --watch server.mjs",
+    "test:postgres": "node --test integration/*.test.mjs"
   },
   "dependencies": {
     "dotenv": "^18.0.3",
-    "googleapis": "^181.0.0"
+    "googleapis": "^181.0.0",
+    "pg": "^8.23.1"
   }
 }

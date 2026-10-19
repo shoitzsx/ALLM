@@ -13,6 +13,10 @@ retry com pedido, tipo ou fornecedor divergente retorna
 Nesta primeira regra de autorização, apenas `ADMINISTRADOR` e `ALMOXARIFADO`
 podem iniciar o REC; a equipe ainda deve confirmar a matriz de permissões
 antes de publicar a rota.
+Quando a CHG já registra um nome de fornecedor capturado, o serviço preserva
+esse nome para validar o pedido e o retry, enquanto resolve a identidade do
+fornecedor pelo vínculo ou CNPJ ativo do catálogo. Uma divergência entre o
+nome capturado e o cadastro atual não renomeia o cadastro.
 
 O módulo ainda não é uma rota pública. A sessão de matrícula/PIN e a conexão
 `alm_runtime_api` precisam ser integradas antes de expô-lo; o `X-User-Id` da
@@ -20,6 +24,38 @@ API legada não deve ser usado como ator desta operação. Os testes atuais usam
 um cliente PostgreSQL simulado e verificam transação, rollback, permissões e
 retry. Falta validar o mesmo fluxo contra PostgreSQL real com as migrations do
 PR #2, após a integração da branch e a configuração de conexão local.
+
+## Validação PostgreSQL em 19/10/2026
+
+`backend/config/postgres.mjs` cria um pool com a identidade técnica
+`alm_runtime_api`, limite de três conexões e TLS com certificado e hostname
+verificados. TLS pode ser desativado somente para `localhost`, `127.0.0.1` ou
+`::1`. As variáveis de conexão estão descritas em `.env.example`. O pacote
+`pg` foi adicionado somente a `backend/package.json`.
+
+Depois de instalar as dependências de `backend/`, execute
+`npm --prefix backend run test:postgres`. Com as variáveis `ALM_DB_*`
+configuradas, esse comando verifica conexão, `SET LOCAL ROLE alm_api` e grants
+dentro de uma transação encerrada com `ROLLBACK`. Sem conexão configurada,
+o teste de rede é ignorado.
+
+O teste que cria fixtures e exerce triggers, rollback, retry e duas conexões
+simultâneas exige **uma base local descartável** já preparada com as migrations
+do PR #2 e com o login técnico configurado. Ele só roda se o host for loopback,
+o nome do banco ser exatamente `alm_ci_clean` e
+`ALM_DB_TEST_DISPOSABLE=YES`. O teste deixa dados de teste nessa base; descarte
+a base conforme o procedimento local após a execução. Não aponte esse teste
+para staging ou produção. Em 19/10/2026, a suíte SQL do PR #2 (137 testes e
+concorrência) e os testes reais do backend (permissões, rollback, retry e
+concorrência) passaram em PostgreSQL 17.11 local. O banco utilizado foi
+`alm_ci_clean`, descartável e restrito a loopback.
+
+O instalador do PR #2 (`supabase/tests/apply-clean.mjs`) também exige uma base
+vazia chamada `alm_ci_clean`, restrita a loopback. Execute a suíte SQL do
+Kobner antes deste teste de integração, que deixa fixtures no banco. Em um
+PostgreSQL local sem TLS, configure `ALM_DB_SSL_MODE=disable`; o pool rejeita
+essa opção fora de loopback. Não execute o bootstrap de login destinado a
+staging no banco descartável.
 
 Este documento descreve o trabalho independente de persistência na branch do Goran. As rotas abaixo ainda não estão registradas no servidor. A função SQL de criação atômica está na branch do PR #2; a operação complementar do backend está implementada, aguardando sessão real e teste integrado.
 
