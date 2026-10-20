@@ -218,20 +218,40 @@ test('desafio nao aceita hash de cookie parcial alheio', async () => withConnect
   } finally {await c.query('ROLLBACK')}
 }))
 
-test('imutabilidade do material criptografico e revogacao irreversivel', async () => withConnection(async c => {
-  await tx(c); await actorHuman(c,fixture.a)
-  try {
-    await c.query('SAVEPOINT imutavel')
-    await expectCode(()=>c.query(`UPDATE alm.credenciais_webauthn
-       SET chave_publica_cose=$1 WHERE id=$2`,[bytes(40),fixture.cred]),['P0001'])
-    await c.query('ROLLBACK TO SAVEPOINT imutavel')
-    await c.query('SAVEPOINT reativar')
-    await expectCode(()=>c.query(`UPDATE alm.credenciais_webauthn
-       SET revogado_em=NULL,revogado_por=NULL,motivo_revogacao=NULL WHERE id=$1`,
-       [fixture.cred]),['P0001'])
-    await c.query('ROLLBACK TO SAVEPOINT reativar')
-  } finally {await c.query('ROLLBACK')}
-}))
+test('imutabilidade por privilegio minimo e trigger; revogacao irreversivel', async () => {
+  await withConnection(async c => {
+    await tx(c); await actorHuman(c,fixture.a)
+    try {
+      // GRANT por coluna barra UPDATE antes do BEFORE UPDATE trigger.
+      await c.query('SAVEPOINT privil_minimo')
+      await expectCode(()=>c.query(`UPDATE alm.credenciais_webauthn
+         SET chave_publica_cose=$1 WHERE id=$2`,[bytes(40),fixture.cred]),['42501'])
+      await c.query('ROLLBACK TO SAVEPOINT privil_minimo')
+
+      // alm_api pode atualizar campos de revogacao, mas nao reativar.
+      await c.query('SAVEPOINT reativar')
+      await expectCode(()=>c.query(`UPDATE alm.credenciais_webauthn
+         SET revogado_em=NULL,revogado_por=NULL,motivo_revogacao=NULL WHERE id=$1`,
+         [fixture.cred]),['P0001'])
+      await c.query('ROLLBACK TO SAVEPOINT reativar')
+    } finally {await c.query('ROLLBACK')}
+  })
+
+  await withConnection(async c => {
+    // Usuario postgres SOMENTE no banco descartavel: testa trigger sem o
+    // bloqueio antecipado dos grants por coluna de alm_api.
+    await c.query('BEGIN'); await actorHuman(c,fixture.a)
+    try {
+      const { rows: [p] } = await c.query(`SELECT has_column_privilege(
+        current_user,'alm.credenciais_webauthn','chave_publica_cose','UPDATE') AS pode_update`)
+      assert.equal(p.pode_update,true,'postgres local deve poder exercitar o trigger')
+      await c.query('SAVEPOINT imutavel')
+      await expectCode(()=>c.query(`UPDATE alm.credenciais_webauthn
+         SET chave_publica_cose=$1 WHERE id=$2`,[bytes(40),fixture.cred]),['P0001'])
+      await c.query('ROLLBACK TO SAVEPOINT imutavel')
+    } finally {await c.query('ROLLBACK')}
+  })
+})
 
 test('registro vincula desafio ao hash de autorizacao', async () => withConnection(async c => {
   await tx(c); await actorSystem(c)
