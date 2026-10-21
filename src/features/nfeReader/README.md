@@ -113,12 +113,12 @@ dígitos, soma ponderada, resto da divisão por 11, `dv = 11 - resto` (0 se der
 qualquer uma das três fontes (texto, barcode, OCR), o resultado só vira "chave
 válida" se o DV bater.
 
-Exemplo verificado (usado no teste automatizado):
+Exemplo sintético, com dados fictícios (usado nos testes automatizados):
 
 ```
-42260748909580000160550010000082801675042868
-→ UF 42 (SC) · AAMM 2607 (2026/07) · CNPJ 48.909.580/0001-60 ·
-  modelo 55 · série 1 · NF 8280 · DV confere
+42260112345678000199550010000000011000000014
+→ UF 42 (SC) · AAMM 2601 (2026/01) · CNPJ 12.345.678/0001-99 ·
+  modelo 55 · série 1 · NF 1 · DV confere
 ```
 
 ### `findValidNfeKeys(texto)` — busca tolerante a formatação
