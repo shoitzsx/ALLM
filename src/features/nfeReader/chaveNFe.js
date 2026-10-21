@@ -66,8 +66,8 @@ export function interpretarChave(chaveRaw) {
 /**
  * Procura, dentro de um texto, todas as sequências de 44 dígitos que passem na
  * validação do dígito verificador — a chave pode aparecer corrida
- * ("42260748...") ou separada por espaços, pontos, hífens e quebras de linha
- * ("4226 0748 9095 ..."). Nunca aceita uma sequência de 44 números só pelo
+ * ("42260112...") ou separada por espaços, pontos, hífens e quebras de linha
+ * ("4226 0112 3456 ..."). Nunca aceita uma sequência de 44 números só pelo
  * tamanho: cada candidata é validada pelo DV antes de entrar no resultado.
  * Retorna as chaves válidas únicas, na ordem em que aparecem no texto.
  */
