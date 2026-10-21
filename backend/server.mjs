@@ -1,6 +1,12 @@
 import http from 'node:http'
 import { createApp } from './app.mjs'
+import { createPostgresApp } from './appPostgres.mjs'
 
-const { handle, env } = await createApp()
+const { handle, env } = process.env.ALM_BACKEND_MODE === 'postgres'
+  ? await createPostgresApp()
+  : await createApp()
 
-http.createServer((req, res) => { res.setHeader('Access-Control-Allow-Origin', env.corsOrigin); handle(req, res) }).listen(env.port, env.host, () => console.log(`ALM API em http://${env.host}:${env.port}/api/v1`))
+http.createServer((req, res) => {
+  if (env.corsOrigin) res.setHeader('Access-Control-Allow-Origin', env.corsOrigin)
+  handle(req, res)
+}).listen(env.port, env.host, () => console.log(`ALM API em http://${env.host}:${env.port}/api/v1`))

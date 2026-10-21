@@ -21,6 +21,7 @@ test('PostgreSQL configuration verifies remote TLS and limits plaintext to loopb
   assert.equal(remote.max, 3)
   assert.throws(() => readPostgresConfig({ ...base, ALM_DB_SSL_MODE: 'disable' }), /loopback/)
   assert.equal(readPostgresConfig({ ...base, ALM_DB_HOST: '127.0.0.1', ALM_DB_SSL_MODE: 'disable' }).ssl, false)
+  assert.throws(() => readPostgresConfig({ ...base, ALM_DB_API_USER: 'postgres' }), /alm_runtime_api/)
 })
 
 test('alm_runtime_api can assume alm_api with expected grants', { skip: !configured }, async () => {

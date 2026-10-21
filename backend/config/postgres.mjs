@@ -15,6 +15,9 @@ export function readPostgresConfig(source = process.env) {
   const database = required(source, 'ALM_DB_NAME')
   const user = required(source, 'ALM_DB_API_USER')
   const password = required(source, 'ALM_DB_API_PASSWORD')
+  if (!/^alm_runtime_api(?:\.[a-z0-9]+)?$/.test(user)) {
+    throw new Error('ALM_DB_API_USER deve usar o login técnico alm_runtime_api.')
+  }
   const port = Number(source.ALM_DB_PORT || 5432)
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('ALM_DB_PORT deve ser uma porta válida.')
