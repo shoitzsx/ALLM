@@ -231,3 +231,306 @@
    --sidebar-*) já é redefinido globalmente sob html[data-theme="dark"] em
    src/styles.css, e a regra global "html[data-theme=dark] input, select,
    textarea" já recolore os campos — a página se adapta sozinha. */
+
+/* ------------------------------------------------------------------ N-2.1 */
+
+.auth-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Selo das telas de pré-visualização (só em desenvolvimento): deixa claro que
+   o estado é demonstrativo e não concede acesso. */
+.auth-preview-badge {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--amber-500);
+  border-radius: var(--radius-sm);
+  color: var(--amber-700);
+  background: var(--amber-50);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Passo do segundo fator (PasskeyStep). */
+.auth-step-label {
+  margin: 0 0 6px;
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* O título recebe foco por script a cada mudança de passo (tabindex=-1). Só
+   some o anel quando o foco NÃO é de navegação (clique do mouse); por teclado
+   ou leitor de tela o anel continua visível, mais forte que o padrão do app
+   (20% de opacidade) por ser o único indicador de onde o foco foi parar. */
+.auth-card-header h1:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.auth-card-header h1:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.auth-step-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-step-actions .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.auth-pulse {
+  animation: auth-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes auth-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Zona do teclado: matrícula + PIN + alternância + teclado + botão Entrar (mesmo espaçamento do cartão). */
+.auth-entry-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Orientação curta sob a matrícula (só o limite; o mínimo não aparece na tela). */
+.auth-field-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-700);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* Aviso de excesso na matrícula: ocupa o lugar da orientação (mesmo espaço). Em tela
+   estreita o texto quebra em duas linhas, então o espaço reserva a altura das duas
+   para o aviso aparecer e sumir sem empurrar o PIN nem o teclado do ALM. */
+@media (max-width: 380px) {
+  .auth-field-note {
+    min-height: calc(2 * 1.4 * 12.5px + 6px);
+  }
+}
+
+.auth-field-hint-error {
+  color: var(--red-700);
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .auth-field-hint-error {
+  color: #f2a7a4;
+}
+
+/* Alternância entre o teclado do ALM e o do dispositivo. */
+.auth-keyboard-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--brand-700);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.auth-keyboard-toggle:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+html[data-theme="dark"] .auth-keyboard-toggle {
+  color: var(--ink-800);
+}
+
+/* Teclado numérico do ALM (PinKeypad). Alvos de toque >= 48px, mesmo em 320px. */
+.auth-keypad {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+/* Legenda do campo atendido pelo teclado (matrícula ou PIN). Sempre presente com o teclado aberto: trocar de campo não muda a altura. */
+.auth-keypad-target {
+  margin: 0 0 8px;
+  color: var(--ink-700);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.auth-keypad-value {
+  margin-left: 8px;
+  color: var(--ink-950);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.auth-keypad-target strong {
+  color: var(--ink-950);
+  font-weight: 700;
+}
+
+.auth-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.auth-keypad-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 0;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  color: var(--ink-950);
+  background: var(--control-background);
+  box-shadow: var(--shadow-sm);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 100ms ease, border-color 100ms ease, transform 100ms ease;
+}
+
+.auth-keypad-key:active:not(:disabled) {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  transform: scale(0.97);
+}
+
+.auth-keypad-key:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.auth-keypad-key:focus-visible {
+  outline: 3px solid rgba(49, 97, 224, 0.45);
+  outline-offset: 2px;
+}
+
+.auth-keypad-key-action {
+  color: var(--ink-700);
+}
+
+.auth-keypad-key-continue {
+  border-color: transparent;
+  color: #fff;
+  background: var(--brand-700);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-keypad-key-continue:active:not(:disabled) {
+  border-color: transparent;
+  background: #162f82;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-keypad-key,
+  .auth-pulse {
+    transition: none;
+    animation: none;
+  }
+
+  .auth-keypad-key:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Celular em paisagem / telas baixas: o cartão rola; teclas um pouco menores
+   (ainda >= 44px), sem esconder o aviso do ambiente. */
+@media (max-height: 520px) {
+  .auth-keypad-grid {
+    gap: 6px;
+  }
+
+  .auth-keypad-key {
+    min-height: 46px;
+    font-size: 20px;
+  }
+
+  /* "Continuar" em linha (ícone + texto) para caber nos 46px sem herdar os 20px dos dígitos. */
+  .auth-keypad-key-continue {
+    flex-direction: row;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .auth-brand-panel .auth-brand-copy {
+    display: none;
+  }
+
+  .auth-form-panel {
+    align-items: flex-start;
+    padding-top: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-keypad {
+    padding: 8px;
+  }
+
+  .auth-keypad-grid {
+    gap: 6px;
+  }
+}
+
+/* Tema escuro: os tokens de texto dos avisos (--red/amber/blue-700) não são redefinidos
+   no escuro e ficavam com contraste fraco sobre o fundo escuro. Tons claros só para o login. */
+html[data-theme="dark"] .auth-alert-error {
+  color: #f2a7a4;
+}
+
+html[data-theme="dark"] .auth-alert-warning,
+html[data-theme="dark"] .auth-preview-badge {
+  color: #f0c87a;
+}
+
+html[data-theme="dark"] .auth-alert-info {
+  color: #9cc4ee;
+}
+
+/* Telas estreitas: cartão alinhado ao topo. Centralizado na vertical, ele "pularia"
+   para cima toda vez que o teclado do ALM ou um aviso aumentasse a altura do cartão,
+   deslocando os campos debaixo do dedo. */
+@media (max-width: 960px) {
+  /* A faixa da marca mantém a altura do conteúdo; o painel do formulário fica com o resto.
+     Sem isto o espaço livre da tela é repartido entre os dois e o cartão se mexe quando cresce. */
+  .auth-page {
+    grid-template-rows: auto 1fr;
+  }
+
+  .auth-form-panel {
+    align-items: flex-start;
+  }
+}
