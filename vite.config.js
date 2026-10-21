@@ -2,11 +2,10 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   server: {
-    // Em dev, `npm run api` sobe o backend em :3001; o frontend chama
-    // caminhos relativos (`/api/v1/...`, igual à produção na Vercel) e o
-    // Vite repassa para o backend local — sem precisar de VITE_API_URL.
+    // Em dev, `npm run api` sobe o backend local em 127.0.0.1:3001.
+    // O frontend chama /api/v1 e o Vite encaminha as requisições.
     proxy: {
-      '/api': 'http://localhost:3001',
+      '/api': 'http://127.0.0.1:3001',
     },
   },
   optimizeDeps: {

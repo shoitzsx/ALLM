@@ -308,8 +308,19 @@ BEGIN
         PERFORM pg_temp.ok(t || ' executa gerador', has_function_privilege(t,'alm.proximo_codigo_recebimento(smallint)','EXECUTE'));
         PERFORM pg_temp.ok(t || ' usa schema extensions', has_schema_privilege(t,'extensions','USAGE'));
         PERFORM pg_temp.ok(t || ' executa unaccent', has_function_privilege(t,'extensions.unaccent(text)','EXECUTE'));
-        PERFORM pg_temp.ok(t || ' sem DELETE negocio', NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='alm' AND c.relkind='r' AND c.relname <> 'sessoes' AND has_table_privilege(t,c.oid,'DELETE')));
+        PERFORM pg_temp.ok(t || ' sem DELETE fora das tabelas tecnicas', NOT EXISTS(
+            SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname='alm' AND c.relkind='r'
+              AND (t = 'alm_api' OR c.relname NOT IN ('sessoes','desafios_webauthn','fluxos_auth_parcial'))
+              AND has_table_privilege(t,c.oid,'DELETE')
+        ));
     END LOOP;
+    PERFORM pg_temp.ok('job DELETE somente nas tres tabelas tecnicas', (
+        SELECT count(*) = 3 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='alm' AND c.relkind='r'
+          AND c.relname IN ('sessoes','desafios_webauthn','fluxos_auth_parcial')
+          AND has_table_privilege('alm_job',c.oid,'DELETE')
+    ));
 END;
 $$;
 

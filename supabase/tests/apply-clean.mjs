@@ -35,7 +35,8 @@ const requiredMigrations = [
   '20261015021500_alm_mvp_fk_indexes_round2.sql',
   '20261015023000_alm_bloquear_restauracao_purgado.sql',
   '20261015024500_alm_extensions_role_usage.sql',
-  '20261015030000_alm_seguranca_auth.sql'
+  '20261015030000_alm_seguranca_auth.sql',
+  '20261019180000_alm_n2_webauthn.sql'
 ]
 for (const required of requiredMigrations) {
   if (!migrationNames.includes(required)) throw new Error('Migration obrigatoria ausente: ' + required)
@@ -87,14 +88,19 @@ try {
       (SELECT count(*)::int FROM pg_class c
         JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='alm' AND c.relkind='r' AND c.relrowsecurity) AS tabelas_rls,
+      (SELECT count(*)::int FROM pg_tables
+        WHERE schemaname='alm' AND tablename IN (
+          'autorizacoes_webauthn', 'credenciais_webauthn',
+          'desafios_webauthn', 'fluxos_auth_parcial')) AS tabelas_webauthn,
       has_schema_privilege('alm_api','extensions','USAGE') AS api_extensions,
       has_schema_privilege('alm_job','extensions','USAGE') AS job_extensions
   `)
-  assert.equal(status.tabelas, 28)
-  assert.equal(status.tabelas_rls, 28)
+  assert.equal(status.tabelas, 32)
+  assert.equal(status.tabelas_rls, status.tabelas)
+  assert.equal(status.tabelas_webauthn, 4)
   assert.equal(status.api_extensions, true)
   assert.equal(status.job_extensions, true)
-  console.log('INSTALACAO LIMPA: 28 tabelas, RLS em 28, roles e legado v1 OK')
+  console.log('INSTALACAO LIMPA: 32 tabelas, RLS em 32, roles e legado v1 OK')
   console.log('Proxima etapa: node supabase/tests/run-database.mjs --local')
 } catch (err) {
   console.error('FALHA INSTALACAO LIMPA:', err.message)
