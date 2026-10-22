@@ -177,12 +177,13 @@ DROP ROLE alm_runtime_job;
 
 ## Pendente com a equipe
 
-- Confirmar comprimento/complexidade do PIN, politica de bloqueio,
-  redefinicao, expiracao e bootstrap auditado do primeiro administrador.
-- Integracao no backend: autenticar por matricula+PIN, hash Argon2id/scrypt
-  com pepper fora do banco, cookie opaco, sessao revogavel, transacao
-  parametrizada com ator, `SET LOCAL ROLE`, auditoria e rate limiting.
-- O frontend e backend permanecem sem modificacoes por esta atividade.
+> Estado deste runbook em 15/10/2026. A implementacao posterior adicionou a
+> migration local de bootstrap, `POST /api/v1/auth/initial-pin` e o script
+> `backend/scripts/provision-first-admin.mjs`; isso nao autoriza aplica-los em
+> staging. Consulte `backend/POSTGRES_N2.md` para o contrato vigente.
+
+- Continuam pendentes a aprovacao operacional para staging, recuperacao e a
+  politica definitiva de comprimento/complexidade e bloqueio do PIN.
 
 ## Referencias oficiais
 

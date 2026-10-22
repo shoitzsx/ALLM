@@ -3,7 +3,7 @@ BEGIN;
 SELECT set_config('app.ator_sistema', 'test:database', true);
 SELECT set_config('app.request_id', '00000000-0000-0000-0000-000000000099', true);
 CREATE TEMP TABLE resultados (nome text NOT NULL);
-GRANT INSERT ON resultados TO alm_api, alm_job;
+GRANT INSERT ON resultados TO alm_api, alm_job, alm_provisioner;
 CREATE FUNCTION pg_temp.ok(nome text, condicao boolean) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     IF condicao IS DISTINCT FROM true THEN RAISE EXCEPTION 'TESTE FALHOU: %', nome; END IF;
@@ -21,8 +21,29 @@ BEGIN
 END;
 $$;
 
+SET LOCAL ROLE alm_provisioner;
+SELECT alm.provisionar_primeiro_administrador(
+  'BOOT001','Administrador Bootstrap',
+  'scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  decode(repeat('ab',32),'hex'),'CHANGE-BOOTSTRAP-TEST',
+  '00000000-0000-0000-0000-000000000097',clock_timestamp()+interval '1 hour');
+RESET ROLE;
+SELECT pg_temp.ok('bootstrap cria primeiro administrador com PIN temporario', EXISTS(
+  SELECT 1 FROM alm.usuarios u JOIN alm.credenciais_pin p ON p.usuario_id=u.id
+  WHERE u.matricula='BOOT001' AND u.perfil='ADMINISTRADOR' AND p.temporario
+    AND p.pin_hash LIKE 'scrypt$32768$8$1$%'));
+SELECT pg_temp.ok('bootstrap cria ativacao somente com hash e aprovacao', EXISTS(
+  SELECT 1 FROM alm.autorizacoes_webauthn a JOIN alm.usuarios u ON u.id=a.usuario_id
+  WHERE u.matricula='BOOT001' AND a.finalidade='ATIVACAO'
+    AND octet_length(a.codigo_hash)=32 AND a.autorizacao_externa='provisionamento-aprovado:CHANGE-BOOTSTRAP-TEST'));
+SELECT pg_temp.ok('bootstrap fica auditado sem hash nos dados de auditoria', EXISTS(
+  SELECT 1 FROM alm.historico_alteracoes h JOIN alm.usuarios u ON u.id::text=h.entidade_id
+  WHERE u.matricula='BOOT001' AND h.ator_identificador='provision-first-admin:CHANGE-BOOTSTRAP-TEST'
+    AND coalesce(h.dados_antes::text,'') NOT LIKE '%scrypt$%'
+    AND coalesce(h.dados_depois::text,'') NOT LIKE '%scrypt$%'));
+
 INSERT INTO alm.usuarios (id, nome, perfil, matricula)
-VALUES ('00000000-0000-0000-0000-000000000001', 'Teste banco', 'ADMINISTRADOR', 'TEST001');
+VALUES ('00000000-0000-0000-0000-000000000001', 'Teste banco', 'ALMOXARIFADO', 'TEST001');
 INSERT INTO alm.fornecedores (id, razao_social) VALUES
 ('00000000-0000-0000-0000-000000000002', 'Fornecedor teste');
 INSERT INTO alm.recebimentos (id, origem, criado_por, alterado_por) VALUES
@@ -406,6 +427,9 @@ $$;
 
 SET LOCAL ROLE alm_api;
 SELECT pg_temp.ok('api executa normalizacao real', alm.normalizar_texto('Água') = 'agua');
+SELECT pg_temp.rejeita('api nao cria segundo administrador',
+  $$INSERT INTO alm.usuarios(nome,perfil,matricula) VALUES('Outro Admin','ADMINISTRADOR','ADMIN03')$$,
+  '23505');
 SELECT alm.proximo_codigo_recebimento(9998::smallint);
 SELECT pg_temp.rejeita('api SELECT numerador negado', 'SELECT * FROM alm.recebimento_numeradores', '42501');
 SELECT pg_temp.rejeita('api INSERT numerador negado', 'INSERT INTO alm.recebimento_numeradores VALUES (9997,1,now())', '42501');
@@ -437,6 +461,24 @@ RESET ROLE;
 SELECT pg_temp.ok('gerador sequencial roles', (SELECT ultimo_numero=2 FROM alm.recebimento_numeradores WHERE ano=9998));
 SELECT pg_temp.ok('job processa fila', EXISTS(SELECT 1 FROM alm.outbox WHERE chave_idempotencia='test' AND status='CONCLUIDO'));
 SELECT pg_temp.ok('job controla espelho', EXISTS(SELECT 1 FROM alm.espelho_sheets WHERE aba='test'));
+SELECT pg_temp.ok('somente provisioner executa bootstrap',
+  has_function_privilege('alm_provisioner',
+    'alm.provisionar_primeiro_administrador(text,text,text,bytea,text,uuid,timestamptz)','EXECUTE')
+  AND NOT has_function_privilege('alm_api',
+    'alm.provisionar_primeiro_administrador(text,text,text,bytea,text,uuid,timestamptz)','EXECUTE')
+  AND NOT has_function_privilege('alm_job',
+    'alm.provisionar_primeiro_administrador(text,text,text,bytea,text,uuid,timestamptz)','EXECUTE')
+  AND NOT has_table_privilege('alm_api','alm.credenciais_pin','DELETE'));
+SET LOCAL ROLE alm_provisioner;
+SELECT pg_temp.rejeita('bootstrap recusa segundo administrador',
+  $$SELECT alm.provisionar_primeiro_administrador(
+    'ADMIN02','Segundo Admin',
+    'scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    decode(repeat('ab',32),'hex'),'CHANGE-SECOND-ADMIN',
+    '00000000-0000-0000-0000-000000000098',clock_timestamp()+interval '1 hour')$$,
+  'P0001');
+SELECT pg_temp.rejeita('provisioner nao le usuarios', 'SELECT * FROM alm.usuarios', '42501');
+RESET ROLE;
 SELECT pg_temp.rejeita('historico imutavel UPDATE', 'UPDATE alm.historico_alteracoes SET detalhes=''alterado''', 'P0001');
 SELECT pg_temp.rejeita('historico imutavel DELETE', 'DELETE FROM alm.historico_alteracoes', 'P0001');
 SELECT pg_temp.rejeita('historico imutavel TRUNCATE', 'TRUNCATE alm.historico_alteracoes', 'P0001');

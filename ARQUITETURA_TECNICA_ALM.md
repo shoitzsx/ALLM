@@ -1795,7 +1795,7 @@ TO alm_api, alm_job;
 COMMIT;
 ```
 
-Observacao de bootstrap: o primeiro administrador e criado por migration privilegiada com `app.ator_sistema` definido. Toda transacao mutavel posterior define exatamente um entre `SET LOCAL app.usuario_id` e `SET LOCAL app.ator_sistema`, alem de `request_id`; requisicoes humanas tambem definem IP e user-agent. As roles `NOLOGIN` sao concedidas a logins tecnicos diferentes por ambiente. Clientes nunca acessam o PostgreSQL diretamente.
+Observacao de bootstrap: a migration nao contem usuario nem segredo. Ela instala a role `alm_provisioner` e a funcao privilegiada, auditada e de uso unico; o script manual `backend/scripts/provision-first-admin.mjs` exige referencia de aprovacao, grava somente hashes e define `app.ator_sistema`/`request_id`. Toda transacao mutavel posterior define exatamente um entre `SET LOCAL app.usuario_id` e `SET LOCAL app.ator_sistema`, alem de `request_id`; requisicoes humanas tambem definem IP e user-agent. As roles `NOLOGIN` sao concedidas a logins tecnicos diferentes por ambiente. Clientes nunca acessam o PostgreSQL diretamente.
 
 ## 4. Indices e estrategia de busca
 
