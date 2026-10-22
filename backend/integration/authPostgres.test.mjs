@@ -240,18 +240,19 @@ test('approved activation registers a passkey with real attestation and consumes
     const pin = '12348765'
     const activationCode = createOpaqueToken()
     const pinHash = await hashPin(temporaryPin, pepper)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
     let userId
     await withApiTransaction(pool, null, randomUUID(), async (client) => {
       const { rows: [user] } = await client.query(`INSERT INTO alm.usuarios
         (matricula,nome,perfil) VALUES($1,'Teste Ativacao','PORTARIA') RETURNING id`, [matricula])
       userId = user.id
       await client.query(`INSERT INTO alm.credenciais_pin
-        (usuario_id,pin_hash,algoritmo,pepper_versao,temporario)
-         VALUES($1,$2,'scrypt',1,true)`, [userId, pinHash])
+        (usuario_id,pin_hash,algoritmo,pepper_versao,temporario,expira_em)
+         VALUES($1,$2,'scrypt',1,true,$3)`, [userId, pinHash, expiresAt])
       await client.query(`INSERT INTO alm.autorizacoes_webauthn
         (usuario_id,finalidade,codigo_hash,autorizacao_externa,expira_em)
-        VALUES($1,'ATIVACAO',$2,'local-approved-test',clock_timestamp()+interval '10 minutes')`,
-      [userId, hashOpaqueToken(activationCode)])
+         VALUES($1,'ATIVACAO',$2,'local-approved-test',$3)`,
+      [userId, hashOpaqueToken(activationCode), expiresAt])
     })
     const app = await createPostgresApp({ pool,
       environment: { host: '127.0.0.1', port: 0, rpName: 'ALM', rpId: 'localhost',
