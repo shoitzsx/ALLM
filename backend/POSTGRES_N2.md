@@ -2,8 +2,8 @@
 
 O backend Node local pode iniciar com `ALM_BACKEND_MODE=postgres`. Esse modo usa
 `alm_runtime_api` e `SET LOCAL ROLE alm_api` em transações PostgreSQL; não chama
-Google Sheets. Não executa migrations ao iniciar. O schema necessário é o das
-11 migrations-base mais `20261019180000_alm_n2_webauthn.sql`.
+Google Sheets. Não executa migrations ao iniciar. O schema necessário inclui
+as migrations N-2 WebAuthn e de provisionamento do primeiro administrador.
 
 Configure as variáveis `ALM_DB_*`, `ALM_PIN_PEPPER_V1`,
 `ALM_WEBAUTHN_RP_ID` e `ALM_WEBAUTHN_ORIGINS` conforme `.env.example`.
@@ -25,6 +25,7 @@ O navegador deve enviar cookies (`credentials: 'include'` quando necessário).
 | POST | `/auth/login-challenges/:id/complete` | `{response}` WebAuthn → `200 {authenticated:true}` e cookie final |
 | GET | `/auth/me` | Identidade SQL, perfil, papéis e permissões da sessão MFA; `401` sem ela |
 | POST | `/auth/logout` | Revoga a sessão e limpa o cookie |
+| POST | `/auth/initial-pin` | `{matricula,temporaryPin,newPin,activationCode}` troca o PIN temporário sem consumir o código |
 | POST | `/auth/authenticators/registration-challenges` | Com sessão MFA recente ou `{matricula,pin,activationCode}` previamente autorizado → `201 {challengeId,options}` |
 | POST | `/auth/authenticators` | `{challengeId,response}` e `activationCode` quando cabível → `201` após verificar attestation |
 | GET | `/auth/authenticators` | Lista metadados dos dispositivos, sem chave pública |
@@ -54,10 +55,21 @@ limitação local de tentativas.
   histórico, edição/finalização de REC, usuários administrativos nem migração
   dos dados existentes no Sheets. As respostas de REC atuais contêm apenas
   campos principais. Não apontar o frontend completo para este modo ainda.
-- Provisionar o primeiro usuário, PIN e autorização de ativação exige o
-  procedimento administrativo aprovado; a API não cria essas credenciais.
-  O formato de hash de PIN implementado é `scrypt` com salt individual e pepper
-  versionado fora do banco. Argon2id ainda não foi integrado.
+- O primeiro administrador é criado somente por
+  `backend/scripts/provision-first-admin.mjs`, com uma conexão operacional capaz
+  de `SET ROLE alm_provisioner`. O comando exige `--approval-reference` e
+  `--confirm PROVISION-FIRST-ADMIN`; gera PIN/código em memória, grava somente
+  hashes e exibe os valores uma única vez para entrega por canal seguro. Exemplo:
+  `node backend/scripts/provision-first-admin.mjs --matricula ADM001 --nome "Nome" --approval-reference CHANGE-1234 --confirm PROVISION-FIRST-ADMIN`.
+  Configure `ALM_PROVISION_DATABASE_URL` e nunca redirecione a saída para arquivo.
+  Uma segunda execução e qualquer segundo usuário com perfil `ADMINISTRADOR` são
+  recusados pelo banco. Alterar o modelo singleton exige migration e aprovação
+  explícitas; não deve ser contornado pela role da API.
+- O PIN temporário deve ser trocado em `/auth/initial-pin` antes do desafio de
+  cadastro. O código continua válido e não consumido durante a troca e a criação
+  do desafio; só é consumido na transação que grava a passkey. O hash de PIN usa
+  `scrypt`, salt individual e pepper versionado fora do banco. Argon2id ainda não
+  foi integrado.
 - O rate limit em memória auxilia o desenvolvimento local; a política final
   de bloqueio e sua coordenação entre instâncias ainda precisam ser fechadas.
 - A migration N-2 está versionada na `main`, mas a aplicação em staging é

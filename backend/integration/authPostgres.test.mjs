@@ -236,9 +236,10 @@ test('approved activation registers a passkey with real attestation and consumes
     ])))
     const credentialId = randomBytes(32)
     const matricula = `A${Date.now().toString().slice(-10)}`
-    const pin = '87654321'
+    const temporaryPin = '87654321'
+    const pin = '12348765'
     const activationCode = createOpaqueToken()
-    const pinHash = await hashPin(pin, pepper)
+    const pinHash = await hashPin(temporaryPin, pepper)
     let userId
     await withApiTransaction(pool, null, randomUUID(), async (client) => {
       const { rows: [user] } = await client.query(`INSERT INTO alm.usuarios
@@ -246,7 +247,7 @@ test('approved activation registers a passkey with real attestation and consumes
       userId = user.id
       await client.query(`INSERT INTO alm.credenciais_pin
         (usuario_id,pin_hash,algoritmo,pepper_versao,temporario)
-        VALUES($1,$2,'scrypt',1,false)`, [userId, pinHash])
+         VALUES($1,$2,'scrypt',1,true)`, [userId, pinHash])
       await client.query(`INSERT INTO alm.autorizacoes_webauthn
         (usuario_id,finalidade,codigo_hash,autorizacao_externa,expira_em)
         VALUES($1,'ATIVACAO',$2,'local-approved-test',clock_timestamp()+interval '10 minutes')`,
@@ -262,10 +263,33 @@ test('approved activation registers a passkey with real attestation and consumes
       headers: { Origin: 'http://localhost:5173', 'Content-Type': 'application/json' },
       body: JSON.stringify(data) })
     try {
+      const beforeChange = await post('/auth/authenticators/registration-challenges',
+        { matricula, pin: temporaryPin, activationCode })
+      assert.equal(beforeChange.status, 401)
+
+      const changed = await post('/auth/initial-pin', {
+        matricula, temporaryPin, newPin: pin, activationCode,
+      })
+      assert.equal(changed.status, 200, await changed.text())
+      const afterPin = await withApiTransaction(pool, null, randomUUID(), async (client) => {
+        const { rows: [row] } = await client.query(`SELECT p.temporario,a.consumido_em
+          FROM alm.credenciais_pin p JOIN alm.autorizacoes_webauthn a ON a.usuario_id=p.usuario_id
+          WHERE p.usuario_id=$1`, [userId])
+        return row
+      })
+      assert.equal(afterPin.temporario, false)
+      assert.equal(afterPin.consumido_em, null)
+
       const begin = await post('/auth/authenticators/registration-challenges',
         { matricula, pin, activationCode })
       const challenge = await begin.json()
       assert.equal(begin.status, 201, JSON.stringify(challenge))
+      const pending = await withApiTransaction(pool, null, randomUUID(), async (client) => {
+        const { rows: [row] } = await client.query(`SELECT consumido_em
+          FROM alm.autorizacoes_webauthn WHERE usuario_id=$1`, [userId])
+        return row.consumido_em
+      })
+      assert.equal(pending, null)
       assert.equal((await fetch(`${base}/auth/me`)).status, 401)
 
       const registered = await post('/auth/authenticators', {

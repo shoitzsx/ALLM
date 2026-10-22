@@ -30,7 +30,8 @@ jobs:
           --health-retries 12
     env:
       ALM_DB_TEST_DEPS: /tmp/alm-db-deps
-      ALM_LOCAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/alm_ci_clean
+      ALM_LOCAL_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/alm_ci_clean
+      PGPASSWORD: postgres
     steps:
       - name: Checkout do projeto
         uses: actions/checkout@v4
@@ -48,3 +49,36 @@ jobs:
 
       - name: Testar SQL, SET ROLE real e concorrencia
         run: node supabase/tests/run-database.mjs --local
+
+      - name: Testar invariantes WebAuthn no PostgreSQL 17
+        env:
+          ALM_DB_TEST_DISPOSABLE: YES
+          PGPASSWORD: postgres
+        run: node supabase/tests/test-webauthn-n2.mjs
+
+      - name: Preparar login efemero e dependencias do backend
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql "$ALM_LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE alm_runtime_api LOGIN NOINHERIT NOSUPERUSER
+            NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
+            PASSWORD 'local-api-only';
+          GRANT alm_api TO alm_runtime_api
+            WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+          SQL
+          npm ci --prefix backend --no-audit --no-fund
+
+      - name: Testar fluxo HTTP WebAuthn completo
+        env:
+          ALM_DB_TEST_DISPOSABLE: YES
+          ALM_DB_HOST: 127.0.0.1
+          ALM_DB_PORT: 5432
+          ALM_DB_NAME: alm_ci_clean
+          ALM_DB_API_USER: alm_runtime_api
+          ALM_DB_API_PASSWORD: local-api-only
+          ALM_DB_SSL_MODE: disable
+          ALM_PIN_PEPPER_V1: local-integration-pepper-with-at-least-32-characters
+          ALM_WEBAUTHN_RP_ID: localhost
+          ALM_WEBAUTHN_ORIGINS: http://localhost:5173
+        run: npm --prefix backend run test:postgres

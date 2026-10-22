@@ -36,7 +36,8 @@ const requiredMigrations = [
   '20261015023000_alm_bloquear_restauracao_purgado.sql',
   '20261015024500_alm_extensions_role_usage.sql',
   '20261015030000_alm_seguranca_auth.sql',
-  '20261019180000_alm_n2_webauthn.sql'
+  '20261019180000_alm_n2_webauthn.sql',
+  '20261021120000_alm_primeiro_administrador.sql'
 ]
 for (const required of requiredMigrations) {
   if (!migrationNames.includes(required)) throw new Error('Migration obrigatoria ausente: ' + required)
