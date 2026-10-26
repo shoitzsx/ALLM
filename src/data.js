@@ -6,6 +6,8 @@
  * ao mesmo protocolo.
  */
 
+import { csvField } from './csvSafe.js'
+
 export const RECEBIMENTO_STATUS = Object.freeze({
   DIGITACAO: 'Em digitação',
   AGUARDANDO_DOCUMENTACAO: 'Aguardando documentação',
@@ -496,13 +498,9 @@ export function getDashboardMetrics(recebimentos, referenceDate = new Date()) {
 
 export const calculateMetrics = getDashboardMetrics
 
-function csvCell(value, delimiter) {
-  const text = value == null ? '' : String(value)
-  if (text.includes(delimiter) || /["\r\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`
-  }
-  return text
-}
+// A serialização de cada célula (escape de aspas/delimitador e proteção contra CSV Injection, H-2)
+// vive em csvSafe.js e é a mesma da Visualização.
+const csvCell = csvField
 
 /** Retorna CSV com uma linha por item, compatível com o legado em Excel. */
 export function exportRecebimentosCsv(recebimentos, options = {}) {

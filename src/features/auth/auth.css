@@ -1,0 +1,783 @@
+/* Estilos da tela de Login (rota de preview #/login — ver LoginPage.jsx).
+   Reaproveita integralmente as variáveis/cores/raio/sombra já definidas em
+   src/styles.css — nenhuma cor nova é introduzida aqui, nem o componente
+   Sidebar/AppShell é reaproveitado estruturalmente (só os tokens de cor do
+   painel escuro, para o login "pertencer" ao mesmo produto visualmente). */
+
+.auth-page {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--app-background);
+}
+
+.auth-brand-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: 56px 64px;
+  color: var(--sidebar-text);
+  background: var(--sidebar-background);
+}
+
+.auth-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-brand-mark img {
+  flex-shrink: 0;
+  border-radius: 10px;
+}
+
+.auth-brand-mark-copy strong {
+  display: block;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.auth-brand-mark-copy span {
+  display: block;
+  margin-top: 2px;
+  color: var(--sidebar-muted);
+  font-size: 13px;
+}
+
+.auth-brand-copy {
+  max-width: 360px;
+  margin: 0;
+  color: var(--sidebar-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.auth-env-note {
+  max-width: 360px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--sidebar-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 360px;
+  padding: 36px 32px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-card-header h1 {
+  margin-bottom: 6px;
+  color: var(--ink-950);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.auth-card-header p {
+  margin: 0;
+  color: var(--ink-600);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Campos maiores e com 16px (não os 12px padrão de .field input em
+   styles.css) só dentro do card de login: alvo de toque confortável e evita
+   o zoom automático do iOS Safari ao focar um input com fonte < 16px. */
+.auth-card .field input {
+  min-height: 48px;
+  font-size: 16px;
+}
+
+.auth-card .field input:disabled {
+  color: var(--ink-600);
+  background: var(--surface-subtle);
+  cursor: not-allowed;
+}
+
+.auth-pin-field {
+  position: relative;
+}
+
+.auth-pin-field input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.auth-pin-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--ink-500);
+  background: transparent;
+  transform: translateY(-50%);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.auth-pin-toggle:hover:not(:disabled) {
+  color: var(--ink-800);
+  background: var(--ink-100);
+}
+
+.auth-pin-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.auth-submit {
+  justify-content: center;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-alert:focus-visible {
+  outline: 3px solid rgba(49, 97, 224, 0.2);
+  outline-offset: 2px;
+}
+
+.auth-alert strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.auth-alert svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.auth-alert-error {
+  border-color: var(--red-100);
+  color: var(--red-700);
+  background: var(--red-50);
+}
+
+.auth-alert-warning {
+  border-color: var(--amber-100);
+  color: var(--amber-700);
+  background: var(--amber-50);
+}
+
+.auth-alert-info {
+  border-color: var(--blue-100);
+  color: var(--blue-700);
+  background: var(--blue-50);
+}
+
+@media (max-width: 960px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-brand-panel {
+    gap: 10px;
+    padding: 24px 24px 20px;
+  }
+
+  .auth-brand-copy,
+  .auth-env-note {
+    max-width: none;
+  }
+
+  .auth-env-note {
+    padding-top: 12px;
+  }
+
+  .auth-form-panel {
+    padding: 20px 20px 32px;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth-card {
+    padding: 28px 20px;
+  }
+}
+
+/* Nenhuma regra de tema escuro adicional é necessária aqui: todo token usado
+   acima (--surface-card, --ink-*, --border-default, --red/amber/blue-*,
+   --sidebar-*) já é redefinido globalmente sob html[data-theme="dark"] em
+   src/styles.css, e a regra global "html[data-theme=dark] input, select,
+   textarea" já recolore os campos — a página se adapta sozinha. */
+
+/* ------------------------------------------------------------------ N-2.1 */
+
+.auth-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Selo das telas de pré-visualização (só em desenvolvimento): deixa claro que
+   o estado é demonstrativo e não concede acesso. */
+.auth-preview-badge {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--amber-500);
+  border-radius: var(--radius-sm);
+  color: var(--amber-700);
+  background: var(--amber-50);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Passo do segundo fator (PasskeyStep). */
+.auth-step-label {
+  margin: 0 0 6px;
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* O título recebe foco por script a cada mudança de passo (tabindex=-1). Só
+   some o anel quando o foco NÃO é de navegação (clique do mouse); por teclado
+   ou leitor de tela o anel continua visível, mais forte que o padrão do app
+   (20% de opacidade) por ser o único indicador de onde o foco foi parar. */
+.auth-card-header h1:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.auth-card-header h1:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.auth-step-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-step-actions .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.auth-pulse {
+  animation: auth-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes auth-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Zona do teclado: matrícula + PIN + alternância + teclado + botão Entrar (mesmo espaçamento do cartão). */
+.auth-entry-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Orientação curta sob a matrícula (só o limite; o mínimo não aparece na tela). */
+.auth-field-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-700);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* Aviso de excesso na matrícula: ocupa o lugar da orientação (mesmo espaço). Em tela
+   estreita o texto quebra em duas linhas, então o espaço reserva a altura das duas
+   para o aviso aparecer e sumir sem empurrar o PIN nem o teclado do ALM. */
+@media (max-width: 380px) {
+  .auth-field-note {
+    min-height: calc(2 * 1.4 * 12.5px + 6px);
+  }
+}
+
+.auth-field-hint-error {
+  color: var(--red-700);
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .auth-field-hint-error {
+  color: #f2a7a4;
+}
+
+/* Alternância entre o teclado do ALM e o do dispositivo. */
+.auth-keyboard-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--brand-700);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.auth-keyboard-toggle:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+html[data-theme="dark"] .auth-keyboard-toggle {
+  color: var(--ink-800);
+}
+
+/* Teclado numérico do ALM (PinKeypad). Alvos de toque >= 48px, mesmo em 320px. */
+.auth-keypad {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+/* Legenda do campo atendido pelo teclado (matrícula ou PIN). Sempre presente com o teclado aberto: trocar de campo não muda a altura. */
+.auth-keypad-target {
+  margin: 0 0 8px;
+  color: var(--ink-700);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.auth-keypad-value {
+  margin-left: 8px;
+  color: var(--ink-950);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.auth-keypad-target strong {
+  color: var(--ink-950);
+  font-weight: 700;
+}
+
+.auth-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.auth-keypad-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 0;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  color: var(--ink-950);
+  background: var(--control-background);
+  box-shadow: var(--shadow-sm);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 100ms ease, border-color 100ms ease, transform 100ms ease;
+}
+
+.auth-keypad-key:active:not(:disabled) {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  transform: scale(0.97);
+}
+
+.auth-keypad-key:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.auth-keypad-key:focus-visible {
+  outline: 3px solid rgba(49, 97, 224, 0.45);
+  outline-offset: 2px;
+}
+
+.auth-keypad-key-action {
+  color: var(--ink-700);
+}
+
+.auth-keypad-key-continue {
+  border-color: transparent;
+  color: #fff;
+  background: var(--brand-700);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-keypad-key-continue:active:not(:disabled) {
+  border-color: transparent;
+  background: #162f82;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-keypad-key,
+  .auth-pulse {
+    transition: none;
+    animation: none;
+  }
+
+  .auth-keypad-key:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Celular em paisagem / telas baixas: o cartão rola; teclas um pouco menores
+   (ainda >= 44px), sem esconder o aviso do ambiente. */
+@media (max-height: 520px) {
+  .auth-keypad-grid {
+    gap: 6px;
+  }
+
+  .auth-keypad-key {
+    min-height: 46px;
+    font-size: 20px;
+  }
+
+  /* "Continuar" em linha (ícone + texto) para caber nos 46px sem herdar os 20px dos dígitos. */
+  .auth-keypad-key-continue {
+    flex-direction: row;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .auth-brand-panel .auth-brand-copy {
+    display: none;
+  }
+
+  .auth-form-panel {
+    align-items: flex-start;
+    padding-top: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-keypad {
+    padding: 8px;
+  }
+
+  .auth-keypad-grid {
+    gap: 6px;
+  }
+}
+
+/* Tema escuro: os tokens de texto dos avisos (--red/amber/blue-700) não são redefinidos
+   no escuro e ficavam com contraste fraco sobre o fundo escuro. Tons claros só para o login. */
+html[data-theme="dark"] .auth-alert-error {
+  color: #f2a7a4;
+}
+
+html[data-theme="dark"] .auth-alert-warning,
+html[data-theme="dark"] .auth-preview-badge {
+  color: #f0c87a;
+}
+
+html[data-theme="dark"] .auth-alert-info {
+  color: #9cc4ee;
+}
+
+/* Telas estreitas: cartão alinhado ao topo. Centralizado na vertical, ele "pularia"
+   para cima toda vez que o teclado do ALM ou um aviso aumentasse a altura do cartão,
+   deslocando os campos debaixo do dedo. */
+@media (max-width: 960px) {
+  /* A faixa da marca mantém a altura do conteúdo; o painel do formulário fica com o resto.
+     Sem isto o espaço livre da tela é repartido entre os dois e o cartão se mexe quando cresce. */
+  .auth-page {
+    grid-template-rows: auto 1fr;
+  }
+
+  .auth-form-panel {
+    align-items: flex-start;
+  }
+}
+
+/* Rodapé do cartão de login: link para ativar a passkey. */
+.auth-footnote {
+  margin: 0;
+  color: var(--ink-700);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-footnote a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-700);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-theme="dark"] .auth-footnote a {
+  color: var(--ink-800);
+}
+
+/* Botão que abre a passkey no passo do segundo fator. */
+.auth-passkey-start {
+  width: 100%;
+}
+
+/* ---- Menu da conta (topo do app) ---- */
+.user-menu {
+  position: relative;
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-950);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.user-menu-item:hover:not(:disabled) {
+  background: var(--ink-100);
+}
+
+.user-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ---- Meus dispositivos ---- */
+.auth-devices {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-device-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+}
+
+.auth-device-step-copy {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-device-step-copy span {
+  color: var(--ink-700);
+  font-size: 13px;
+}
+
+.auth-device-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth-device-actions {
+  display: block;
+  margin-top: 8px;
+}
+
+.auth-device-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-device-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.auth-device-item:last-child {
+  border-bottom: 0;
+}
+
+.auth-device-item.is-revoked {
+  opacity: 0.7;
+}
+
+.auth-device-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--brand-700);
+  background: var(--brand-50);
+}
+
+.auth-device-copy {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.auth-device-copy span {
+  color: var(--ink-700);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.auth-device-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-device-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--ink-950);
+  background: var(--ink-100);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-device-badge.is-revoked {
+  color: var(--red-700);
+  background: var(--red-50);
+}
+
+html[data-theme="dark"] .auth-device-badge.is-revoked {
+  color: #f2a7a4;
+}
+
+.auth-device-hint {
+  color: var(--ink-700);
+  font-size: 12px;
+}
+
+.auth-revoke-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Ativação: primeiro acesso (PIN temporário) ou novo dispositivo */
+.auth-mode {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.auth-mode legend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--ink-800);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-mode-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--ink-800);
+  background: var(--surface-card);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.auth-mode-option input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brand-700);
+}
+.auth-mode-option:has(input:checked) {
+  border-color: var(--brand-700);
+  background: var(--surface-subtle);
+}
+.auth-mode-option:has(input:focus-visible) {
+  outline: 3px solid var(--brand-700);
+  outline-offset: 2px;
+}
+.auth-mode:disabled .auth-mode-option {
+  cursor: default;
+  opacity: 0.7;
+}

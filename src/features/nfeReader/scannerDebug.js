@@ -1,7 +1,7 @@
 /**
  * Ativação do painel de diagnóstico/benchmark do scanner — por query string
  * (`?nfeScannerDebug=1`), nunca por `import.meta.env.DEV`. O teste decisivo
- * (NF real, celular físico) precisa acontecer no deploy HTTPS (Vercel), não
+ * (NF real, celular físico) precisa acontecer num ambiente HTTPS, não
  * só em desenvolvimento local — diferente do painel de diagnóstico do
  * scanner ao vivo (DevDiagnosticsPanel, NfeLiveScanner.jsx), que continua
  * DEV-only por ser só instrumentação interna, não uma ferramenta de teste

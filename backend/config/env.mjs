@@ -5,9 +5,9 @@ const projectRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 // O .env fica na raiz do projeto (mesmo arquivo que o Vite usa para VITE_*),
 // resolvido a partir deste arquivo para funcionar independentemente do
-// diretório usado para iniciar o processo. Em produção (Vercel) este arquivo
-// não existe e a chamada abaixo é um no-op silencioso — as variáveis vêm
-// direto de process.env, injetadas pela plataforma.
+// diretório usado para iniciar o processo. Num servidor sem .env (variáveis
+// injetadas pelo ambiente) a chamada abaixo é um no-op silencioso — as
+// variáveis vêm direto de process.env.
 export function loadProjectEnvironment() {
   dotenv.config({ path: path.join(projectRoot, '.env') })
   dotenv.config({ path: path.join(projectRoot, 'backend', '.env') })

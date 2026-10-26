@@ -10,9 +10,9 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
+  Database,
   ClipboardCheck,
   ClipboardList,
   Eye,
@@ -49,33 +49,50 @@ import {
   hasOpenDivergences,
   isNfPending,
 } from './data.js'
-import { useRecebimentosStore } from './store.js'
+import { resetDemoData, retryInitialLoad, setCurrentUser, useRecebimentosStore } from './store.js'
 import {
   Avatar,
   EmptyState,
   FieldError,
   Modal,
   StatusBadge,
-  ToastHost,
   formatDate,
   formatDateTime,
   formatFileSize,
-  getStatusMeta,
 } from './ui.jsx'
-import { ROUTES, navigate, useHashRoute } from './layout/navigation.js'
+import { AREAS, AREA_CONFIG, ROUTES, getAreaForPath, navigate, useHashRoute } from './layout/navigation.js'
 import { Sidebar } from './layout/Sidebar.jsx'
 import { MobileHeader } from './layout/MobileHeader.jsx'
 import { MobileNav } from './layout/MobileNav.jsx'
 import { PageHeader } from './components/shared/PageHeader.jsx'
 import { FilterBar } from './components/shared/FilterBar.jsx'
 import { KpiStrip } from './components/dashboard/KpiStrip.jsx'
+import { BarList } from './components/dashboard/BarList.jsx'
+import { MonthlyChart } from './components/dashboard/MonthlyChart.jsx'
+import {
+  buildMonthlySeries,
+  buildStatusChart,
+  buildTopList,
+  getAttentionReceipts,
+  getRecentReceipts,
+  selectActiveReceipts,
+} from './components/dashboard/dashboardMetrics.js'
 import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
 import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
 import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
 import { clearPendingReceiptPrefill, peekPendingReceiptPrefill } from './features/nfeReader/receiptHandoff.js'
-import { attachmentDownloadHref } from './api.js'
+import { attachmentDownloadHref, setUnauthorizedHandler } from './api.js'
 import { friendlyAttachmentError } from './features/attachments/errorMessages.js'
 import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile } from './features/attachments/constraints.js'
+import { LoginPage } from './features/auth/LoginPage.jsx'
+import { ActivatePasskeyPage } from './features/auth/ActivatePasskeyPage.jsx'
+import { AccessGate } from './features/auth/AccessGate.jsx'
+import { AuthenticatorsPage } from './features/auth/AuthenticatorsPage.jsx'
+import { AuthProvider, useAuth } from './features/auth/AuthProvider.jsx'
+import { UserMenu } from './features/auth/UserMenu.jsx'
+import { AUTH_ROUTES, canAccessPath } from './features/auth/routeAccess.js'
+import { toStoreUser } from './features/auth/sessionState.js'
+import { NotificationsProvider, useNotifications } from './features/notifications/index.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
 // a quem abrir esta tela experimental. `receiptHandoff.js` acima é importado
@@ -84,6 +101,22 @@ import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile
 // confirmados na leitura de NF-e — importá-lo aqui não traz nenhuma
 // dependência de câmera/PDF/OCR para o bundle principal.
 const NfeReaderPage = lazy(() => import('./features/nfeReader/NfeReaderPage.jsx'))
+
+// PortariaPage é um named export (não default) — o adaptador abaixo resolve
+// isso para o formato que React.lazy espera. Lazy por importar, através de
+// NfePhotoCapture.jsx, a mesma cadeia pesada do scanner (ZBar/WASM, pdf.js,
+// Tesseract) que justifica NfeReaderPage também ser lazy, acima.
+const PortariaPage = lazy(() =>
+  import('./features/portaria/PortariaPage.jsx').then((module) => ({ default: module.PortariaPage })),
+)
+
+// Mesmo adaptador de named export que PortariaPage usa acima. Lazy mais por
+// consistência com o resto do módulo do que por peso (Visualização não tem
+// dependência pesada, é só mock local) — mantém o bundle inicial livre de
+// qualquer página que não seja a primeira que o usuário abre.
+const VisualizacaoPage = lazy(() =>
+  import('./features/visualizacao/VisualizacaoPage.jsx').then((module) => ({ default: module.VisualizacaoPage })),
+)
 
 const WIZARD_STEPS = [
   { title: 'Identificação', subtitle: 'Pedido e fornecedor' },
@@ -189,12 +222,30 @@ function downloadCsv(receipts) {
   URL.revokeObjectURL(url)
 }
 
-function AppShell({ route, pendingCount, currentUser, children, onToast, theme, onToggleTheme }) {
+// "Novo recebimento" só aparece para quem tem `recebimentos.create` nas permissões
+// que o SERVIDOR entregou em /auth/me (nunca pelo nome do perfil). O backend recusa
+// a criação de qualquer forma; aqui só se evita oferecer um botão que não funciona.
+function NewReceiptButton({ iconSize = 16 }) {
+  const { can } = useAuth()
+  if (!can('recebimentos.create')) return null
+  return (
+    <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
+      <Plus size={iconSize} /> Novo recebimento
+    </button>
+  )
+}
+
+// Um único shell para as duas áreas: a área (da rota) só troca os itens de
+// navegação e o que não faz sentido fora dela (a busca de recebimentos e o
+// atalho para Pendências são do Almoxarifado).
+function AppShell({ area, route, pendingCount, currentUser, access, children, onToast, theme, onToggleTheme }) {
   const [globalSearch, setGlobalSearch] = useState('')
   const searchRef = useRef(null)
+  const isAlmoxarifado = area === AREAS.almoxarifado
 
   useEffect(() => {
     const onShortcut = (event) => {
+      if (!searchRef.current) return
       if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
         event.preventDefault()
         searchRef.current?.focus()
@@ -211,54 +262,57 @@ function AppShell({ route, pendingCount, currentUser, children, onToast, theme, 
   }
 
   return (
-    <div className="app-shell">
-      <Sidebar route={route} pendingCount={pendingCount} currentUser={currentUser} />
+    <div className="app-shell" data-area={area}>
+      <Sidebar area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} currentUser={currentUser} canAccess={access.canAccess} />
 
       <main className="main-shell">
         <header className="topbar">
-          <form className="top-search" onSubmit={submitGlobalSearch} role="search">
-            <Search size={17} />
-            <input
-              ref={searchRef}
-              value={globalSearch}
-              onChange={(event) => setGlobalSearch(event.target.value)}
-              placeholder="Buscar protocolo, pedido, NF, fornecedor ou material"
-              aria-label="Busca global"
-            />
-            <kbd>/</kbd>
-          </form>
+          {isAlmoxarifado ? (
+            <form className="top-search" onSubmit={submitGlobalSearch} role="search">
+              <Search size={17} />
+              <input
+                ref={searchRef}
+                value={globalSearch}
+                onChange={(event) => setGlobalSearch(event.target.value)}
+                placeholder="Buscar protocolo, pedido, NF, fornecedor ou material"
+                aria-label="Busca global"
+              />
+              <kbd>/</kbd>
+            </form>
+          ) : (
+            <div className="topbar-context">
+              <strong>{AREA_CONFIG[area].label}</strong>
+              <span>Operação de chegadas · registros simulados, sem integração real</span>
+            </div>
+          )}
           <div className="topbar-actions">
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-            <button
-              className="icon-button notification-button"
-              type="button"
-              aria-label="Ver pendências"
-              onClick={() => navigate(ROUTES.pending)}
-            >
-              <Bell size={18} />
-            </button>
+            {isAlmoxarifado ? (
+              <button
+                className="icon-button notification-button"
+                type="button"
+                aria-label="Ver pendências"
+                onClick={() => navigate(ROUTES.pending)}
+              >
+                <Bell size={18} />
+              </button>
+            ) : null}
             <span className="topbar-divider" />
-            <button
-              className="topbar-user"
-              type="button"
-              onClick={() => onToast('Perfil demonstrativo', 'A autenticação corporativa será conectada na implantação.')}
-            >
-              <Avatar name={currentUser?.nome || currentUser?.name} />
-              <span className="topbar-user-copy">
-                <strong>{currentUser?.nome || currentUser?.name}</strong>
-                <span>{currentUser?.perfil || currentUser?.role}</span>
-              </span>
-              <ChevronDown size={14} className="icon-muted" />
-            </button>
+            <UserMenu
+              user={currentUser}
+              onDevices={() => navigate(AUTH_ROUTES.devices)}
+              onSignOut={access.onSignOut}
+              signingOut={access.signingOut}
+            />
           </div>
         </header>
 
-        <MobileHeader theme={theme} onToggleTheme={onToggleTheme} />
+        <MobileHeader area={area} theme={theme} onToggleTheme={onToggleTheme} />
 
         {children}
       </main>
 
-      <MobileNav route={route} pendingCount={pendingCount} />
+      <MobileNav area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} canAccess={access.canAccess} account={{ onDevices: () => navigate(AUTH_ROUTES.devices), onSignOut: access.onSignOut, signingOut: access.signingOut }} />
     </div>
   )
 }
@@ -303,13 +357,16 @@ function DashboardPage({ store }) {
   }
 
   const { receipts, metrics } = store
-  const maxStatus = Math.max(1, ...metrics.porStatus.map((item) => item.total))
-  const attention = receipts
-    .filter((item) => isNfPending(item) || hasOpenDivergences(item))
-    .slice(0, 5)
-  const recent = [...receipts]
-    .sort((a, b) => String(b.atualizadoEm).localeCompare(String(a.atualizadoEm)))
-    .slice(0, 5)
+  // Mesma base de getDashboardMetrics no store (registros ativos): os gráficos
+  // somam com os KPIs. "Recentes" e "Requer atenção" seguem como antes.
+  const activeReceipts = selectActiveReceipts(receipts)
+  const statusChart = buildStatusChart(metrics)
+  const monthly = buildMonthlySeries(activeReceipts)
+  const byType = buildTopList(metrics.porTipo, 6)
+  const bySupplier = buildTopList(metrics.porFornecedor, 5)
+  // Mesmo conjunto ativo dos KPIs e gráficos: arquivado não entra em "Requer atenção" nem em "Recentes".
+  const attention = getAttentionReceipts(activeReceipts)
+  const recent = getRecentReceipts(activeReceipts)
 
   return (
     <div className="page">
@@ -317,15 +374,40 @@ function DashboardPage({ store }) {
         title="Visão geral"
         description="Acompanhe os recebimentos e resolva o que precisa de atenção hoje."
       >
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
-          <Plus size={17} /> Novo recebimento
-        </button>
+        <NewReceiptButton iconSize={17} />
       </PageHeader>
+
+      <p className="dashboard-source">
+        <Database size={13} aria-hidden="true" />
+        Dados da API v1 · {metrics.totalRecebimentos} recebimento(s) ativo(s) carregado(s); arquivados não entram nos indicadores, nos gráficos nem nas listas desta página.
+      </p>
 
       <KpiStrip metrics={metrics} />
 
       <section className="dashboard-grid">
         <div className="dashboard-column">
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Evolução mensal</h2>
+                <p>Recebimentos por mês da data de recebimento{monthly.months.length ? ` · ${monthly.months[0].label} a ${monthly.months.at(-1).label}` : ''}</p>
+              </div>
+            </header>
+            {monthly.months.length ? (
+              <>
+                <MonthlyChart months={monthly.months} caption="Recebimentos ativos por mês da data de recebimento" />
+                {monthly.semDataValida || monthly.registrosAntesDoRecorte ? (
+                  <p className="chart-note">
+                    {monthly.registrosAntesDoRecorte ? `${monthly.registrosAntesDoRecorte} recebimento(s) de meses anteriores ao período exibido (últimos 12 meses com registro). ` : ''}
+                    {monthly.semDataValida ? `${monthly.semDataValida} recebimento(s) sem data de recebimento válida ficaram fora do gráfico.` : ''}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <EmptyState icon={CalendarDays} title="Sem datas para exibir" description={monthly.semDataValida ? `${monthly.semDataValida} recebimento(s) sem data de recebimento válida.` : 'Os recebimentos registrados vão aparecer aqui, por mês.'} />
+            )}
+          </article>
+
           <article className="panel">
             <header className="panel-header">
               <div>
@@ -336,23 +418,8 @@ function DashboardPage({ store }) {
                 Ver todos <ChevronRight size={14} />
               </button>
             </header>
-            <div className="status-bars">
-              {metrics.porStatus.map((item) => {
-                const suffix = STATUS_BAR_CLASSES[item.status]
-                return (
-                  <div className="status-bar-row" key={item.status}>
-                    <div className="status-bar-label">
-                      <span className={`status-dot ${suffix ? `dot-${suffix}` : ''}`} />
-                      <span>{getStatusMeta(item.status).shortLabel}</span>
-                    </div>
-                    <div className="bar-track">
-                      <div className={`bar-fill ${suffix ? `fill-${suffix}` : ''}`} style={{ width: `${Math.max(8, (item.total / maxStatus) * 100)}%` }} />
-                    </div>
-                    <span className="status-count">{item.total}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <BarList items={statusChart.items} label="Recebimentos ativos por status" toneOf={(item) => STATUS_BAR_CLASSES[item.key]} />
+            {statusChart.foraDoCatalogo ? <p className="chart-note">{statusChart.foraDoCatalogo} recebimento(s) com status fora do catálogo não aparecem nas barras.</p> : null}
           </article>
 
           <article className="panel table-panel">
@@ -428,6 +495,40 @@ function DashboardPage({ store }) {
               <EmptyState icon={CheckCircle2} title="Tudo em dia" description="Nenhuma pendência operacional neste momento." />
             )}
           </article>
+
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Por tipo de recebimento</h2>
+                <p>Quantidade de recebimentos por classificação</p>
+              </div>
+            </header>
+            {byType.items.length ? (
+              <>
+                <BarList items={byType.items} label="Recebimentos ativos por tipo" toneOf={() => 'brand'} />
+                {byType.demais ? <p className="chart-note">Mais {byType.demais.categorias} tipo(s), somando {byType.demais.total} recebimento(s).</p> : null}
+              </>
+            ) : (
+              <EmptyState icon={PackageOpen} title="Sem recebimentos" description="A distribuição por tipo aparece quando houver registros." />
+            )}
+          </article>
+
+          <article className="panel">
+            <header className="panel-header">
+              <div>
+                <h2>Principais fornecedores</h2>
+                <p>Os {Math.min(5, bySupplier.items.length) || 5} com mais recebimentos (quantidade de recebimentos, não de materiais)</p>
+              </div>
+            </header>
+            {bySupplier.items.length ? (
+              <>
+                <BarList items={bySupplier.items} label="Fornecedores com mais recebimentos ativos" toneOf={() => 'brand'} />
+                {bySupplier.demais ? <p className="chart-note">Outros {bySupplier.demais.categorias} fornecedor(es) somam {bySupplier.demais.total} recebimento(s).</p> : null}
+              </>
+            ) : (
+              <EmptyState icon={Building2} title="Sem fornecedores" description="Os fornecedores aparecem quando houver recebimentos." />
+            )}
+          </article>
         </div>
       </section>
     </div>
@@ -480,9 +581,7 @@ function ReceiptsPage({ store, initialQuery }) {
         <button className="btn btn-secondary" type="button" onClick={() => downloadCsv(filtered)}>
           <FileSpreadsheet size={16} /> Exportar Excel
         </button>
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
-          <Plus size={16} /> Novo recebimento
-        </button>
+        <NewReceiptButton />
       </PageHeader>
 
       <section className="panel table-panel">
@@ -1331,7 +1430,7 @@ function PendingPage({ store }) {
     <div className="page">
       <PageHeader title="Pendências" description="Cada cartão mostra o próximo passo necessário para o recebimento avançar.">
         <button className="btn btn-secondary" type="button" onClick={() => navigate(ROUTES.receipts)}><ClipboardList size={16} /> Ver todos</button>
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}><Plus size={16} /> Novo recebimento</button>
+        <NewReceiptButton />
       </PageHeader>
 
       <section className="pending-columns">
@@ -1358,19 +1457,24 @@ function PendingPage({ store }) {
   )
 }
 
-export default function App() {
-  const route = useHashRoute()
+// Tudo que depende do domínio de Recebimentos (store, toasts das páginas
+// autenticadas, AppShell) vive aqui, não em App(). Assim useRecebimentosStore()
+// só é chamado quando esta função é efetivamente renderizada — ou seja, nunca
+// na rota /login. App() decide a rota antes de montar este componente.
+function AuthenticatedApp({ route, theme, toggleTheme }) {
+  const auth = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
   const store = useRecebimentosStore()
-  const [toasts, setToasts] = useState([])
-  const { theme, toggleTheme } = useTheme()
-
-  const pushToast = (title, message, type = 'success') => {
-    const id = `${Date.now()}-${Math.random()}`
-    setToasts((current) => [...current, { id, title, message, type }])
-    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4400)
-  }
+  // Mantém a assinatura de sempre — pushToast(title, message, type = 'success') —
+  // para as telas que já a recebem por prop. A exibição vive em
+  // features/notifications, cujo Provider fica em App().
+  const { pushToast } = useNotifications()
 
   const pendingCount = store.receipts.filter((item) => isNfPending(item) || hasOpenDivergences(item) || item.status === RECEBIMENTO_STATUS.CONFERENCIA).length
+  // "Meus dispositivos" não pertence a nenhuma área: usa a primeira que a conta pode abrir.
+  const area = route.path === AUTH_ROUTES.devices && !canAccessPath(auth.user, AREA_CONFIG[AREAS.almoxarifado].home)
+    ? AREAS.portaria
+    : getAreaForPath(route.path)
   let content
 
   if (route.path === ROUTES.dashboard) {
@@ -1387,19 +1491,119 @@ export default function App() {
         <NfeReaderPage pushToast={pushToast} />
       </Suspense>
     )
+  } else if (route.path === ROUTES.portaria || route.path === ROUTES.portariaRegistrar) {
+    // As duas rotas no MESMO lugar da árvore: alternar entre o painel e o
+    // registro não desmonta a página (as chegadas simuladas continuam na tela).
+    content = (
+      <Suspense fallback={<div className="page"><EmptyState icon={ShieldCheck} title="Carregando módulo" description="Preparando a Portaria…" /></div>}>
+        <PortariaPage registering={route.path === ROUTES.portariaRegistrar} />
+      </Suspense>
+    )
+  } else if (route.path === ROUTES.visualizacao) {
+    content = (
+      <Suspense fallback={<div className="page"><EmptyState icon={Search} title="Carregando módulo" description="Preparando a Visualização…" /></div>}>
+        <VisualizacaoPage />
+      </Suspense>
+    )
+  } else if (route.path === AUTH_ROUTES.devices) {
+    content = <AuthenticatorsPage />
   } else if (route.path.startsWith('/recebimentos/')) {
     const receiptId = decodeURIComponent(route.path.split('/').filter(Boolean)[1] || '')
     content = <DetailPage store={store} receiptId={receiptId} pushToast={pushToast} />
   } else {
-    content = <div className="page"><EmptyState icon={CircleAlert} title="Página não encontrada" description="O endereço informado não existe nesta aplicação." action={<button className="btn btn-primary" onClick={() => navigate('/')}>Ir para visão geral</button>} /></div>
+    const home = area === AREAS.portaria
+      ? { path: ROUTES.portaria, label: 'Ir para o painel da Portaria' }
+      : { path: ROUTES.dashboard, label: 'Ir para visão geral' }
+    content = <div className="page"><EmptyState icon={CircleAlert} title="Página não encontrada" description="O endereço informado não existe nesta aplicação." action={<button className="btn btn-primary" onClick={() => navigate(home.path)}>{home.label}</button>} /></div>
   }
 
   return (
-    <>
-      <AppShell route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
-        {content}
-      </AppShell>
-      <ToastHost toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
-    </>
+    <AppShell
+      area={area}
+      route={route}
+      pendingCount={pendingCount}
+      currentUser={store.currentUser}
+      access={{
+        // Só mostra no menu o que as permissões do servidor liberam (o backend recusa o resto).
+        canAccess: (path) => canAccessPath(auth.user, path),
+        signingOut,
+        onSignOut: async () => {
+          setSigningOut(true)
+          const result = await auth.signOut()
+          setSigningOut(false)
+          if (!result.ok) pushToast('Não foi possível sair', 'Verifique sua conexão e tente novamente.', 'error')
+        },
+      }}
+      onToast={pushToast}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
+      {content}
+    </AppShell>
+  )
+}
+
+// O usuário da sessão (validado pelo servidor em GET /auth/me) vira o usuário do
+// store local ANTES do app autenticado montar, e os recebimentos são recarregados
+// quando a identidade muda. Ao sair, os dados em memória do usuário anterior somem.
+let hydratedForUserId = null
+function handleSessionUser(user) {
+  if (!user) {
+    hydratedForUserId = null
+    resetDemoData()
+    return
+  }
+  setCurrentUser(toStoreUser(user))
+  if (hydratedForUserId !== user.id) {
+    hydratedForUserId = user.id
+    void retryInitialLoad()
+  }
+}
+
+// Qualquer chamada autenticada do domínio que receber 401 encerra a sessão local.
+function UnauthorizedBridge() {
+  const { expireSession } = useAuth()
+  useEffect(() => {
+    setUnauthorizedHandler(expireSession)
+    return () => setUnauthorizedHandler(null)
+  }, [expireSession])
+  return null
+}
+
+// Troca a rota sem empilhar histórico (o botão Voltar não cai num redirecionamento).
+function replaceRoute(path) {
+  const base = window.location.href.split('#')[0]
+  window.location.replace(`${base}#${path}`)
+}
+
+export default function App() {
+  const route = useHashRoute()
+  // useTheme fica aqui (fora de AuthenticatedApp) porque é infraestrutura
+  // global — aplica data-theme em document.documentElement independente da
+  // rota. auth.css depende disso para o modo escuro funcionar mesmo ao abrir
+  // /login direto, sem nunca ter passado pelo app autenticado.
+  const { theme, toggleTheme } = useTheme()
+
+  // O Provider de notificações fica acima das rotas: Login, Portaria,
+  // Visualização e o app autenticado usam a mesma store e a mesma área de
+  // exibição, e os avisos sobrevivem à troca de rota. Ver src/features/notifications/.
+  //
+  // O AccessGate só monta AuthenticatedApp (onde mora useRecebimentosStore) para
+  // quem tem sessão confirmada pelo servidor e permissão para a rota: sem sessão,
+  // /login e a ativação de passkey são as únicas telas, e nada de recebimentos é
+  // carregado. Ver src/features/auth/.
+  return (
+    <NotificationsProvider>
+      <AuthProvider onUserChange={handleSessionUser}>
+        <UnauthorizedBridge />
+        <AccessGate
+          route={route}
+          onRedirect={replaceRoute}
+          renderLogin={() => <LoginPage />}
+          renderActivate={() => <ActivatePasskeyPage />}
+          renderApp={() => <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />}
+        />
+      </AuthProvider>
+    </NotificationsProvider>
   )
 }

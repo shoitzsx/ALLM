@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { classifyDecodedText, createDiagnosticsCounter, DECODE_OUTCOME } from './decodeDiagnostics.js'
 
-// Chave sintética (fictícia), com dígito verificador válido — a mesma dos fixtures de imagem.
-const CHAVE_EXEMPLO = '42260112345678000199550010000000011000000014'
+// Chave sintética (fictícia), com DV da chave e do CNPJ embutido corretos — a mesma de chaveNFe.test.mjs.
+const CHAVE_EXEMPLO = '42260112345678000195550010000000011000000017'
 
 test('classifyDecodedText: null/vazio conta como not_found', () => {
   assert.equal(classifyDecodedText(null), DECODE_OUTCOME.NOT_FOUND)
@@ -25,7 +25,7 @@ test('classifyDecodedText: chave válida conta como valid', () => {
 })
 
 test('classifyDecodedText: normaliza antes de classificar (aceita espaços)', () => {
-  assert.equal(classifyDecodedText('4226 0112 3456 7800 0199 5500 1000 0000 0110 0000 0014'), DECODE_OUTCOME.VALID)
+  assert.equal(classifyDecodedText('4226 0112 3456 7800 0195 5500 1000 0000 0110 0000 0017'), DECODE_OUTCOME.VALID)
 })
 
 test('createDiagnosticsCounter: acumula contagens e nunca perde uma tentativa', () => {

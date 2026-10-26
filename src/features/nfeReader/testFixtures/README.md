@@ -13,10 +13,16 @@ runner nativo do Node não tem.
 42260112345678000199550010000000011000000014
 ```
 
-Passa em `validarChaveNFe()` (dígito verificador módulo 11 confere), mas o
+O dígito verificador módulo 11 da chave confere (`validarDvChaveNFe()`), mas o
 CNPJ (`12345678000199`) e os demais campos são inventados — **não é uma NF
-real**, só uma sequência de 44 dígitos matematicamente válida para gerar um
-barcode de teste.
+real**, só uma sequência de 44 dígitos para gerar um barcode de teste. Desde a
+validação semântica de `validarChaveNFe()` (cUF/AAMM/CNPJ/modelo), esta chave
+**não** passa na validação completa, porque os dígitos verificadores do CNPJ
+embutido não conferem. `validate-fixtures.mjs` só compara os dígitos
+decodificados, então continua valendo; o cenário 5 de
+`validate-photo-capture.mjs` depende da validação completa e exige regerar as
+imagens com uma chave de CNPJ válido (ex.: a dos testes unitários,
+`42260112345678000195550010000000011000000017`).
 
 ## Como as fixtures foram geradas
 

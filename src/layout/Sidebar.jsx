@@ -1,39 +1,69 @@
 import React from 'react'
-import { CircleDashed } from 'lucide-react'
+import { ArrowLeftRight, CircleDashed } from 'lucide-react'
 import { Avatar } from '../ui.jsx'
-import { NAV_ITEMS, isRouteActive, navigate } from './navigation.js'
+import { AREA_CONFIG, getNavItems, isRouteActive, navigate } from './navigation.js'
 
-export function Sidebar({ route, pendingCount, currentUser }) {
+function NavButton({ item, route, pendingCount }) {
+  const Icon = item.icon
+  const active = isRouteActive(route, item.path)
   return (
-    <aside className="sidebar" aria-label="Navegação principal">
-      <button className="brand" type="button" onClick={() => navigate('/')} aria-label="Ir para visão geral">
+    <button
+      className={`nav-item ${active ? 'active' : ''}`}
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      onClick={() => navigate(item.path)}
+    >
+      <Icon size={18} strokeWidth={2} />
+      <span>{item.label}</span>
+      {item.count && pendingCount ? <span className="nav-count">{pendingCount}</span> : null}
+    </button>
+  )
+}
+
+// `canAccess(path)`: o app autenticado só mostra o que as permissões da sessão liberam
+// (ver features/auth/routeAccess.js). Sem ele, tudo aparece, como antes.
+export function Sidebar({ area, route, pendingCount, currentUser, canAccess = () => true }) {
+  const config = AREA_CONFIG[area]
+  const other = AREA_CONFIG[config.switchTo]
+  const items = getNavItems(area).filter((item) => canAccess(item.path))
+  const mainItems = items.filter((item) => !item.beta)
+  const betaItems = items.filter((item) => item.beta)
+
+  return (
+    <aside className="sidebar" data-area={area} aria-label="Navegação principal">
+      <button className="brand" type="button" onClick={() => navigate(config.home)} aria-label={`Ir para o início de ${config.label}`}>
         <img className="brand-mark" src="/brand/logo-mark.png" alt="Águia Sistemas" />
         <span className="brand-copy">
-          <strong>Recebimentos</strong>
-          <span>Almoxarifado</span>
+          <strong>{config.product}</strong>
+          <span>{config.subtitle}</span>
         </span>
       </button>
 
-      <div className="sidebar-context">Operação</div>
-      <nav className="sidebar-nav">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon
-          return (
-            <button
-              className={`nav-item ${isRouteActive(route, item.path) ? 'active' : ''}`}
-              key={item.path}
-              type="button"
-              onClick={() => navigate(item.path)}
-            >
-              <Icon size={18} strokeWidth={2} />
-              <span>{item.label}</span>
-              {item.count && pendingCount ? <span className="nav-count">{pendingCount}</span> : null}
-            </button>
-          )
-        })}
+      <nav className="sidebar-nav-group" aria-label={config.navLabel}>
+        <div className="sidebar-context">{config.label}</div>
+        <div className="sidebar-nav">
+          {mainItems.map((item) => <NavButton key={item.path} item={item} route={route} pendingCount={pendingCount} />)}
+        </div>
+        {betaItems.length ? (
+          <>
+            <div className="sidebar-context sidebar-context-minor">Em teste</div>
+            <div className="sidebar-nav">
+              {betaItems.map((item) => <NavButton key={item.path} item={item} route={route} pendingCount={pendingCount} />)}
+            </div>
+          </>
+        ) : null}
       </nav>
 
       <div className="sidebar-bottom">
+        {canAccess(other.home) ? (
+          <button className="area-switch" type="button" onClick={() => navigate(other.home)}>
+            <ArrowLeftRight size={16} />
+            <span className="area-switch-copy">
+              <strong>Ir para {other.label}</strong>
+              <span>Disponível para a sua conta</span>
+            </span>
+          </button>
+        ) : null}
         <div className="sidebar-user">
           <Avatar name={currentUser?.nome || currentUser?.name} />
           <span className="sidebar-user-copy">

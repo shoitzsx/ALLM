@@ -7,8 +7,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { analyzeNfeKey, buildAnalysisFromKey, buildReliableReceiptPrefill, CONFIDENCE } from './analysisBuilder.js'
 
-// Chave sintética (fictícia), com dígito verificador válido — a mesma dos fixtures de imagem.
-const CHAVE_EXEMPLO = '42260112345678000199550010000000011000000014'
+// Chave sintética (fictícia), com DV da chave e do CNPJ embutido corretos — a mesma de chaveNFe.test.mjs.
+const CHAVE_EXEMPLO = '42260112345678000195550010000000011000000017'
 const CHAVE_INVALIDA = CHAVE_EXEMPLO.slice(0, 43) + '0'
 
 test('analyzeNfeKey aceita uma chave válida e preenche os campos derivados dela', () => {
@@ -39,7 +39,7 @@ test('analyzeNfeKey rejeita uma chave com dígito verificador incorreto sem lan�
 })
 
 test('analyzeNfeKey aceita a chave formatada com espaços (normaliza antes de validar)', () => {
-  const resultado = analyzeNfeKey('4226 0112 3456 7800 0199 5500 1000 0000 0110 0000 0014')
+  const resultado = analyzeNfeKey('4226 0112 3456 7800 0195 5500 1000 0000 0110 0000 0017')
   assert.equal(resultado.chaveValida, true)
   assert.equal(resultado.fields.serieNf.value, '1')
 })
@@ -102,4 +102,31 @@ test('buildReliableReceiptPrefill com chave inválida não leva nada (tudo "não
   const resultado = analyzeNfeKey(CHAVE_INVALIDA)
   const prefill = buildReliableReceiptPrefill(resultado, {})
   assert.deepEqual(prefill, {})
+})
+
+// --- Falso positivo (chave passa no DV, mas é semanticamente inválida) ---
+
+// Sintética, no formato do falso positivo de OCR relatado — a mesma de chaveNFe.test.mjs.
+const CHAVE_FALSO_POSITIVO_OCR = '40104922333000181550020000000000030000000039'
+
+test('analyzeNfeKey rejeita a sequência no formato do falso positivo (DV ok, cUF/AAMM/modelo/CNPJ incoerentes) e marca candidataInvalidaEncontrada', () => {
+  const resultado = analyzeNfeKey(CHAVE_FALSO_POSITIVO_OCR, 'OCR')
+  assert.equal(resultado.chaveValida, false)
+  assert.equal(resultado.chaveInterpretada, null)
+  assert.equal(resultado.candidataInvalidaEncontrada, true, '44 dígitos foram encontrados — diferente de "nada encontrado"')
+  assert.equal(resultado.fields.numeroNf.value, '', 'nunca deriva NF de uma chave semanticamente inválida')
+  assert.equal(resultado.fields.cnpjFornecedor.value, '')
+})
+
+test('analyzeNfeKey com entrada vazia NÃO marca candidataInvalidaEncontrada (não há candidato de 44 dígitos)', () => {
+  const resultado = analyzeNfeKey('')
+  assert.equal(resultado.chaveValida, false)
+  assert.equal(resultado.candidataInvalidaEncontrada, false)
+})
+
+test('analyzeNfeKey com uma chave sintética válida continua aceita após a validação semântica (não regressão)', () => {
+  const resultado = analyzeNfeKey(CHAVE_EXEMPLO, 'texto do PDF')
+  assert.equal(resultado.chaveValida, true)
+  assert.equal(resultado.candidataInvalidaEncontrada, false)
+  assert.equal(resultado.fields.numeroNf.value, '1')
 })

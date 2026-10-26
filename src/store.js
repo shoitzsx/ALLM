@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import {
   DEMO_CURRENT_USER,
   DOCUMENT_TYPE_OPTIONS,
@@ -16,7 +16,7 @@ import {
   sortRecebimentos,
   validateStatusTransition,
 } from './data.js'
-import { api } from './api.js'
+import { advanceSessionGeneration, api, currentSessionGeneration } from './api.js'
 import { uploadFileToSession } from './features/attachments/resumableUpload.js'
 import { validateAttachmentFile } from './features/attachments/constraints.js'
 
@@ -213,6 +213,9 @@ export const getReceiptById = getRecebimentoById
 
 export function setCurrentUser(user) {
   const normalized = normalizeActor(user)
+  // Outra identidade é outra sessão: respostas ainda em voo da anterior não valem mais.
+  // Reler o MESMO usuário (revalidação ao voltar para a aba) não invalida nada.
+  if (normalized.id !== state.currentUser?.id) advanceSessionGeneration()
   setState((current) => ({ ...current, currentUser: normalized }))
   return normalized
 }
@@ -514,6 +517,7 @@ export async function uploadAttachment(id, file, categoria, options = {}) {
     size: file.size,
     categoria: categoria || 'Outro',
   }
+  const generation = currentSessionGeneration()
   const session = await api.createAttachmentUploadSession(id, metadata)
   const uploaded = await uploadFileToSession({
     sessionUrl: session.upload.sessionUrl,
@@ -523,6 +527,8 @@ export async function uploadAttachment(id, file, categoria, options = {}) {
     signal: options.signal,
   })
   const attachment = await api.confirmAttachment(id, { fileId: uploaded.id, categoria: metadata.categoria })
+  // O anexo pertence a um recebimento da sessão anterior: não toca o estado da atual.
+  if (generation !== currentSessionGeneration()) return attachment
 
   mutateReceipt(id, (receipt) => ({
     ...receipt,
@@ -737,6 +743,10 @@ export function restoreRecebimento(id, options = {}) {
 }
 
 export function resetDemoData() {
+  // Logout/expiração: o que ainda está em voo pertence à sessão que acabou, e a
+  // hidratação em andamento (ou concluída) dela não pode ser reaproveitada.
+  advanceSessionGeneration()
+  initialHydration = null
   const fresh = makeDefaultState()
   setState(fresh)
   return fresh.recebimentos
@@ -778,8 +788,10 @@ export function buildCsvExport(filters = {}, options = {}) {
 }
 
 async function refreshReceiptFromApi(id) {
+  const generation = currentSessionGeneration()
   try {
     const remote = await api.getRecebimento(id)
+    if (generation !== currentSessionGeneration()) return null
     setState((current) => ({
       ...current,
       recebimentos: current.recebimentos.map((r) => r.id === id || r.protocolo === id ? remote : r),
@@ -812,6 +824,7 @@ function syncMutation(id, promiseFactory, options = {}) {
 }
 
 async function apiCreate(input, local) {
+  const generation = currentSessionGeneration()
   let created = null
   try {
     created = await api.createRecebimento({
@@ -836,7 +849,7 @@ async function apiCreate(input, local) {
   } catch (error) {
     if (created) {
       await refreshReceiptFromApi(created.id)
-    } else {
+    } else if (generation === currentSessionGeneration()) {
       setState((current) => ({
         ...current,
         recebimentos: current.recebimentos.filter(
@@ -909,7 +922,9 @@ const apiBackedActions = {
   removeAttachment: async (id, attachmentId, options = {}) => {
     const user = options.user || state.currentUser
     requireWritePermission(user)
+    const generation = currentSessionGeneration()
     await api.removeAttachment(id, attachmentId, options.reason || options.motivo || '')
+    if (generation !== currentSessionGeneration()) return null
     return removeAttachment(id, attachmentId, { ...options, user })
   },
   addDivergence: (id, input = {}, options = {}) => {
@@ -955,6 +970,10 @@ let initialHydration = null
 
 export async function hydrateRecebimentosFromApi() {
   if (initialHydration) return initialHydration
+  // Geração da sessão que PEDIU estes dados: se mudar antes da resposta chegar
+  // (logout, expiração, outro usuário), a resposta é descartada, sem publicar.
+  const generation = currentSessionGeneration()
+  const isStale = () => generation !== currentSessionGeneration()
   initialHydration = (async () => {
     setState((current) => ({ ...current, initialLoadStatus: 'loading', initialLoadError: null }), { keepTimestamp: true })
     try {
@@ -976,6 +995,7 @@ export async function hydrateRecebimentosFromApi() {
       const recebimentos = [firstPage, ...remaining].flatMap((page) =>
         Array.isArray(page?.data) ? page.data : [],
       )
+      if (isStale()) return []
       setState((current) => ({
         ...current,
         recebimentos,
@@ -989,6 +1009,7 @@ export async function hydrateRecebimentosFromApi() {
       }))
       return recebimentos
     } catch (error) {
+      if (isStale()) return []
       console.warn('ALM API: não foi possível carregar os recebimentos iniciais.', error)
       setState((current) => ({
         ...current,
@@ -1013,6 +1034,16 @@ export function retryInitialLoad() {
  * Se filtros/paginação forem passados, o resultado derivado vem em `view`.
  */
 export function useRecebimentosStore(options = {}) {
+  // Inicialização do domínio amarrada ao hook, não ao import do módulo: a
+  // hidratação só começa quando algo realmente monta e lê o store (hoje,
+  // AuthenticatedApp). hydrateRecebimentosFromApi() já é idempotente (guarda
+  // em `initialHydration`), então chamadas repetidas — múltiplos componentes,
+  // remontagens, o double-invoke de efeitos do StrictMode em dev — nunca
+  // disparam um segundo fetch.
+  useEffect(() => {
+    void hydrateRecebimentosFromApi()
+  }, [])
+
   const snapshot = useSyncExternalStore(
     subscribeToRecebimentos,
     getStoreSnapshot,
@@ -1080,7 +1111,3 @@ export function useRecebimentosStore(options = {}) {
 
 export const useReceiptStore = useRecebimentosStore
 export default useRecebimentosStore
-
-if (typeof window !== 'undefined') {
-  void hydrateRecebimentosFromApi()
-}

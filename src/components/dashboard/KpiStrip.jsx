@@ -1,7 +1,8 @@
 import React from 'react'
 import { AlertTriangle, Boxes, FileClock, PackageOpen } from 'lucide-react'
 
-function KpiItem({ icon: Icon, value, label, tone = '', meta }) {
+// Exportado para o Painel do dia da Portaria montar a própria faixa com o mesmo visual.
+export function KpiItem({ icon: Icon, value, label, tone = '', meta }) {
   return (
     <div className={`kpi-item ${tone ? `kpi-${tone}` : ''}`}>
       <span className="kpi-icon"><Icon size={16} /></span>
