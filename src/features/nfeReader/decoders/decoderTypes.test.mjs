@@ -2,16 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildDecodeResult, ENGINE, maskValue, unavailableResult } from './decoderTypes.js'
 
-// Mesma chave real (METALFORT) usada em chaveNFe.test.mjs/analysisBuilder.test.mjs
+// Mesma chave sintética usada em chaveNFe.test.mjs/analysisBuilder.test.mjs
 // — precisa ser genuinamente válida (DV E semântica: cUF/AAMM/CNPJ/modelo),
 // não só ter 44 dígitos com DV correto. O fixture anterior aqui (DV correto,
 // mas com um CNPJ embutido inventado que não passa no próprio dígito
 // verificador do CNPJ) só "funcionava" porque a validação era DV-only —
 // exatamente a lacuna que motivou reforçar validarChaveNFe (ver chaveNFe.js).
-const CHAVE_VALIDA = '42260748909580000160550010000082801675042868'
+// Esta é fictícia, mas com o CNPJ de exemplo matematicamente válido.
+const CHAVE_VALIDA = '42260112345678000195550010000000011000000017'
 
 test('maskValue mascara mantendo só prefixo/sufixo', () => {
-  assert.equal(maskValue(CHAVE_VALIDA), `4226${'•'.repeat(36)}2868`)
+  assert.equal(maskValue(CHAVE_VALIDA), `4226${'•'.repeat(36)}0017`)
 })
 
 test('maskValue com valor curto vira só bolinhas', () => {
@@ -31,7 +32,7 @@ test('buildDecodeResult classifica chave válida', () => {
   assert.equal(result.format, 'CODE_128')
   assert.equal(result.digitCount, 44)
   assert.equal(result.validNfeKey, true)
-  assert.equal(result.maskedValue, `4226${'•'.repeat(36)}2868`)
+  assert.equal(result.maskedValue, `4226${'•'.repeat(36)}0017`)
   assert.equal(result.decodeTimeMs, 13)
   assert.equal(result.error, null)
 })
