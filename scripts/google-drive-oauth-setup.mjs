@@ -8,7 +8,7 @@
 //      node scripts/google-drive-oauth-setup.mjs
 // 4. Abra a URL impressa, faça login com a conta Google que vai guardar os anexos
 //    e autorize. O refresh token aparece no terminal — copie para GOOGLE_OAUTH_REFRESH_TOKEN
-//    no seu .env (local) e nas variáveis de ambiente da Vercel (produção).
+//    no seu .env (local) e nas variáveis de ambiente do servidor (produção).
 
 import http from 'node:http'
 import crypto from 'node:crypto'
@@ -58,7 +58,7 @@ const server = http.createServer(async (req, res) => {
       console.error('\nO Google não devolveu refresh_token. Revogue o acesso em https://myaccount.google.com/permissions e rode o script de novo (o parâmetro prompt=consent força um novo refresh token).')
       process.exit(1)
     }
-    console.log('\nRefresh token obtido. Adicione ao seu .env e às variáveis de ambiente da Vercel:\n')
+    console.log('\nRefresh token obtido. Adicione ao seu .env e às variáveis de ambiente do servidor:\n')
     console.log(`GOOGLE_OAUTH_REFRESH_TOKEN=${tokens.refresh_token}\n`)
     process.exit(0)
   } catch (error) {

@@ -334,7 +334,7 @@ Contas de serviço não têm cota de armazenamento própria para criar arquivos 
 
 1. No Google Cloud Console, crie um "OAuth 2.0 Client ID" do tipo **Desktop app** e ative a Google Drive API.
 2. Preencha `GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_CLIENT_SECRET` no `.env`, rode `node scripts/google-drive-oauth-setup.mjs`, abra a URL impressa e autorize com a conta que vai guardar os anexos.
-3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente da Vercel em produção).
+3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente do servidor em produção).
 4. `GOOGLE_DRIVE_FOLDER_ID` é opcional. É recomendado deixá-lo vazio: uma pasta própria chamada "ALM Recebimentos - Anexos" é criada/reaproveitada automaticamente com o escopo mínimo `drive.file`.
 5. O contrato resumível, os limites e os erros de anexo estão em [`docs/attachments-api.md`](docs/attachments-api.md).
 
@@ -380,13 +380,14 @@ Fluxos que dependem de APIs de navegador reais (câmera, Canvas, renderização 
 
 ## Deploy
 
-Frontend e backend são publicados juntos, no mesmo projeto Vercel:
+A Vercel foi descontinuada como destino de publicação em 2026-10-26, e a Function `api/v1/[...path].mjs` foi removida. O destino oficial ainda depende de aprovação; a proposta, os requisitos e o passo a passo estão em [`docs/PUBLICACAO_ALM2.md`](docs/PUBLICACAO_ALM2.md).
 
-- O frontend é construído com Vite (`npm run build`) e servido como estático a partir de `dist/`.
-- O backend roda como uma Vercel Function em `api/v1/[...path].mjs`, que reaproveita o mesmo dispatcher de `backend/app.mjs` usado localmente por `npm run api` — sem lógica duplicada.
-- `src/api.js` chama `/api/v1` (caminho relativo, same-origin); não é necessário configurar `VITE_API_URL` em produção.
-- As variáveis `GOOGLE_*` (Sheets e Drive) devem ser cadastradas em Project Settings → Environment Variables na Vercel, sem prefixo `VITE_` — elas nunca chegam ao bundle do frontend.
-- Node.js recomendado: 24.x (Project Settings → Node.js Version), mesma versão usada em desenvolvimento.
+Qualquer destino precisa cumprir estes requisitos:
+
+- **Mesma origem HTTPS:** o frontend (`dist/`, gerado por `npm run build`) e a API (`/api/v1`) ficam na mesma origem. Os cookies `__Host-alm_*` (`Secure`, `SameSite=Strict`, sem `Domain`), a validação de `Origin` e o RP ID do WebAuthn dependem disso. `src/api.js` usa caminho relativo e não precisa de CORS.
+- **Backend:** `ALM_BACKEND_MODE=postgres`, como processo Node.js 24 de longa duração (`node backend/server.mjs`) e em uma única instância, porque o limitador de tentativas fica em memória.
+- **Segredos:** só no ambiente do servidor, nunca com prefixo `VITE_`.
+- **PostgreSQL 17:** com TLS `verify-full` e sem porta exposta à internet. As migrations são aplicadas manualmente pelo responsável pelo banco.
 
 ---
 

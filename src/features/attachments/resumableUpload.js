@@ -1,5 +1,5 @@
 // Envia um arquivo em partes diretamente para a sessão resumível do Google
-// Drive (sessionUrl), sem passar o binário pela Vercel Function. sessionUrl é
+// Drive (sessionUrl), sem passar o binário pela API do ALM. sessionUrl é
 // uma URL externa temporária — não é uma chamada à API do ALM, por isso vive
 // fora de src/api.js (ver docs/attachments-api.md).
 export async function uploadFileToSession({ sessionUrl, chunkSize, file, onProgress, signal }) {

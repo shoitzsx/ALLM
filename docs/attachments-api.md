@@ -1,5 +1,7 @@
 # Contrato de anexos
 
+> **Nota (2026-10-26):** este contrato é o do backend legado (Google Sheets/Drive). A Vercel foi descontinuada; a menção à "Function da Vercel" abaixo explica a origem dos limites, que seguem valendo até o Goran revisá-los.
+
 Base URL: `/api/v1`. Todas as chamadas para a API usam `Content-Type: application/json` e `X-User-Id`. O navegador envia os bytes diretamente a uma sessão temporária do Google Drive; `GOOGLE_OAUTH_CLIENT_SECRET` e `GOOGLE_OAUTH_REFRESH_TOKEN` nunca chegam ao cliente.
 
 ## Limites e tipos

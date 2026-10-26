@@ -517,8 +517,8 @@ código ou piorar a experiência).
 
 #### HTTPS é obrigatório para a câmera
 
-`getUserMedia` só funciona em contexto seguro. Em produção (Vercel) isso é
-automático. Em desenvolvimento, `localhost` funciona normalmente, mas acessar
+`getUserMedia` só funciona em contexto seguro. Em produção isso é garantido
+pelo HTTPS obrigatório. Em desenvolvimento, `localhost` funciona normalmente, mas acessar
 o Vite dev server por um IP da rede local (`http://192.168.x.x:5173`, o modo
 usado por `npm run dev -- --host` para testar em celular físico) **não** é
 contexto seguro — o navegador do celular bloqueia a câmera nesse caso. Isso
@@ -594,14 +594,14 @@ válida" é idêntico para os três (`normalizarChave` + `validarChaveNFe`,
 
 `scannerDebug.js` ativa o painel por **query string** (`?nfeScannerDebug=1`),
 nunca por `import.meta.env.DEV` — o teste decisivo (NF real, celular físico)
-precisa acontecer no deploy HTTPS (Vercel), não só em desenvolvimento local.
+precisa acontecer num ambiente HTTPS, não só em desenvolvimento local.
 Sem a flag, nenhuma UI nova aparece e nenhum código do benchmark é sequer
 baixado (`NfeScannerBenchmark.jsx` é `React.lazy` a partir de
 `NfeReaderPage.jsx`, gated pela mesma flag) — custo zero para quem não está
 testando. Com a flag, um link discreto "Diagnóstico do scanner" aparece no
 cabeçalho da tela de Leitura automática.
 
-Exemplo: `https://<seu-deploy>.vercel.app/?nfeScannerDebug=1#/leitura-automatica`
+Exemplo: `https://<dominio-do-alm>/?nfeScannerDebug=1#/leitura-automatica`
 
 ### Modo A — frame capturado
 

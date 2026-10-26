@@ -1,5 +1,7 @@
 # Handoff técnico — Upload de anexos, Google Drive, Google Sheets e travamento no frontend
 
+> **Histórico (nota de 2026-10-26):** as menções à Vercel e a `https://allm.vercel.app` descrevem o ambiente legado, descontinuado. O destino atual está em [`PUBLICACAO_ALM2.md`](./PUBLICACAO_ALM2.md).
+
 Estado da investigação em 30/09/2026
 
 ---
