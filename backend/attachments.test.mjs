@@ -85,14 +85,14 @@ test('Drive não configurado falha de forma explícita sem inicializar a API int
 
 // O upload resumível só ganha CORS do Google para a Origin presente já na
 // criação da sessão — por isso o backend precisa validar antes de repassar.
-const allowlist = ['http://localhost:5173', 'https://allm.vercel.app']
+const allowlist = ['http://localhost:5173', 'https://alm.example']
 
 test('permite origem de desenvolvimento presente na allowlist', () => {
   assert.equal(isOriginAllowed('http://localhost:5173', allowlist), true)
 })
 
 test('permite origem de produção presente na allowlist', () => {
-  assert.equal(isOriginAllowed('https://allm.vercel.app', allowlist), true)
+  assert.equal(isOriginAllowed('https://alm.example', allowlist), true)
 })
 
 test('rejeita origem fora da allowlist', () => {
