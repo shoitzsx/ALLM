@@ -2,11 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mapChegadaToRecebimentoInput, normalizeChegadaInput, planInicioRecebimento } from './services/chegadasService.mjs'
 
-const key = '43240104994734000518550020000398041864220514'
+// Chave sintética válida, compartilhada conceitualmente com os testes do leitor de NF-e.
+const key = '42260112345678000195550010000000011000000017'
 const arrival = {
   id: 'CHG-ID', status: 'REGISTRADA', recebimentoId: null,
-  nfeChaveAcesso: key, numeroNf: '39804', serieNf: '2',
-  cnpjEmitente: '04994734000518', fornecedor: 'Empresa ABC',
+  nfeChaveAcesso: key, numeroNf: '1', serieNf: '1',
+  cnpjEmitente: '12345678000195', fornecedor: 'Empresa ABC',
 }
 
 test('normalizes a valid NF-e key and derives its identity without trusting client-owned fields', () => {
@@ -16,19 +17,19 @@ test('normalizes a valid NF-e key and derives its identity without trusting clie
     criadoEm: 'yesterday', recebimentoId: 'other-receipt',
   })
   assert.deepEqual(normalized, {
-    nfeChaveAcesso: key, numeroNf: '39804', serieNf: '2',
-    cnpjEmitente: '04994734000518', fornecedor: 'Empresa ABC',
+    nfeChaveAcesso: key, numeroNf: '1', serieNf: '1',
+    cnpjEmitente: '12345678000195', fornecedor: 'Empresa ABC',
     metodoLeitura: 'MANUAL', confianca: null, observacoes: null,
   })
 })
 
 test('allows an unknown supplier and NF identification without a key', () => {
   const normalized = normalizeChegadaInput({
-    numeroNf: '39804', cnpjEmitente: '04.994.734/0005-18',
+    numeroNf: '1', cnpjEmitente: '12.345.678/0001-95',
     metodoLeitura: 'MANUAL', fornecedor: ' ',
   })
   assert.equal(normalized.fornecedor, null)
-  assert.equal(normalized.cnpjEmitente, '04994734000518')
+  assert.equal(normalized.cnpjEmitente, '12345678000195')
   assert.equal(normalized.nfeChaveAcesso, null)
 })
 
@@ -58,7 +59,7 @@ test('maps only arrival identity and new warehouse data into the receipt input',
   const result = mapChegadaToRecebimentoInput(arrival, { pedido: ' 4500873245 ', tipo: 'Estoque' })
   assert.deepEqual(result, {
     pedido: '4500873245', tipo: 'Estoque', fornecedor: 'Empresa ABC',
-    numeroNf: '39804', serieNf: '2', cnpjFornecedor: '04994734000518',
+    numeroNf: '1', serieNf: '1', cnpjFornecedor: '12345678000195',
     nfeChaveAcesso: key,
   })
   assert.equal(arrival.recebimentoId, null)
@@ -104,7 +105,7 @@ test('an unlinked arrival plans a new receipt using only warehouse input', () =>
     kind: 'create',
     receiptInput: {
       pedido: '123', tipo: 'Estoque', fornecedor: 'Empresa ABC',
-      numeroNf: '39804', serieNf: '2', cnpjFornecedor: '04994734000518',
+      numeroNf: '1', serieNf: '1', cnpjFornecedor: '12345678000195',
       nfeChaveAcesso: key,
     },
   })
