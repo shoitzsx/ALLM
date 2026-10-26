@@ -92,5 +92,5 @@ Itens, anexos, edição e conclusão de recebimentos ainda não estão ligados a
 1. **Vercel → projeto `alm` → Settings → Git → Disconnect.** Interrompe os deploys automáticos da `main` e dos PRs.
 2. Decidir entre **pausar** o projeto (reversível) e excluí-lo. Exclusão só depois de confirmar que nenhum outro sistema usa o projeto ou o domínio `allm.vercel.app`.
 3. **Settings → Environment Variables:** remover as variáveis `GOOGLE_*` e `DRIVE_*`. O Goran deve **revogar e reemitir** as credenciais Google que estavam lá: conta de serviço do Sheets e refresh token OAuth do Drive.
-4. **GitHub → Settings → Applications → Vercel → Configure:** remover o repositório `ALLM` do acesso do app. Se nenhum outro repositório usar a Vercel, desinstalar o app.
+4. **GitHub → Settings → Applications → Vercel → Configure:** remover só o repositório `ALLM` do acesso do app. **Não desinstalar o app:** outros repositórios da mesma conta usam a Vercel. Pelo mesmo motivo, não excluir a conta nem a equipe da Vercel.
 5. Os ambientes `Production` e `Preview` e o histórico de deployments do GitHub ficam como histórico.
