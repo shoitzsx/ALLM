@@ -1,4 +1,4 @@
-import { MATRICULA_MAX_LENGTH, sanitizePinInput } from './credentialsInput.js'
+import { PIN_LENGTH, sanitizePinInput } from './credentialsInput.js'
 
 /**
  * Modelo do teclado numérico do ALM: o que cada tecla faz com o valor do
@@ -23,20 +23,29 @@ export function isDigitKey(key) {
   return typeof key === 'string' && key.length === 1 && key >= '0' && key <= '9'
 }
 
-/** Campos que o MESMO teclado do ALM atende, um de cada vez (o que tem o foco). */
+/**
+ * Campos da zona de entrada da tela de acesso. A matrícula agora aceita LETRAS e
+ * números, então o teclado numérico do ALM atende só o PIN (`keypadServes`); a
+ * matrícula usa sempre o teclado do dispositivo.
+ */
 export const KEYPAD_FIELD = Object.freeze({
   MATRICULA: 'matricula',
   PIN: 'pin',
 })
 
-/** Matrícula tem no máximo 6 dígitos; o PIN segue sem limite (política pendente). */
+/** O teclado numérico do ALM só atende o PIN (a matrícula tem letras). */
+export function keypadServes(field) {
+  return field === KEYPAD_FIELD.PIN
+}
+
+/** O PIN tem exatamente 8 dígitos; campo que o teclado não atende: 0 (nenhuma tecla vale). */
 export function keypadMaxLength(field) {
-  return field === KEYPAD_FIELD.MATRICULA ? MATRICULA_MAX_LENGTH : Infinity
+  return keypadServes(field) ? PIN_LENGTH : 0
 }
 
 /**
  * Tecla que seria recusada por excesso: dígito com o campo já no limite.
- * Apagar, continuar e campo sem limite (PIN) nunca são excesso.
+ * Apagar e continuar nunca são excesso; sem `maxLength` nada é.
  */
 export function isKeypadOverflow(value, key, { maxLength = Infinity } = {}) {
   return isDigitKey(key) && sanitizePinInput(value).length >= maxLength

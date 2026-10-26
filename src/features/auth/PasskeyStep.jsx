@@ -21,12 +21,12 @@ const CAN_RETRY = new Set([
  * Passo do segundo fator (passkey) — SÓ apresentação.
  *
  * Não chama `navigator.credentials`, não fala com servidor e não decide nada:
- * mostra o estado que recebe e avisa `onRetry` / `onBack`. A confirmação em
- * si usará a interface segura do dispositivo quando a integração real
- * existir; esta tela só espera por ela. Também não há botão de cadastro:
+ * mostra o estado que recebe e avisa `onStart` (abrir a passkey, num toque do
+ * usuário), `onRetry` e `onBack`. Quem executa a cerimônia é o fluxo de login
+ * (loginFlow.js); sem `onStart` (pré-visualização) não há botão que a dispare. Também não há botão de cadastro:
  * passkey só se cadastra por um fluxo autorizado (fora desta etapa).
  */
-export function PasskeyStep({ state, preview = false, onRetry, onBack }) {
+export function PasskeyStep({ state, preview = false, onStart, busy, onRetry, onBack }) {
   const copy = getStepCopy(state)
   const headingRef = useRef(null)
 
@@ -41,7 +41,7 @@ export function PasskeyStep({ state, preview = false, onRetry, onBack }) {
   const waiting = state.status === AUTH_STATUS.AGUARDANDO_SEGUNDO_FATOR
 
   return (
-    <div className="auth-card auth-step" aria-busy={waiting}>
+    <div className="auth-card auth-step" aria-busy={waiting && busy !== false}>
       {preview ? (
         <p className="auth-preview-badge">Pré-visualização demonstrativa: não concede acesso.</p>
       ) : null}
@@ -63,6 +63,14 @@ export function PasskeyStep({ state, preview = false, onRetry, onBack }) {
       </div>
 
       <div className="auth-step-actions">
+        {waiting && onStart ? (
+          // A passkey só abre dentro de um toque do usuário (o Safari exige o gesto):
+          // por isso o botão, em vez de abrir sozinha depois da resposta do servidor.
+          <button type="button" className="btn btn-primary btn-lg auth-passkey-start" onClick={onStart} disabled={Boolean(busy)}>
+            {busy ? <RefreshCw size={16} className="spin" aria-hidden="true" /> : <Fingerprint size={16} aria-hidden="true" />}
+            {busy ? 'Aguardando o dispositivo…' : 'Usar a passkey'}
+          </button>
+        ) : null}
         {CAN_RETRY.has(state.status) ? (
           <button type="button" className="btn btn-primary btn-lg" onClick={onRetry}>
             <RefreshCw size={16} aria-hidden="true" />

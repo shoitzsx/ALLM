@@ -534,3 +534,250 @@ html[data-theme="dark"] .auth-alert-info {
     align-items: flex-start;
   }
 }
+
+/* Rodapé do cartão de login: link para ativar a passkey. */
+.auth-footnote {
+  margin: 0;
+  color: var(--ink-700);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-footnote a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-700);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html[data-theme="dark"] .auth-footnote a {
+  color: var(--ink-800);
+}
+
+/* Botão que abre a passkey no passo do segundo fator. */
+.auth-passkey-start {
+  width: 100%;
+}
+
+/* ---- Menu da conta (topo do app) ---- */
+.user-menu {
+  position: relative;
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-950);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.user-menu-item:hover:not(:disabled) {
+  background: var(--ink-100);
+}
+
+.user-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ---- Meus dispositivos ---- */
+.auth-devices {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-device-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+}
+
+.auth-device-step-copy {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-device-step-copy span {
+  color: var(--ink-700);
+  font-size: 13px;
+}
+
+.auth-device-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth-device-actions {
+  display: block;
+  margin-top: 8px;
+}
+
+.auth-device-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-device-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.auth-device-item:last-child {
+  border-bottom: 0;
+}
+
+.auth-device-item.is-revoked {
+  opacity: 0.7;
+}
+
+.auth-device-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--brand-700);
+  background: var(--brand-50);
+}
+
+.auth-device-copy {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.auth-device-copy span {
+  color: var(--ink-700);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.auth-device-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-device-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--ink-950);
+  background: var(--ink-100);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-device-badge.is-revoked {
+  color: var(--red-700);
+  background: var(--red-50);
+}
+
+html[data-theme="dark"] .auth-device-badge.is-revoked {
+  color: #f2a7a4;
+}
+
+.auth-device-hint {
+  color: var(--ink-700);
+  font-size: 12px;
+}
+
+.auth-revoke-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Ativação: primeiro acesso (PIN temporário) ou novo dispositivo */
+.auth-mode {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.auth-mode legend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--ink-800);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-mode-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--ink-800);
+  background: var(--surface-card);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.auth-mode-option input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brand-700);
+}
+.auth-mode-option:has(input:checked) {
+  border-color: var(--brand-700);
+  background: var(--surface-subtle);
+}
+.auth-mode-option:has(input:focus-visible) {
+  outline: 3px solid var(--brand-700);
+  outline-offset: 2px;
+}
+.auth-mode:disabled .auth-mode-option {
+  cursor: default;
+  opacity: 0.7;
+}

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { KEYPAD_FIELD, KEYPAD_KEY, KEYPAD_LAYOUT, applyKeypadKey, isDigitKey, isKeypadOverflow, keypadMaxLength } from './pinKeypad.js'
+import { KEYPAD_FIELD, KEYPAD_KEY, KEYPAD_LAYOUT, applyKeypadKey, isDigitKey, isKeypadOverflow, keypadMaxLength, keypadServes } from './pinKeypad.js'
 
 const press = (pin, ...keys) => keys.reduce((acc, key) => applyKeypadKey(acc, key), pin)
 
@@ -49,65 +49,46 @@ test('isDigitKey só aceita um caractere de 0 a 9', () => {
   for (const x of ['a', '10', '', ' ', '١', null, undefined, 3]) assert.equal(isDigitKey(x), false)
 })
 
-// --- um só teclado para dois campos: matrícula (até 6 dígitos) e PIN (sem limite definido) ---
+// --- o teclado numérico do ALM atende SÓ o PIN (8 dígitos); a matrícula tem letras e usa o teclado do dispositivo ---
 
-test('cada campo tem a sua regra: matrícula limita a 6 dígitos, PIN continua sem limite', () => {
-  assert.equal(keypadMaxLength(KEYPAD_FIELD.MATRICULA), 6)
-  assert.equal(keypadMaxLength(KEYPAD_FIELD.PIN), Infinity)
-  assert.equal(keypadMaxLength(null), Infinity)
-  assert.equal(keypadMaxLength('desconhecido'), Infinity)
+test('o teclado atende o PIN e mais nenhum campo', () => {
+  assert.equal(keypadServes(KEYPAD_FIELD.PIN), true)
+  assert.equal(keypadServes(KEYPAD_FIELD.MATRICULA), false)
+  assert.equal(keypadServes(null), false)
+  assert.equal(keypadServes('desconhecido'), false)
 })
 
-test('matrícula pelo teclado: o 7º dígito é ignorado e os zeros à esquerda ficam', () => {
-  const rules = { maxLength: keypadMaxLength(KEYPAD_FIELD.MATRICULA) }
+test('o PIN tem exatamente 8 dígitos; campo que o teclado não atende não aceita tecla alguma', () => {
+  assert.equal(keypadMaxLength(KEYPAD_FIELD.PIN), 8)
+  assert.equal(keypadMaxLength(KEYPAD_FIELD.MATRICULA), 0)
+  assert.equal(keypadMaxLength(null), 0)
+  assert.equal(keypadMaxLength('desconhecido'), 0)
+  assert.equal(applyKeypadKey('', '7', { maxLength: keypadMaxLength(KEYPAD_FIELD.MATRICULA) }), '')
+})
+
+test('PIN pelo teclado: o 9º dígito é ignorado e os zeros à esquerda ficam', () => {
+  const rules = { maxLength: keypadMaxLength(KEYPAD_FIELD.PIN) }
   const type = (...keys) => keys.reduce((acc, key) => applyKeypadKey(acc, key, rules), '')
-  assert.equal(type('0', '0', '1', '2'), '0012')
-  assert.equal(type('0', '0', '0', '1', '2', '3'), '000123')
-  assert.equal(type('1', '2', '3', '4', '5', '6', '7', '8'), '123456')
-  assert.equal(type('1', '2', '3', '4', '5', '6', '7', KEYPAD_KEY.BACKSPACE, '9'), '123459', 'apagar libera espaço')
+  assert.equal(type('0', '0', '1', '2', '3', '4', '5', '6'), '00123456')
+  assert.equal(type('1', '2', '3', '4', '5', '6', '7', '8', '9', '9'), '12345678')
+  assert.equal(type('1', '2', '3', '4', '5', '6', '7', '8', '9', KEYPAD_KEY.BACKSPACE, '0'), '12345670', 'apagar libera espaço')
   assert.equal(type(KEYPAD_KEY.BACKSPACE), '')
   assert.equal(type('1', KEYPAD_KEY.CONTINUE, '2'), '12', 'continuar não mexe no valor')
 })
 
-test('PIN pelo teclado: sem limite, como antes', () => {
-  const rules = { maxLength: keypadMaxLength(KEYPAD_FIELD.PIN) }
-  let pin = ''
-  for (let i = 0; i < 40; i += 1) pin = applyKeypadKey(pin, '7', rules)
-  assert.equal(pin.length, 40)
+test('limite do PIN também vale quando o valor de entrada já passa do máximo (colagem anterior)', () => {
+  assert.equal(applyKeypadKey('123456789', '8', { maxLength: 8 }), '123456789', 'não acrescenta; o saneamento do campo é quem recusa')
+  assert.equal(applyKeypadKey('1234567', '8', { maxLength: 8 }), '12345678')
 })
 
-test('limite de matrícula também vale quando o valor de entrada já passa do máximo (colagem anterior)', () => {
-  assert.equal(applyKeypadKey('1234567', '8', { maxLength: 6 }), '1234567', 'não acrescenta; o saneamento do campo é quem corta')
-  assert.equal(applyKeypadKey('12345', '8', { maxLength: 6 }), '123458')
-})
-
-test('alternar entre matrícula e PIN: cada tecla vai SÓ para o campo ativo', () => {
-  const values = { matricula: '', pin: '' }
-  const press = (field, key) => {
-    const next = { ...values }
-    next[field] = applyKeypadKey(values[field], key, { maxLength: keypadMaxLength(field) })
-    Object.assign(values, next)
-  }
-  for (const key of ['0', '0', '4', '2']) press(KEYPAD_FIELD.MATRICULA, key)
-  assert.deepEqual(values, { matricula: '0042', pin: '' })
-  for (const key of ['9', '8', '7']) press(KEYPAD_FIELD.PIN, key)
-  assert.deepEqual(values, { matricula: '0042', pin: '987' })
-  press(KEYPAD_FIELD.MATRICULA, KEYPAD_KEY.BACKSPACE)
-  assert.deepEqual(values, { matricula: '004', pin: '987' })
-  press(KEYPAD_FIELD.PIN, '1')
-  press(KEYPAD_FIELD.MATRICULA, '5')
-  assert.deepEqual(values, { matricula: '0045', pin: '9871' })
-})
-
-test('excesso no teclado: dígito com a matrícula já em 6 é recusado e sinalizado; PIN nunca', () => {
-  const matricula = { maxLength: keypadMaxLength(KEYPAD_FIELD.MATRICULA) }
+test('excesso no teclado: dígito com o PIN já em 8 é recusado e sinalizado; apagar e continuar nunca', () => {
   const pin = { maxLength: keypadMaxLength(KEYPAD_FIELD.PIN) }
-  assert.equal(isKeypadOverflow('123456', '7', matricula), true)
-  assert.equal(isKeypadOverflow('000000', '0', matricula), true)
-  assert.equal(isKeypadOverflow('12345', '6', matricula), false)
-  assert.equal(isKeypadOverflow('123456', KEYPAD_KEY.BACKSPACE, matricula), false, 'apagar nunca é excesso')
-  assert.equal(isKeypadOverflow('123456', KEYPAD_KEY.CONTINUE, matricula), false)
-  assert.equal(isKeypadOverflow('1'.repeat(80), '1', pin), false, 'a política do PIN não mudou')
+  assert.equal(isKeypadOverflow('12345678', '9', pin), true)
+  assert.equal(isKeypadOverflow('00000000', '0', pin), true)
+  assert.equal(isKeypadOverflow('1234567', '8', pin), false)
+  assert.equal(isKeypadOverflow('12345678', KEYPAD_KEY.BACKSPACE, pin), false, 'apagar nunca é excesso')
+  assert.equal(isKeypadOverflow('12345678', KEYPAD_KEY.CONTINUE, pin), false)
+  assert.equal(isKeypadOverflow('1'.repeat(80), '1'), false, 'sem limite informado, nada é excesso')
   // E o valor preservado é exatamente o anterior, zeros incluídos.
-  assert.equal(applyKeypadKey('000000', '1', matricula), '000000')
+  assert.equal(applyKeypadKey('00000000', '1', pin), '00000000')
 })

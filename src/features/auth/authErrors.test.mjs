@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { AUTH_STATUS, LOGIN_FAILURE, UNSUPPORTED_REASON } from './authStates.js'
 import {
+  CHALLENGE_EXPIRED_COPY,
   CONNECTION_FAILURE,
   LOGIN_FAILURE_COPY,
   MATRICULA_OVERFLOW_MESSAGE,
@@ -100,6 +101,19 @@ test('o aviso desta etapa diz que nenhum dado foi enviado', () => {
 })
 
 test('aviso de excesso da matrícula: texto exato, sem revelar o mínimo nem regra interna', () => {
-  assert.equal(MATRICULA_OVERFLOW_MESSAGE, 'A matrícula não pode ultrapassar 6 dígitos.')
-  assert.doesNotMatch(MATRICULA_OVERFLOW_MESSAGE, /m[ií]nim|pelo menos|ao menos|\b4\b|quatro/i)
+  assert.equal(MATRICULA_OVERFLOW_MESSAGE, 'A matrícula não pode ultrapassar 20 caracteres.')
+  assert.doesNotMatch(MATRICULA_OVERFLOW_MESSAGE, /m[ií]nim|pelo menos|ao menos|\b3\b|tr[eê]s/i)
+})
+
+test('falha de conexão no primeiro fator tem texto próprio e não é campo inválido', () => {
+  assert.equal(CONNECTION_FAILURE, LOGIN_FAILURE.CONEXAO)
+  const copy = getLoginFailureCopy(LOGIN_FAILURE.CONEXAO)
+  assert.equal(copy.title, 'Não foi possível conectar ao ALM.')
+  assert.equal(copy.fieldLevel, false)
+  assert.equal(copy.tone, 'error')
+})
+
+test('desafio expirado: aviso fixo, sem culpar matrícula nem PIN', () => {
+  assert.equal(CHALLENGE_EXPIRED_COPY.title, 'A confirmação expirou ou não foi aceita.')
+  assert.doesNotMatch(JSON.stringify(CHALLENGE_EXPIRED_COPY), /inválid|incorret|existe|bloquead|inativ/i)
 })

@@ -41,6 +41,7 @@ export const LOGIN_FAILURE = Object.freeze({
   CREDENCIAIS: 'credenciais',
   LIMITE: 'limite',
   INDISPONIVEL: 'indisponivel',
+  CONEXAO: 'conexao',
 })
 
 /** Por que o dispositivo/navegador não serve para a passkey. */

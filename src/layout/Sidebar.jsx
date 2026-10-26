@@ -20,10 +20,12 @@ function NavButton({ item, route, pendingCount }) {
   )
 }
 
-export function Sidebar({ area, route, pendingCount, currentUser }) {
+// `canAccess(path)`: o app autenticado só mostra o que as permissões da sessão liberam
+// (ver features/auth/routeAccess.js). Sem ele, tudo aparece, como antes.
+export function Sidebar({ area, route, pendingCount, currentUser, canAccess = () => true }) {
   const config = AREA_CONFIG[area]
   const other = AREA_CONFIG[config.switchTo]
-  const items = getNavItems(area)
+  const items = getNavItems(area).filter((item) => canAccess(item.path))
   const mainItems = items.filter((item) => !item.beta)
   const betaItems = items.filter((item) => item.beta)
 
@@ -53,13 +55,15 @@ export function Sidebar({ area, route, pendingCount, currentUser }) {
       </nav>
 
       <div className="sidebar-bottom">
-        <button className="area-switch" type="button" onClick={() => navigate(other.home)}>
-          <ArrowLeftRight size={16} />
-          <span className="area-switch-copy">
-            <strong>Ir para {other.label}</strong>
-            <span>Troca livre no ambiente de validação</span>
-          </span>
-        </button>
+        {canAccess(other.home) ? (
+          <button className="area-switch" type="button" onClick={() => navigate(other.home)}>
+            <ArrowLeftRight size={16} />
+            <span className="area-switch-copy">
+              <strong>Ir para {other.label}</strong>
+              <span>Disponível para a sua conta</span>
+            </span>
+          </button>
+        ) : null}
         <div className="sidebar-user">
           <Avatar name={currentUser?.nome || currentUser?.name} />
           <span className="sidebar-user-copy">

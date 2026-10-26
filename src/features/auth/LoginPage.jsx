@@ -1,14 +1,20 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { AlertTriangle, Eye, EyeOff, Info, Keyboard, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useHashRoute } from '../../layout/navigation.js'
 import { AUTH_EVENT, AUTH_STATUS, LOGIN_FAILURE, UNSUPPORTED_REASON, createInitialState, isSecondFactorStep, transition } from './authStates.js'
-import { MATRICULA_OVERFLOW_MESSAGE, NOT_AVAILABLE_COPY, SESSION_EXPIRED_COPY, getLoginFailureCopy } from './authErrors.js'
-import { applyKeypadKey, isKeypadOverflow, KEYPAD_FIELD, KEYPAD_KEY, keypadMaxLength } from './pinKeypad.js'
-import { applyMatriculaInput, canSubmitCredentials, isMatriculaComplete, sanitizeMatriculaInput, sanitizePinInput } from './credentialsInput.js'
+import { CHALLENGE_EXPIRED_COPY, MATRICULA_OVERFLOW_MESSAGE, NOT_AVAILABLE_COPY, SESSION_EXPIRED_COPY, getLoginFailureCopy } from './authErrors.js'
+import { applyKeypadKey, KEYPAD_FIELD, KEYPAD_KEY, keypadMaxLength } from './pinKeypad.js'
+import { applyMatriculaInput, applyPinInput, canSubmitCredentials, isMatriculaComplete, isPinComplete, sanitizeMatriculaInput } from './credentialsInput.js'
 import { useTouchKeypadDefault } from './inputModality.js'
 import { PinKeypad } from './PinKeypad.jsx'
 import { PasskeyStep } from './PasskeyStep.jsx'
+import { AuthLayout } from './AuthLayout.jsx'
+import { useAuth } from './AuthProvider.jsx'
+import { FLOW_SIGNAL, createLoginFlow } from './loginFlow.js'
+import { authenticate } from './webauthnBrowser.js'
+import { getWebAuthnSupport } from './webauthnSupport.js'
+import { AUTH_ROUTES } from './routeAccess.js'
 import './auth.css'
 
 /**
@@ -48,20 +54,26 @@ function initialStateFor(preview) {
 }
 
 /**
- * Tela de acesso — só UI/UX nesta etapa. Não autentica ninguém: o submit
- * nunca chama a API, nunca grava em localStorage/sessionStorage/cookie, nunca
- * usa DEMO_USERS/DEMO_CURRENT_USER e nunca coloca matrícula ou PIN na URL. Um
- * clique real em "Entrar" mostra brevemente o carregamento, limpa o PIN e
- * avisa que o acesso ainda não está disponível neste ambiente — prova a UI
- * sem fingir uma sessão. Não existe aqui nenhum caminho que termine em
- * "autenticado": ver authStates.js.
+ * Tela de acesso. Com o `AuthProvider` (aplicação real) o envio executa o login
+ * de verdade, por loginFlow.js: matrícula + PIN → desafio WebAuthn (toque do
+ * usuário) → sessão confirmada pelo servidor em GET /auth/me. Esta tela não
+ * concede acesso a ninguém: quem autentica é o servidor, e a tela só reflete
+ * o resultado. Nunca grava em localStorage/sessionStorage/cookie, nunca usa
+ * DEMO_USERS e nunca coloca matrícula ou PIN na URL; o PIN sai do campo no
+ * envio. Sem Provider ou numa pré-visualização (`?state=`, só em DEV) nada é
+ * enviado à rede: só se mostra o estado visual e o aviso de ambiente sem acesso.
  */
 function LoginScreen({ preview }) {
+  const session = useAuth()
+  // Fluxo real só com o Provider da aplicação e fora de pré-visualização.
+  const realFlow = Boolean(session.api) && !preview
   const [auth, dispatch] = useReducer(transition, preview, initialStateFor)
   const [matricula, setMatricula] = useState('')
   const [pin, setPin] = useState('')
   const [showPin, setShowPin] = useState(false)
-  const [notice, setNotice] = useState(preview?.notice || null)
+  const [notice, setNotice] = useState(preview?.notice || (session.reason === 'expired' ? SESSION_EXPIRED_COPY : null))
+  // A passkey está aberta no dispositivo (botão desativado enquanto isso).
+  const [ceremonyBusy, setCeremonyBusy] = useState(false)
   // Teclado do ALM: padrão só em toque puro (ver inputModality.js); quem
   // preferir o do dispositivo alterna aqui. Fica só na memória da página.
   const touchDefault = useTouchKeypadDefault()
@@ -89,6 +101,31 @@ function LoginScreen({ preview }) {
   const timerRef = useRef(null)
   const previousStatus = useRef(auth.status)
 
+  // Sinais do fluxo real → máquina de estados da tela. Sempre a versão mais recente (ref).
+  const signalRef = useRef(() => {})
+  signalRef.current = (event) => {
+    if (event.type === FLOW_SIGNAL.CEREMONY_RUNNING) setCeremonyBusy(true)
+    else if (event.type === FLOW_SIGNAL.CEREMONY_IDLE) setCeremonyBusy(false)
+    else if (event.type === FLOW_SIGNAL.CHALLENGE_EXPIRED) {
+      dispatch({ type: AUTH_EVENT.BACK })
+      setNotice(CHALLENGE_EXPIRED_COPY)
+    } else if (event.type === FLOW_SIGNAL.SIGNED_IN) {
+      // Nada a fazer aqui: o Provider já tem a sessão validada pelo servidor e o
+      // roteador (App) leva o usuário para dentro. A tela não concede nada.
+    } else dispatch(event)
+  }
+  const flow = useMemo(() => (realFlow ? createLoginFlow({
+    api: session.api,
+    webauthn: { authenticate },
+    getSupport: () => getWebAuthnSupport(window),
+    refreshSession: session.readSession,
+    emit: (event) => signalRef.current(event),
+  }) : null), [realFlow, session.api, session.readSession])
+  useEffect(() => {
+    flow?.activate()
+    return () => flow?.dispose()
+  }, [flow])
+
   const loading = auth.status === AUTH_STATUS.VERIFICANDO_CREDENCIAIS
   // Checagem local do tamanho da matrícula: mesma mensagem de credenciais
   // inválidas, sem dizer qual campo nem qual regra. Nada é enviado.
@@ -100,7 +137,8 @@ function LoginScreen({ preview }) {
   const keypadEnabled = touchDefault && !nativeKeyboard
   const fieldActive = activeField !== null
   const overflowShown = matriculaOverflow > 0
-  const showKeypad = keypadEnabled && fieldActive && !loading
+  // O teclado numérico do ALM atende só o PIN: a matrícula tem letras e usa o teclado do dispositivo.
+  const showKeypad = keypadEnabled && activeField === KEYPAD_FIELD.PIN && !loading
 
   function focusQuietly(element) {
     quietFocusRef.current = true
@@ -147,9 +185,10 @@ function LoginScreen({ preview }) {
     }
     setNotice(null)
     setMatriculaOverflow(0)
-    if (!isMatriculaComplete(matricula)) {
-      // Matrícula curta: recusa aqui mesmo, com a mensagem genérica de sempre.
-      // O PIN também é apagado — assim não se descobre qual dos dois estava errado.
+    if (!isMatriculaComplete(matricula) || !isPinComplete(pin)) {
+      // Matrícula curta ou PIN que não tem 8 dígitos: recusa aqui mesmo, com a
+      // mensagem genérica de sempre. O PIN também é apagado — assim não se
+      // descobre qual dos dois estava errado nem qual é a regra.
       setPin('')
       setShowPin(false)
       setLocalRejection((current) => current + 1)
@@ -157,11 +196,18 @@ function LoginScreen({ preview }) {
     }
     setLocalRejection(0)
     dispatch({ type: AUTH_EVENT.SUBMIT_CREDENTIALS })
-    // O PIN não fica no campo depois do envio (aqui: do "envio" que não existe).
+    // O PIN sai do campo no envio; a cópia abaixo vive só nesta chamada e vai
+    // direto ao corpo da requisição (nunca à URL, ao storage ou ao console).
+    const submittedPin = pin
     setPin('')
     setShowPin(false)
-    // Nenhuma autenticação real nesta etapa — só prova o estado visual de
-    // carregamento e volta ao formulário avisando que o acesso ainda não existe.
+    if (flow) {
+      void flow.start({ matricula, pin: submittedPin })
+      return
+    }
+    // Sem fluxo real (pré-visualização em DEV ou tela isolada sem Provider):
+    // nada é enviado — só o estado visual de carregamento e o aviso de que
+    // este ambiente não dá acesso. Nenhum caminho aqui termina em "autenticado".
     timerRef.current = window.setTimeout(() => {
       dispatch({ type: AUTH_EVENT.BACK })
       setNotice(NOT_AVAILABLE_COPY)
@@ -178,9 +224,9 @@ function LoginScreen({ preview }) {
     setMatricula(value)
   }
 
-  // Digitação, colagem e preenchimento automático passam por aqui. Mais de 6
-  // dígitos: a entrada INTEIRA é recusada (nada de cortar nos 6 primeiros), o
-  // valor que já estava no campo fica e o aviso aparece.
+  // Digitação, colagem e preenchimento automático passam por aqui. Letras viram
+  // maiúsculas. Mais de 20 caracteres: a entrada INTEIRA é recusada (nada de
+  // cortar nos 20 primeiros), o valor que já estava no campo fica e o aviso aparece.
   function handleMatriculaChange(event) {
     setLocalRejection(0)
     const result = applyMatriculaInput(matriculaValueRef.current, event.target.value)
@@ -190,27 +236,18 @@ function LoginScreen({ preview }) {
 
   function handlePinChange(event) {
     setLocalRejection(0)
-    setPin(sanitizePinInput(event.target.value))
+    setPin((current) => applyPinInput(current, event.target.value))
   }
 
-  // Um teclado só para os dois campos: cada tecla vai SÓ para o campo ativo.
-  // "Continuar" leva da matrícula ao PIN e, no PIN, envia o formulário.
+  // O teclado numérico do ALM digita só o PIN (até 8 dígitos; o 9º é ignorado).
+  // "Continuar" envia o formulário.
   function handleKeypadKey(key) {
     if (key === KEYPAD_KEY.CONTINUE) {
-      if (activeField === KEYPAD_FIELD.MATRICULA) pinRef.current?.focus()
-      else submit()
+      submit()
       return
     }
     setLocalRejection(0)
-    const rules = { maxLength: keypadMaxLength(activeField) }
-    if (activeField === KEYPAD_FIELD.MATRICULA) {
-      // Mesma regra do campo: o 7º dígito é recusado, o valor fica e o aviso aparece.
-      const overflow = isKeypadOverflow(matriculaValueRef.current, key, rules)
-      commitMatricula(applyKeypadKey(matriculaValueRef.current, key, rules))
-      setMatriculaOverflow((current) => (overflow ? current + 1 : 0))
-    } else if (activeField === KEYPAD_FIELD.PIN) {
-      setPin((current) => applyKeypadKey(current, key, rules))
-    }
+    setPin((current) => applyKeypadKey(current, key, { maxLength: keypadMaxLength(KEYPAD_FIELD.PIN) }))
   }
 
   // Tudo acontece DENTRO do clique, de forma síncrona. O Safari do iOS só abre o
@@ -218,15 +255,14 @@ function LoginScreen({ preview }) {
   // (requestAnimationFrame, setTimeout) faz o campo ganhar foco sem teclado.
   // `flushSync` aplica o novo `inputMode` ao DOM antes do foco, para o navegador
   // ler o tipo de teclado certo (nativo ou nenhum) no momento em que o recebe.
-  // A alternância vale para os dois campos: o foco volta ao campo que estava ativo
-  // (ou ao PIN, se nenhum estava).
+  // A alternância vale só para o PIN (a matrícula sempre usa o teclado do
+  // dispositivo): o foco vai para o PIN no mesmo gesto.
   function toggleNativeKeyboard() {
-    const target = activeField || KEYPAD_FIELD.PIN
     flushSync(() => {
       setNativeKeyboard((current) => !current)
-      setActiveField(target)
+      setActiveField(KEYPAD_FIELD.PIN)
     })
-    const input = target === KEYPAD_FIELD.MATRICULA ? matriculaRef.current : pinRef.current
+    const input = pinRef.current
     if (!input) return
     // Campo já focado: sai e entra de novo no mesmo gesto para o navegador reler o tipo de teclado.
     if (document.activeElement === input) input.blur()
@@ -300,8 +336,18 @@ function LoginScreen({ preview }) {
       <PasskeyStep
         state={auth}
         preview={Boolean(preview)}
-        onRetry={() => dispatch({ type: AUTH_EVENT.RETRY })}
-        onBack={() => dispatch({ type: AUTH_EVENT.BACK })}
+        busy={flow ? ceremonyBusy : undefined}
+        onStart={flow ? () => void flow.confirm() : undefined}
+        onRetry={() => {
+          dispatch({ type: AUTH_EVENT.RETRY })
+          // O toque em "Tentar novamente" já é o gesto que a passkey exige.
+          if (flow) void flow.confirm()
+        }}
+        onBack={() => {
+          flow?.cancel()
+          setCeremonyBusy(false)
+          dispatch({ type: AUTH_EVENT.BACK })
+        }}
       />
     )
   }
@@ -346,11 +392,12 @@ function LoginScreen({ preview }) {
             id="login-matricula"
             name="matricula"
             type="text"
-            // Só números (0-9), até 6, preservando zeros à esquerda: continua TEXTO,
-            // nunca number. "none": com o teclado do ALM ativo, o do aparelho não abre junto.
-            inputMode={keypadEnabled ? 'none' : 'numeric'}
+            // Letras e números (3 a 20), sempre em MAIÚSCULAS, preservando zeros à
+            // esquerda: continua TEXTO, nunca number. Teclado do dispositivo (tem letras).
+            inputMode="text"
             enterKeyHint="next"
             autoComplete="username"
+            autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
             data-keypad-target={KEYPAD_FIELD.MATRICULA}
@@ -370,7 +417,7 @@ function LoginScreen({ preview }) {
               </span>
             ) : (
               <span id="login-matricula-hint" className="auth-field-hint">
-                Até 6 números
+                Até 20 letras ou números
               </span>
             )}
           </div>
@@ -428,9 +475,9 @@ function LoginScreen({ preview }) {
             <div ref={keypadRef}>
               <PinKeypad
                 onKey={handleKeypadKey}
-                digitCount={activeField === KEYPAD_FIELD.MATRICULA ? matricula.length : pin.length}
-                fieldLabel={activeField === KEYPAD_FIELD.MATRICULA ? 'Matrícula' : 'PIN'}
-                valuePreview={activeField === KEYPAD_FIELD.MATRICULA ? matricula : maskedPreview(pin)}
+                digitCount={pin.length}
+                fieldLabel="PIN"
+                valuePreview={maskedPreview(pin)}
                 disabled={loading}
               />
             </div>
@@ -442,6 +489,12 @@ function LoginScreen({ preview }) {
           {loading ? 'Entrando…' : 'Entrar'}
         </button>
       </div>
+
+      {realFlow ? (
+        <p className="auth-footnote">
+          Primeiro acesso ou novo dispositivo? <a href={`#${AUTH_ROUTES.activate}`}>Ativar passkey</a>
+        </p>
+      ) : null}
     </form>
   )
 }
@@ -451,28 +504,15 @@ export function LoginPage() {
   const previewKey = import.meta.env.DEV ? route.query.get('state') : null
   const preview = previewKey && Object.prototype.hasOwnProperty.call(PREVIEWS, previewKey) ? PREVIEWS[previewKey] : null
 
-  return (
-    <div className="auth-page">
-      <div className="auth-brand-panel">
-        <div className="auth-brand-mark">
-          <img src="/brand/logo-mark.png" alt="" width={40} height={40} />
-          <span className="auth-brand-mark-copy">
-            <strong>ALM</strong>
-            <span>Gestão de chegadas e recebimentos</span>
-          </span>
-        </div>
-        <p className="auth-brand-copy">
-          Um único acesso para acompanhar chegadas, conferências e recebimentos de materiais.
-        </p>
-        <span className="auth-env-note">
-          Ambiente de validação — esta tela ainda não envia nenhum dado de login.
-        </span>
-      </div>
+  const session = useAuth()
+  const envNote = session.api
+    ? 'Ambiente de validação — acesso com matrícula, PIN e passkey.'
+    : 'Ambiente de validação — esta tela ainda não envia nenhum dado de login.'
 
-      <div className="auth-form-panel">
-        {/* `key`: trocar `?state=` remonta a tela já no estado pedido. */}
-        <LoginScreen key={previewKey || 'live'} preview={preview} />
-      </div>
-    </div>
+  return (
+    <AuthLayout envNote={envNote}>
+      {/* `key`: trocar `?state=` remonta a tela já no estado pedido. */}
+      <LoginScreen key={previewKey || 'live'} preview={preview} />
+    </AuthLayout>
   )
 }

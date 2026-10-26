@@ -78,9 +78,9 @@ test('o título da passkey não perde o anel de foco de navegação por teclado'
   assert.doesNotMatch(visible[1], /outline\s*:\s*none/)
 })
 
-test('matrícula: excesso é recusado pela regra única (campo e teclado do ALM), sem truncar nem maxLength', () => {
+test('matrícula: excesso é recusado pela regra única do campo, sem truncar nem maxLength (o teclado do ALM não digita matrícula)', () => {
   assert.match(loginCode, /applyMatriculaInput\(matriculaValueRef\.current, event\.target\.value\)/)
-  assert.match(loginCode, /isKeypadOverflow\(matriculaValueRef\.current, key, rules\)/)
+  assert.doesNotMatch(functionBody(loginCode, 'handleKeypadKey'), /matricula/i, 'o teclado numérico só digita o PIN')
   // Nenhum corte automático da matrícula na tela, nem limite nativo que truncaria a colagem.
   assert.doesNotMatch(loginCode, /setMatricula\(sanitizeMatriculaInput/)
   const input = loginCode.match(/<input[^>]*id="login-matricula"[\s\S]*?\/>/)[0]
@@ -94,7 +94,7 @@ test('o aviso de excesso vem da constante, é alerta e não toca no PIN', () => 
   assert.match(loginCode, /\{MATRICULA_OVERFLOW_MESSAGE\}/)
   assert.doesNotMatch(loginCode, /ultrapassar/, 'o texto fica só em authErrors.js')
   assert.match(loginCode, /id="login-matricula-limit"[^>]*role="alert"/)
-  assert.match(functionBody(loginCode, 'handlePinChange'), /^\{[\s\S]*sanitizePinInput\(event\.target\.value\)[\s\S]*\}$/)
+  assert.match(functionBody(loginCode, 'handlePinChange'), /^\{[\s\S]*applyPinInput\(current, event\.target\.value\)[\s\S]*\}$/)
   assert.doesNotMatch(functionBody(loginCode, 'handlePinChange'), /Overflow|applyMatriculaInput/)
 })
 

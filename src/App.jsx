@@ -10,7 +10,6 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   Database,
@@ -50,7 +49,7 @@ import {
   hasOpenDivergences,
   isNfPending,
 } from './data.js'
-import { useRecebimentosStore } from './store.js'
+import { resetDemoData, retryInitialLoad, setCurrentUser, useRecebimentosStore } from './store.js'
 import {
   Avatar,
   EmptyState,
@@ -82,10 +81,17 @@ import { ReceiptsTable } from './components/recebimentos/ReceiptsTable.jsx'
 import { ReceiptMobileCard } from './components/recebimentos/ReceiptMobileCard.jsx'
 import { displayResponsible, getActorName } from './components/recebimentos/receiptHelpers.js'
 import { clearPendingReceiptPrefill, peekPendingReceiptPrefill } from './features/nfeReader/receiptHandoff.js'
-import { attachmentDownloadHref } from './api.js'
+import { attachmentDownloadHref, setUnauthorizedHandler } from './api.js'
 import { friendlyAttachmentError } from './features/attachments/errorMessages.js'
 import { ALLOWED_ATTACHMENT_ACCEPT, ALLOWED_IMAGE_ACCEPT, validateAttachmentFile } from './features/attachments/constraints.js'
 import { LoginPage } from './features/auth/LoginPage.jsx'
+import { ActivatePasskeyPage } from './features/auth/ActivatePasskeyPage.jsx'
+import { AccessGate } from './features/auth/AccessGate.jsx'
+import { AuthenticatorsPage } from './features/auth/AuthenticatorsPage.jsx'
+import { AuthProvider, useAuth } from './features/auth/AuthProvider.jsx'
+import { UserMenu } from './features/auth/UserMenu.jsx'
+import { AUTH_ROUTES, canAccessPath } from './features/auth/routeAccess.js'
+import { toStoreUser } from './features/auth/sessionState.js'
 import { NotificationsProvider, useNotifications } from './features/notifications/index.js'
 
 // Carregado sob demanda: pdfjs-dist e @zxing pesam no bundle e só interessam
@@ -216,10 +222,23 @@ function downloadCsv(receipts) {
   URL.revokeObjectURL(url)
 }
 
+// "Novo recebimento" só aparece para quem tem `recebimentos.create` nas permissões
+// que o SERVIDOR entregou em /auth/me (nunca pelo nome do perfil). O backend recusa
+// a criação de qualquer forma; aqui só se evita oferecer um botão que não funciona.
+function NewReceiptButton({ iconSize = 16 }) {
+  const { can } = useAuth()
+  if (!can('recebimentos.create')) return null
+  return (
+    <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
+      <Plus size={iconSize} /> Novo recebimento
+    </button>
+  )
+}
+
 // Um único shell para as duas áreas: a área (da rota) só troca os itens de
 // navegação e o que não faz sentido fora dela (a busca de recebimentos e o
 // atalho para Pendências são do Almoxarifado).
-function AppShell({ area, route, pendingCount, currentUser, children, onToast, theme, onToggleTheme }) {
+function AppShell({ area, route, pendingCount, currentUser, access, children, onToast, theme, onToggleTheme }) {
   const [globalSearch, setGlobalSearch] = useState('')
   const searchRef = useRef(null)
   const isAlmoxarifado = area === AREAS.almoxarifado
@@ -244,7 +263,7 @@ function AppShell({ area, route, pendingCount, currentUser, children, onToast, t
 
   return (
     <div className="app-shell" data-area={area}>
-      <Sidebar area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} currentUser={currentUser} />
+      <Sidebar area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} currentUser={currentUser} canAccess={access.canAccess} />
 
       <main className="main-shell">
         <header className="topbar">
@@ -279,18 +298,12 @@ function AppShell({ area, route, pendingCount, currentUser, children, onToast, t
               </button>
             ) : null}
             <span className="topbar-divider" />
-            <button
-              className="topbar-user"
-              type="button"
-              onClick={() => onToast('Perfil demonstrativo', 'A autenticação corporativa será conectada na implantação.', 'info')}
-            >
-              <Avatar name={currentUser?.nome || currentUser?.name} />
-              <span className="topbar-user-copy">
-                <strong>{currentUser?.nome || currentUser?.name}</strong>
-                <span>{currentUser?.perfil || currentUser?.role}</span>
-              </span>
-              <ChevronDown size={14} className="icon-muted" />
-            </button>
+            <UserMenu
+              user={currentUser}
+              onDevices={() => navigate(AUTH_ROUTES.devices)}
+              onSignOut={access.onSignOut}
+              signingOut={access.signingOut}
+            />
           </div>
         </header>
 
@@ -299,7 +312,7 @@ function AppShell({ area, route, pendingCount, currentUser, children, onToast, t
         {children}
       </main>
 
-      <MobileNav area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} />
+      <MobileNav area={area} route={route} pendingCount={isAlmoxarifado ? pendingCount : 0} canAccess={access.canAccess} account={{ onDevices: () => navigate(AUTH_ROUTES.devices), onSignOut: access.onSignOut, signingOut: access.signingOut }} />
     </div>
   )
 }
@@ -361,9 +374,7 @@ function DashboardPage({ store }) {
         title="Visão geral"
         description="Acompanhe os recebimentos e resolva o que precisa de atenção hoje."
       >
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
-          <Plus size={17} /> Novo recebimento
-        </button>
+        <NewReceiptButton iconSize={17} />
       </PageHeader>
 
       <p className="dashboard-source">
@@ -570,9 +581,7 @@ function ReceiptsPage({ store, initialQuery }) {
         <button className="btn btn-secondary" type="button" onClick={() => downloadCsv(filtered)}>
           <FileSpreadsheet size={16} /> Exportar Excel
         </button>
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}>
-          <Plus size={16} /> Novo recebimento
-        </button>
+        <NewReceiptButton />
       </PageHeader>
 
       <section className="panel table-panel">
@@ -1421,7 +1430,7 @@ function PendingPage({ store }) {
     <div className="page">
       <PageHeader title="Pendências" description="Cada cartão mostra o próximo passo necessário para o recebimento avançar.">
         <button className="btn btn-secondary" type="button" onClick={() => navigate(ROUTES.receipts)}><ClipboardList size={16} /> Ver todos</button>
-        <button className="btn btn-primary" type="button" onClick={() => navigate(ROUTES.newReceipt)}><Plus size={16} /> Novo recebimento</button>
+        <NewReceiptButton />
       </PageHeader>
 
       <section className="pending-columns">
@@ -1453,6 +1462,8 @@ function PendingPage({ store }) {
 // só é chamado quando esta função é efetivamente renderizada — ou seja, nunca
 // na rota /login. App() decide a rota antes de montar este componente.
 function AuthenticatedApp({ route, theme, toggleTheme }) {
+  const auth = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
   const store = useRecebimentosStore()
   // Mantém a assinatura de sempre — pushToast(title, message, type = 'success') —
   // para as telas que já a recebem por prop. A exibição vive em
@@ -1460,7 +1471,10 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
   const { pushToast } = useNotifications()
 
   const pendingCount = store.receipts.filter((item) => isNfPending(item) || hasOpenDivergences(item) || item.status === RECEBIMENTO_STATUS.CONFERENCIA).length
-  const area = getAreaForPath(route.path)
+  // "Meus dispositivos" não pertence a nenhuma área: usa a primeira que a conta pode abrir.
+  const area = route.path === AUTH_ROUTES.devices && !canAccessPath(auth.user, AREA_CONFIG[AREAS.almoxarifado].home)
+    ? AREAS.portaria
+    : getAreaForPath(route.path)
   let content
 
   if (route.path === ROUTES.dashboard) {
@@ -1491,6 +1505,8 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
         <VisualizacaoPage />
       </Suspense>
     )
+  } else if (route.path === AUTH_ROUTES.devices) {
+    content = <AuthenticatorsPage />
   } else if (route.path.startsWith('/recebimentos/')) {
     const receiptId = decodeURIComponent(route.path.split('/').filter(Boolean)[1] || '')
     content = <DetailPage store={store} receiptId={receiptId} pushToast={pushToast} />
@@ -1502,10 +1518,62 @@ function AuthenticatedApp({ route, theme, toggleTheme }) {
   }
 
   return (
-    <AppShell area={area} route={route} pendingCount={pendingCount} currentUser={store.currentUser} onToast={pushToast} theme={theme} onToggleTheme={toggleTheme}>
+    <AppShell
+      area={area}
+      route={route}
+      pendingCount={pendingCount}
+      currentUser={store.currentUser}
+      access={{
+        // Só mostra no menu o que as permissões do servidor liberam (o backend recusa o resto).
+        canAccess: (path) => canAccessPath(auth.user, path),
+        signingOut,
+        onSignOut: async () => {
+          setSigningOut(true)
+          const result = await auth.signOut()
+          setSigningOut(false)
+          if (!result.ok) pushToast('Não foi possível sair', 'Verifique sua conexão e tente novamente.', 'error')
+        },
+      }}
+      onToast={pushToast}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
       {content}
     </AppShell>
   )
+}
+
+// O usuário da sessão (validado pelo servidor em GET /auth/me) vira o usuário do
+// store local ANTES do app autenticado montar, e os recebimentos são recarregados
+// quando a identidade muda. Ao sair, os dados em memória do usuário anterior somem.
+let hydratedForUserId = null
+function handleSessionUser(user) {
+  if (!user) {
+    hydratedForUserId = null
+    resetDemoData()
+    return
+  }
+  setCurrentUser(toStoreUser(user))
+  if (hydratedForUserId !== user.id) {
+    hydratedForUserId = user.id
+    void retryInitialLoad()
+  }
+}
+
+// Qualquer chamada autenticada do domínio que receber 401 encerra a sessão local.
+function UnauthorizedBridge() {
+  const { expireSession } = useAuth()
+  useEffect(() => {
+    setUnauthorizedHandler(expireSession)
+    return () => setUnauthorizedHandler(null)
+  }, [expireSession])
+  return null
+}
+
+// Troca a rota sem empilhar histórico (o botão Voltar não cai num redirecionamento).
+function replaceRoute(path) {
+  const base = window.location.href.split('#')[0]
+  window.location.replace(`${base}#${path}`)
 }
 
 export default function App() {
@@ -1516,21 +1584,26 @@ export default function App() {
   // /login direto, sem nunca ter passado pelo app autenticado.
   const { theme, toggleTheme } = useTheme()
 
-  // Rota de preview/dev (#/login) — fora do AppShell de propósito (sem
-  // sidebar/topbar) e sem inicializar o domínio de recebimentos: AuthenticatedApp
-  // (onde mora useRecebimentosStore) só é montado no branch abaixo, então abrir
-  // /login direto nunca dispara o carregamento inicial de recebimentos. Nenhum
-  // guard, nenhum redirecionamento: é só uma tela isolada, acessada manualmente.
-  // Ver src/features/auth/.
-  const screen =
-    route.path === ROUTES.login ? (
-      <LoginPage />
-    ) : (
-      <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />
-    )
-
   // O Provider de notificações fica acima das rotas: Login, Portaria,
   // Visualização e o app autenticado usam a mesma store e a mesma área de
   // exibição, e os avisos sobrevivem à troca de rota. Ver src/features/notifications/.
-  return <NotificationsProvider>{screen}</NotificationsProvider>
+  //
+  // O AccessGate só monta AuthenticatedApp (onde mora useRecebimentosStore) para
+  // quem tem sessão confirmada pelo servidor e permissão para a rota: sem sessão,
+  // /login e a ativação de passkey são as únicas telas, e nada de recebimentos é
+  // carregado. Ver src/features/auth/.
+  return (
+    <NotificationsProvider>
+      <AuthProvider onUserChange={handleSessionUser}>
+        <UnauthorizedBridge />
+        <AccessGate
+          route={route}
+          onRedirect={replaceRoute}
+          renderLogin={() => <LoginPage />}
+          renderActivate={() => <ActivatePasskeyPage />}
+          renderApp={() => <AuthenticatedApp route={route} theme={theme} toggleTheme={toggleTheme} />}
+        />
+      </AuthProvider>
+    </NotificationsProvider>
+  )
 }

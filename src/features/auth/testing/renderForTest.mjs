@@ -16,7 +16,7 @@ const AUTH_DIR = join(ROOT, 'src', 'features', 'auth').replaceAll('\\', '/')
 
 let cached = null
 
-/** Devolve `{ React, renderToStaticMarkup, LoginPage, PinKeypad, PasskeyStep }` da MESMA cópia do React. */
+/** Devolve `{ React, renderToStaticMarkup, LoginPage, PinKeypad, PasskeyStep, ActivatePasskeyPage }` da MESMA cópia do React. */
 export async function loadAuthComponents() {
   if (cached) return cached
   const entry = `
@@ -26,6 +26,7 @@ export async function loadAuthComponents() {
     export { LoginPage } from '${AUTH_DIR}/LoginPage.jsx'
     export { PinKeypad } from '${AUTH_DIR}/PinKeypad.jsx'
     export { PasskeyStep } from '${AUTH_DIR}/PasskeyStep.jsx'
+    export { ActivatePasskeyPage } from '${AUTH_DIR}/ActivatePasskeyPage.jsx'
   `
   const result = await build({
     stdin: { contents: entry, resolveDir: ROOT, sourcefile: 'entry.jsx', loader: 'jsx' },

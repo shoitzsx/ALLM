@@ -28,16 +28,22 @@ export const LOGIN_FAILURE_COPY = Object.freeze({
     description: 'Tente novamente em instantes. Se continuar, procure um responsável pelo ALM.',
     fieldLevel: false,
   }),
+  [LOGIN_FAILURE.CONEXAO]: Object.freeze({
+    tone: 'error',
+    title: 'Não foi possível conectar ao ALM.',
+    description: 'Verifique sua conexão e tente novamente.',
+    fieldLevel: false,
+  }),
 })
 
 /**
  * Aviso de excesso na matrícula. Fala só do LIMITE (que a tela já mostra em
- * "Até 6 números"); o mínimo é validação interna e nunca aparece em texto.
+ * "Até 20 letras ou números"); o mínimo é validação interna e nunca aparece em texto.
  */
-export const MATRICULA_OVERFLOW_MESSAGE = 'A matrícula não pode ultrapassar 6 dígitos.'
+export const MATRICULA_OVERFLOW_MESSAGE = 'A matrícula não pode ultrapassar 20 caracteres.'
 
 /** Só 429 e falha de servidor se distinguem; todo o resto de 4xx é "credenciais". */
-export const CONNECTION_FAILURE = 'conexao'
+export const CONNECTION_FAILURE = LOGIN_FAILURE.CONEXAO
 
 /**
  * Classificação provisória por semântica HTTP genérica. NÃO depende de
@@ -121,6 +127,17 @@ export function getStepCopy(state) {
   }
   return STEP_COPY[state.status] || null
 }
+
+/**
+ * Aviso quando o desafio do segundo fator não vale mais: o servidor recusa com
+ * uma resposta única para "expirou", "já usado" e "resposta inválida" — o
+ * usuário só precisa recomeçar (matrícula e PIN de novo).
+ */
+export const CHALLENGE_EXPIRED_COPY = Object.freeze({
+  tone: 'info',
+  title: 'A confirmação expirou ou não foi aceita.',
+  description: 'Entre novamente com sua matrícula e PIN.',
+})
 
 /** Aviso exibido na tela de credenciais por causa de uma sessão que terminou (ver LoginPage). */
 export const SESSION_EXPIRED_COPY = Object.freeze({

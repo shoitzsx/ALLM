@@ -1,17 +1,21 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { ArrowLeftRight, MoreHorizontal, X } from 'lucide-react'
+import { ArrowLeftRight, Fingerprint, LogOut, MoreHorizontal, X } from 'lucide-react'
 import { AREA_CONFIG, getMobileNavItems, isRouteActive, navigate } from './navigation.js'
 
 // Até 4 destinos da área ficam fixos na barra; o resto (e a troca de área)
 // vai para "Mais" — ver getMobileNavItems em navigation.js.
-export function MobileNav({ area, route, pendingCount }) {
+// `canAccess(path)` filtra o menu pelas permissões da sessão; `account` traz "Meus dispositivos" e "Sair"
+// (no celular não há menu da conta no topo). Sem eles, tudo aparece, como antes.
+export function MobileNav({ area, route, pendingCount, canAccess = () => true, account }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const moreButtonRef = useRef(null)
   const panelId = useId()
 
   const config = AREA_CONFIG[area]
   const other = AREA_CONFIG[config.switchTo]
-  const { primary: primaryItems, more: moreItems } = getMobileNavItems(area)
+  const { primary, more } = getMobileNavItems(area)
+  const primaryItems = primary.filter((item) => canAccess(item.path))
+  const moreItems = more.filter((item) => canAccess(item.path))
   const moreActive = moreItems.some((item) => isRouteActive(route, item.path))
 
   // Fecha com Escape e devolve o foco ao botão "Mais" — do contrário o foco
@@ -107,13 +111,27 @@ export function MobileNav({ area, route, pendingCount }) {
               </button>
             )
           })}
-          <button className="mobile-more-item mobile-more-switch" type="button" onClick={() => goTo(other.home)}>
-            <ArrowLeftRight size={18} />
-            <span className="area-switch-copy">
-              <strong>Ir para {other.label}</strong>
-              <span>Troca livre no ambiente de validação</span>
-            </span>
-          </button>
+          {canAccess(other.home) ? (
+            <button className="mobile-more-item mobile-more-switch" type="button" onClick={() => goTo(other.home)}>
+              <ArrowLeftRight size={18} />
+              <span className="area-switch-copy">
+                <strong>Ir para {other.label}</strong>
+                <span>Disponível para a sua conta</span>
+              </span>
+            </button>
+          ) : null}
+          {account ? (
+            <>
+              <button className="mobile-more-item" type="button" onClick={() => { setMoreOpen(false); account.onDevices?.() }}>
+                <Fingerprint size={18} />
+                Meus dispositivos
+              </button>
+              <button className="mobile-more-item" type="button" disabled={account.signingOut} onClick={() => { setMoreOpen(false); account.onSignOut?.() }}>
+                <LogOut size={18} />
+                {account.signingOut ? 'Saindo…' : 'Sair'}
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
     </>

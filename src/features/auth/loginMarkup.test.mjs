@@ -26,52 +26,56 @@ test('formulário não pode enviar matrícula/PIN na URL: método POST, sem acti
   assert.doesNotMatch(form, /method="get"/i)
 })
 
-test('matrícula: texto (zeros à esquerda), rótulo, teclado numérico, só dígitos, sem regra de mínimo na tela', () => {
+test('matrícula: texto (zeros à esquerda), rótulo, teclado de texto com maiúsculas, sem regra de mínimo na tela', () => {
   const markup = loginHtml()
   assert.match(markup, /<label for="login-matricula">Matrícula<\/label>/)
   const input = tag(markup, /<input[^>]*id="login-matricula"[^>]*>/)
   assert.match(input, /type="text"/, 'type=number perderia os zeros à esquerda')
-  assert.match(input, /inputMode="numeric"|inputmode="numeric"/i)
+  assert.match(input, /inputMode="text"|inputmode="text"/i, 'letras e números: teclado de texto, não numérico')
   assert.match(input, /autoComplete="username"|autocomplete="username"/i)
-  assert.doesNotMatch(input, /autocapitalize|minlength|pattern=/i)
+  assert.match(input, /autoCapitalize="characters"|autocapitalize="characters"/i, 'o teclado do aparelho já sugere maiúsculas')
+  assert.doesNotMatch(input, /minlength|maxlength|pattern=/i)
   assert.doesNotMatch(input, /min=|max=/i)
   assert.match(input, /required/)
   assert.match(input, /spellcheck="false"/i)
 })
 
-test('matrícula: a única orientação visível é "Até 6 números" e o mínimo não aparece em lugar nenhum', () => {
+test('matrícula: a única orientação visível é "Até 20 letras ou números" e o mínimo não aparece em lugar nenhum', () => {
   const markup = loginHtml()
-  assert.match(markup, />Até 6 números</)
+  assert.match(markup, />Até 20 letras ou números</)
   const input = tag(markup, /<input[^>]*id="login-matricula"[^>]*>/)
   const hintId = markup.match(/<[a-z]+[^>]*id="(login-matricula-hint)"[^>]*>/)?.[1]
   assert.equal(hintId, 'login-matricula-hint')
   assert.match(input, /aria-describedby="[^"]*login-matricula-hint/)
-  assert.doesNotMatch(markup, /m[ií]nim|pelo menos|ao menos|4 (d[ií]gitos|n[uú]meros)|quatro|entre 4|4 a 6|de 4/i)
+  assert.doesNotMatch(markup, /m[ií]nim|pelo menos|ao menos|3 (d[ií]gitos|n[uú]meros|caracteres)|tr[eê]s|entre 3|3 a 20|Até 6|4 a 6/i)
 })
 
-test('estado inicial: sem aviso de excesso; só a orientação "Até 6 números"', () => {
+test('estado inicial: sem aviso de excesso; só a orientação "Até 20 letras ou números"', () => {
   const markup = loginHtml()
   assert.doesNotMatch(markup, /ultrapassar|login-matricula-limit/)
   assert.match(markup, /<span id="login-matricula-hint"/)
 })
 
-test('matrícula e PIN: a mesma regra vale em qualquer dispositivo — nunca há dois teclados definidos pelo campo', () => {
+test('a mesma regra vale em qualquer dispositivo: matrícula com teclado de texto, PIN com teclado numérico', () => {
   for (const options of [undefined, { matchMedia: desktop }]) {
     const markup = loginHtml(options)
-    assert.match(tag(markup, /<input[^>]*id="login-matricula"[^>]*>/), /inputMode="numeric"|inputmode="numeric"/i)
+    assert.match(tag(markup, /<input[^>]*id="login-matricula"[^>]*>/), /inputMode="text"|inputmode="text"/i)
     assert.match(tag(markup, /<input[^>]*id="login-pin"[^>]*>/), /inputMode="numeric"|inputmode="numeric"/i)
   }
 })
 
-test('celular/tablet só de toque: matrícula E PIN sem teclado do aparelho (o do ALM atende os dois)', () => {
+test('celular/tablet só de toque: o PIN usa o teclado do ALM; a matrícula (com letras) continua no teclado do aparelho', () => {
   const markup = loginHtml({ matchMedia: touchOnly })
-  for (const id of ['login-matricula', 'login-pin']) {
-    const input = tag(markup, new RegExp(`<input[^>]*id="${id}"[^>]*>`))
-    assert.match(input, /inputMode="none"|inputmode="none"/i, id)
+  const matricula = tag(markup, /<input[^>]*id="login-matricula"[^>]*>/)
+  assert.match(matricula, /inputMode="text"|inputmode="text"/i, 'o teclado numérico do ALM não digita letras')
+  assert.doesNotMatch(matricula, /inputMode="none"|inputmode="none"/i)
+  const pin = tag(markup, /<input[^>]*id="login-pin"[^>]*>/)
+  assert.match(pin, /inputMode="none"|inputmode="none"/i)
+  for (const [id, input] of [['login-matricula', matricula], ['login-pin', pin]]) {
     assert.doesNotMatch(input, /readonly|disabled/i, `${id}: colagem e preenchimento assistido precisam continuar valendo`)
     assert.doesNotMatch(input, /maxlength|pattern=/i, id)
   }
-  // A alternância "Usar o teclado do dispositivo" é única e vale para os dois campos.
+  // A alternância "Usar o teclado do dispositivo" é única e vale só para o PIN.
   assert.equal((markup.match(/auth-keyboard-toggle/g) || []).length, 1)
   assert.doesNotMatch(markup, /class="auth-keypad"/, 'o teclado só aparece quando um campo recebe foco')
 })
@@ -86,7 +90,7 @@ test('matrícula e PIN pertencem à mesma zona do teclado e declaram qual campo 
   assert.match(tag(markup, /<input[^>]*id="login-pin"[^>]*>/), /data-keypad-target="pin"/)
 })
 
-test('PIN: rótulo, mascarado, numérico, sem comprimento fixo, com preenchimento assistido', () => {
+test('PIN: rótulo, mascarado, numérico, com preenchimento assistido (o tamanho de 8 é regra em código, não atributo)', () => {
   const markup = loginHtml()
   assert.match(markup, /<label for="login-pin">PIN<\/label>/)
   const input = tag(markup, /<input[^>]*id="login-pin"[^>]*>/)
@@ -241,4 +245,36 @@ test('passo da passkey: a pré-visualização é identificada como demonstrativa
 test('passo da passkey sem texto (estado de formulário) não renderiza nada', () => {
   const state = createInitialState(AUTH_STATUS.CREDENCIAIS)
   assert.equal(html(React.createElement(PasskeyStep, { state, onRetry() {}, onBack() {} })), '')
+})
+
+// --- passkey real: o botão que abre o dispositivo é um toque do usuário (exigência do Safari) ---
+
+test('passo da passkey com fluxo real: botão "Usar a passkey" aparece só no passo aguardando', () => {
+  const waiting = createInitialState(AUTH_STATUS.AGUARDANDO_SEGUNDO_FATOR)
+  const markup = html(React.createElement(PasskeyStep, { state: waiting, onStart() {}, onRetry() {}, onBack() {} }))
+  const start = tag(markup, /<button[^>]*auth-passkey-start[^>]*>/)
+  assert.match(start, /type="button"/)
+  assert.doesNotMatch(start, /disabled/)
+  assert.match(markup, />Usar a passkey</)
+  assert.match(markup, />Cancelar</)
+  for (const status of [AUTH_STATUS.CONFIRMACAO_INTERROMPIDA, AUTH_STATUS.ERRO_CONEXAO, AUTH_STATUS.ERRO_SEGUNDO_FATOR, AUTH_STATUS.PASSKEY_NAO_CADASTRADA]) {
+    const other = html(React.createElement(PasskeyStep, { state: createInitialState(status), onStart() {}, onRetry() {}, onBack() {} }))
+    assert.doesNotMatch(other, /auth-passkey-start/, status)
+  }
+})
+
+test('passo da passkey: enquanto o dispositivo responde, o botão fica desativado e o passo ocupado', () => {
+  const waiting = createInitialState(AUTH_STATUS.AGUARDANDO_SEGUNDO_FATOR)
+  const markup = html(React.createElement(PasskeyStep, { state: waiting, onStart() {}, busy: true, onRetry() {}, onBack() {} }))
+  assert.match(tag(markup, /<button[^>]*auth-passkey-start[^>]*>/), /disabled/)
+  assert.match(markup, /aria-busy="true"/)
+  assert.match(markup, /Aguardando o dispositivo/)
+  const idle = html(React.createElement(PasskeyStep, { state: waiting, onStart() {}, busy: false, onRetry() {}, onBack() {} }))
+  assert.match(idle, /aria-busy="false"/)
+})
+
+test('passo da passkey sem fluxo real (pré-visualização/testes): nenhum botão que dispare passkey', () => {
+  const waiting = createInitialState(AUTH_STATUS.AGUARDANDO_SEGUNDO_FATOR)
+  const markup = html(React.createElement(PasskeyStep, { state: waiting, preview: true, onRetry() {}, onBack() {} }))
+  assert.doesNotMatch(markup, /auth-passkey-start/)
 })
