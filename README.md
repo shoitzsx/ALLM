@@ -380,9 +380,9 @@ Fluxos que dependem de APIs de navegador reais (câmera, Canvas, renderização 
 
 ## Deploy
 
-A Vercel foi descontinuada como destino de publicação em 2026-10-26, e a Function `api/v1/[...path].mjs` foi removida. O destino oficial ainda depende de aprovação; a proposta, os requisitos e o passo a passo estão em [`docs/PUBLICACAO_ALM2.md`](docs/PUBLICACAO_ALM2.md).
+O ALM 2.0 **não está publicado**. Não há deploy nesta etapa, e nenhum destino de hospedagem foi escolhido nem configurado. A Vercel deixou de ser o destino em 2026-10-26, e a Function `api/v1/[...path].mjs` foi removida. O encerramento da integração antiga e o que ainda depende de ação no painel e nas credenciais estão em [`docs/PUBLICACAO_ALM2.md`](docs/PUBLICACAO_ALM2.md).
 
-Qualquer destino precisa cumprir estes requisitos:
+Restrições que o código já impõe a qualquer publicação futura:
 
 - **Mesma origem HTTPS:** o frontend (`dist/`, gerado por `npm run build`) e a API (`/api/v1`) ficam na mesma origem. Os cookies `__Host-alm_*` (`Secure`, `SameSite=Strict`, sem `Domain`), a validação de `Origin` e o RP ID do WebAuthn dependem disso. `src/api.js` usa caminho relativo e não precisa de CORS.
 - **Backend:** `ALM_BACKEND_MODE=postgres`, como processo Node.js 24 de longa duração (`node backend/server.mjs`) e em uma única instância, porque o limitador de tentativas fica em memória.

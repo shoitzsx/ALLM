@@ -1,6 +1,6 @@
 # Handoff técnico — Vercel, Production, Preview e roteamento da API
 
-> **Histórico (nota de 2026-10-26):** a Vercel foi descontinuada como destino do ALM e a Function `api/v1/[...path].mjs` foi removida do repositório. Este documento descreve o ambiente legado; o destino atual está em [`PUBLICACAO_ALM2.md`](./PUBLICACAO_ALM2.md).
+> **Histórico (nota de 2026-10-26):** a Vercel deixou de ser o destino do ALM, e a Function `api/v1/[...path].mjs` foi removida do repositório. Este documento descreve o ambiente legado. O ALM não está publicado em nenhum outro lugar. A desativação no painel e as credenciais estão em [`PUBLICACAO_ALM2.md`](./PUBLICACAO_ALM2.md).
 
 Estado da investigação em 30/09/2026
 
