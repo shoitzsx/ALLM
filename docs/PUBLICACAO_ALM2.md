@@ -27,17 +27,19 @@ Referências mantidas de propósito:
 - **Arquivos de apresentação, não alterados:** `docs/ALM_Apresentacao_*`.
 - **Regra de segurança:** `src/features/auth/officialRules.test.mjs`, que proíbe domínio `.vercel.app` fixo no código.
 
-## 3. Fora do repositório (pendente)
+## 3. Fora do repositório
 
-| Item | Estado em 2026-10-26 | Responsável |
+O Lucas informou em 2026-10-26 que executou no painel da Vercel e no GitHub os passos da seção 5. O que foi possível conferir por fora:
+
+| Item | Estado | Evidência |
 |---|---|---|
-| Integração Git do projeto Vercel `alm` com o `ALLM` | **Ativa.** Cada push em qualquer branch gera Preview, e cada push na `main` gera Production (último automático: Preview de `631b027`, 2026-10-26 18:52 UTC) | Lucas |
-| Aplicação legada em `allm.vercel.app` | **No ar, não pausada** | Lucas |
-| App da Vercel no GitHub | Instalado. Também atende outros repositórios da conta: **remover só o `ALLM`, não desinstalar** | Lucas |
-| Variáveis de ambiente do projeto `alm` | Não verificadas: a equipe não tem acesso de leitura por ferramenta | Lucas |
-| Credenciais Google do backend legado | Validade atual desconhecida; **revogação não confirmada** (seção 4) | Goran |
+| Integração Git do projeto Vercel `alm` com o `ALLM` | **Não publica mais** | O push de `a15d450` (19:16 UTC) não gerou deployment, status nem check run em 4 minutos. Antes, cada push gerava um Preview em cerca de 1 minuto (último: `631b027`, 18:52 UTC) |
+| Aplicação legada em `allm.vercel.app` | **Não é mais servida** | Às 19:22 UTC a página inicial respondeu `404 DEPLOYMENT_NOT_FOUND`; mais cedo, no mesmo dia, respondia 200. Por fora não dá para distinguir pausa de remoção do domínio |
+| `ALLM` no app da Vercel do GitHub | Removido, segundo o Lucas | Não verificável por ferramenta; o app continua instalado para os outros repositórios da conta |
+| Variáveis de ambiente do projeto `alm` | **Não verificadas** | A equipe não tem acesso de leitura por ferramenta |
+| Credenciais Google do backend legado | Validade atual desconhecida; **revogação não confirmada** (seção 4) | Pendente com o Goran |
 
-Até a integração ser desconectada, qualquer push no `ALLM` volta a publicar na Vercel.
+Se algum deployment da `vercel[bot]` voltar a aparecer em GitHub → repositório → **Deployments**, a integração não está desligada.
 
 ## 4. Credenciais Google do backend legado
 
@@ -63,7 +65,7 @@ O que se sabe sobre cada credencial:
 
 Ações, na ordem:
 
-1. **Lucas:** pausar o projeto `alm` e desconectar o Git (seção 5).
+1. **Lucas:** pausar o projeto `alm` e desconectar o Git (seção 5). Informado como feito em 2026-10-26.
 2. **Goran:** no Google Cloud Console, **IAM e administrador → Contas de serviço →** conta do `GOOGLE_SERVICE_ACCOUNT_EMAIL` **→ Chaves**. Excluir a chave usada pela Vercel; só criar outra se ainda houver uso legítimo fora da Vercel.
 3. **Goran:** revogar o `GOOGLE_OAUTH_REFRESH_TOKEN`. Entrar na Conta Google que autorizou o Drive, abrir `https://myaccount.google.com/connections` e remover o acesso do app OAuth do ALM. Em **APIs e serviços → Credenciais**, redefinir a chave secreta do cliente OAuth (`GOOGLE_OAUTH_CLIENT_SECRET`) se ele continuar em uso.
 4. **Goran:** confirmar se a planilha e a pasta do Drive guardam dados reais e revisar com quem estão compartilhadas.
@@ -72,11 +74,11 @@ Ações, na ordem:
 
 ## 5. Passos no painel (Lucas)
 
-Antes de cada passo, conferir que a equipe é `lucasizaias`, o projeto é `alm` e o repositório ligado é `shoitzsx/ALLM`.
+Executados pelo Lucas em 2026-10-26. Ficam como referência para conferência ou para refazer, se algum deployment voltar a aparecer. Antes de cada passo, conferir que a equipe é `lucasizaias`, o projeto é `alm` e o repositório ligado é `shoitzsx/ALLM`.
 
 1. **Pausar a aplicação legada.** Vercel → equipe `lucasizaias` → projeto `alm` → **Settings → General → Pause Project**, a seção logo acima de "Delete Project". O painel pede o nome do projeto para confirmar. É reversível pelo botão **Resume Project**. Não excluir o projeto nem o domínio `allm.vercel.app` nesta etapa.
 2. **Desconectar o Git.** Mesmo projeto → **Settings → Git → Connected Git Repository → Disconnect**. Isso impede novos deploys automáticos, mas não tira do ar o que já está publicado (por isso o passo 1).
 3. **Tirar o `ALLM` do app no GitHub.** GitHub → **Settings → Applications → Installed GitHub Apps → Vercel → Configure → Repository access**.
    - Se estiver em "Only select repositories": remover só o `shoitzsx/ALLM` e salvar.
    - Se estiver em "All repositories": trocar para "Only select repositories" e marcar todos os outros repositórios que já usam a Vercel antes de salvar; senão eles perdem os deploys.
-4. **Conferir.** Um push numa branch do `ALLM` não deve mais criar deployment pela `vercel[bot]` (GitHub → repositório → **Deployments**), e `allm.vercel.app` deve mostrar a página de projeto pausado.
+4. **Conferir.** Um push numa branch do `ALLM` não deve mais criar deployment pela `vercel[bot]` (GitHub → repositório → **Deployments**), e `allm.vercel.app` não deve mais servir a aplicação legada.
