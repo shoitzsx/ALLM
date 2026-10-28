@@ -25,7 +25,7 @@
  * "Não encontrado" só é reportado depois que texto, barcode e OCR já foram
  * tentados (ou não se aplicavam).
  */
-import { findValidNfeKeys, normalizarChave, validarChaveNFe } from './chaveNFe.js'
+import { encontrouSequenciaDe44Digitos, findValidNfeKeys, normalizarChave, validarChaveNFe } from './chaveNFe.js'
 import { extractPdfText, renderPdfFirstPageToCanvas } from './pdfExtractor.js'
 import { decodeCode128RawZxing, loadImageFileToCanvas, readCode128FromCanvas } from './barcodeReader.js'
 import { decodeCode128RawZbar } from './zbarReader.js'
@@ -78,6 +78,11 @@ function buildOcrWarning() {
   return 'Para usar o reconhecimento de texto como alternativa, inclua também os 44 números impressos abaixo do código de barras.'
 }
 
+/** OCR achou 44 dígitos em algum lugar da imagem, mas nenhum passou na validação (DV ou semântica) — diferente de "não achou nada": aqui algo foi lido, só não é uma chave de NF-e real. */
+function buildOcrInvalidSequenceWarning() {
+  return 'Uma sequência de 44 dígitos foi encontrada por OCR, mas não corresponde a uma chave de NF-e válida.'
+}
+
 // Fast path de barcode estático, tentado antes do pipeline robusto de
 // estágios: ZBar cru, depois ZXing cru (uma tentativa cada, sem recorte/
 // rotação/contraste/deskew) — evidência do benchmark de decoders
@@ -112,7 +117,7 @@ async function runBarcodeThenOcr(canvas, warnings) {
     if (outcome === DECODE_OUTCOME.VALID) {
       const chave = normalizarChave(rawFast)
       log(`Barcode encontrado (${label}):`, chave)
-      return { chave, origem: ORIGEM_BARCODE }
+      return { chave, origem: ORIGEM_BARCODE, candidataInvalidaEncontrada: false }
     }
   }
 
@@ -128,19 +133,29 @@ async function runBarcodeThenOcr(canvas, warnings) {
 
   if (chave) {
     log('Barcode encontrado:', chave)
-    return { chave, origem: ORIGEM_BARCODE }
+    return { chave, origem: ORIGEM_BARCODE, candidataInvalidaEncontrada: false }
   }
-  warnings.push(buildBarcodeWarning(summary))
+  // "invalid_length"/"invalid_dv" aqui cobre tanto DV incorreto quanto (desde
+  // a validação semântica em chaveNFe.js) 44 dígitos com DV correto mas
+  // cUF/AAMM/CNPJ/modelo incoerentes — em ambos os casos, algo de 44 dígitos
+  // foi decodificado, só não é uma chave de NF-e real.
+  const barcodeCandidataInvalida = summary.invalid_length > 0 || summary.invalid_dv > 0
 
   log('Código de barras não resolveu — tentando OCR como último recurso.')
-  const chavesOcr = await findNfeKeysWithOcr(canvas)
+  const { chaves: chavesOcr, candidataInvalidaEncontrada: ocrCandidataInvalida } = await findNfeKeysWithOcr(canvas)
   const chaveOcr = chavesOcr[0] || null
   if (chaveOcr) {
     log('Chave encontrada por OCR:', chaveOcr)
-    return { chave: chaveOcr, origem: ORIGEM_OCR }
+    // Código de barras falhou, mas o texto/OCR achou uma chave válida — é um
+    // aviso informativo ("conferir"), não o alarme de "nada foi encontrado"
+    // (que só pushamos abaixo, quando NADA resolveu).
+    warnings.push('Código de barras não detectado. A chave foi identificada por OCR/texto e deve ser conferida.')
+    return { chave: chaveOcr, origem: ORIGEM_OCR, candidataInvalidaEncontrada: false }
   }
-  warnings.push(buildOcrWarning())
-  return { chave: null, origem: null }
+
+  warnings.push(buildBarcodeWarning(summary))
+  warnings.push(ocrCandidataInvalida ? buildOcrInvalidSequenceWarning() : buildOcrWarning())
+  return { chave: null, origem: null, candidataInvalidaEncontrada: barcodeCandidataInvalida || ocrCandidataInvalida }
 }
 
 /**
@@ -154,9 +169,9 @@ async function runBarcodeThenOcr(canvas, warnings) {
 export async function analyzeNfeCanvas(canvas) {
   const warnings = []
   log(`Canvas capturado do scanner ao vivo: ${canvas.width} x ${canvas.height}`)
-  const { chave, origem } = await runBarcodeThenOcr(canvas, warnings)
+  const { chave, origem, candidataInvalidaEncontrada } = await runBarcodeThenOcr(canvas, warnings)
   const origens = chave ? [`${origem} (${ORIGEM_CAPTURA})`] : []
-  return buildAnalysisFromKey(chave, origens, { warnings })
+  return buildAnalysisFromKey(chave, origens, { warnings, candidataInvalidaEncontrada })
 }
 
 export async function analyzeNfeFile(file) {
@@ -187,6 +202,9 @@ export async function analyzeNfeFile(file) {
   // não resolveu. Cada um só roda se o anterior não achou nada. --------------
   let chaveDoBarcode = null
   let chaveDoOcr = null
+  // Mesma distinção de runBarcodeThenOcr (ver lá): "nada parecido com uma
+  // chave" vs "achou 44 dígitos em algum lugar, mas nenhum é válido".
+  let candidataInvalidaEncontrada = text && !chaveDoTexto ? encontrouSequenciaDe44Digitos(text) : false
 
   if (chaveDoTexto) {
     log('Chave já válida via texto — código de barras e OCR não serão tentados.')
@@ -216,6 +234,7 @@ export async function analyzeNfeFile(file) {
       const resultado = await runBarcodeThenOcr(canvas, warnings)
       if (resultado.origem === ORIGEM_BARCODE) chaveDoBarcode = resultado.chave
       else if (resultado.origem === ORIGEM_OCR) chaveDoOcr = resultado.chave
+      if (resultado.candidataInvalidaEncontrada) candidataInvalidaEncontrada = true
     }
   }
 
@@ -238,5 +257,5 @@ export async function analyzeNfeFile(file) {
     origens.push(ORIGEM_OCR)
   }
 
-  return buildAnalysisFromKey(chave, origens, { text, fontesCruzadas, warnings })
+  return buildAnalysisFromKey(chave, origens, { text, fontesCruzadas, warnings, candidataInvalidaEncontrada })
 }

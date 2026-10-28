@@ -27,21 +27,45 @@
  *
  *   1. BarcodeDetector nativo (se o navegador suportar) + ZXing na imagem
  *      inteira, original/contraste, 4 rotações cardeais.
- *   2. Os CROP_VARIANTS de sempre (para fotos da página inteira da NF).
+ *   2. Os CROP_VARIANTS de sempre (para fotos da página inteira da NF) —
+ *      "topo direito" primeiro (geometria compartilhada com o OCR, ver
+ *      pageRegions.js), por ser onde o DANFE costuma posicionar o código.
  *   2b. Imagem inteira com margem branca artificial (recupera fotos onde o
  *       código foi enquadrado rente demais, sem quiet zone real).
+ *   2c. Os mesmos CROP_VARIANTS, cada um TAMBÉM com margem branca artificial
+ *       — cobre o código enquadrado rente DENTRO de um recorte específico,
+ *       caso que nem o 2 (recorte sem margem) nem o 2b (margem só na imagem
+ *       inteira, onde o código continua pequeno) resolviam.
  *   3. A mesma imagem com margem, em pequenas inclinações de correção
  *      (deskew) — só roda se nada acima resolveu. Medido: sem este estágio,
  *      o pipeline decodifica de forma confiável até ~2° de desvio de câmera
  *      e falha a partir de 3°; com ele, a maioria (não 100%, a reamostragem
  *      do canvas em cada ângulo não é perfeitamente previsível) dos casos
  *      entre 3° e 10° passa a ser recuperada.
+ *
+ * Um recorte estreito é ampliado antes do decoder (`widenIfNarrow`) com um
+ * fator calculado (`computeUpscaleFactor`, canvasUtils.js — 2× a 3×
+ * conforme a largura), não um fator fixo: "topo direito"/"topo esquerdo"
+ * (~65% da largura da imagem) ainda ficavam abaixo do mínimo recomendado só
+ * dobrando. O log por tentativa individual (até ~115 numa única foto) foi
+ * substituído por um resumo agrupado por estágio, só em DEV (`devLog.js`) —
+ * ver "Log de diagnóstico" no README.
  */
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/browser'
 import { DecodeHintType, NotFoundException } from '@zxing/library'
-import { cloneToDomCanvas, cropCanvas, padCanvasWithWhite, rotateCanvas, thresholdCanvas, upscaleCanvas } from './canvasUtils.js'
+import {
+  cloneToDomCanvas,
+  computeUpscaleFactor,
+  cropCanvas,
+  padCanvasWithWhite,
+  rotateCanvas,
+  thresholdCanvas,
+  upscaleCanvas,
+} from './canvasUtils.js'
 import { detectCode128Native } from './nativeBarcodeDetector.js'
 import { classifyDecodedText, DECODE_OUTCOME } from './decodeDiagnostics.js'
+import { BARCODE_CROP_ORDER } from './pageRegions.js'
+import { agora, devLogGroup } from './devLog.js'
 
 const ROTATION_ANGLES = [0, 90, 180, 270]
 
@@ -53,9 +77,13 @@ const PAD_RATIO = 0.08
 
 // Abaixo dessa largura, o recorte é ampliado (com suavização desligada, para
 // não borrar as barras) antes de ir pro decoder — um recorte pequeno demais
-// tende a comprimir demais as barras finas do CODE_128.
+// tende a comprimir demais as barras finas do CODE_128. O fator necessário é
+// calculado dinamicamente (`computeUpscaleFactor`, canvasUtils.js) em vez de
+// fixo em 2×: um recorte bem mais estreito que a imagem inteira (ex. "topo
+// direito", ~65% da largura) ainda ficava abaixo do mínimo depois de só
+// dobrar. Limitado a 3× para não ampliar sem necessidade um recorte minúsculo.
 const MIN_DECODE_WIDTH = 1200
-const UPSCALE_FACTOR = 2
+const MAX_UPSCALE_FACTOR = 3
 
 // Um único nível de limiar (threshold) já cobre boa parte dos casos de baixo
 // contraste sem multiplicar demais o número de tentativas — múltiplos níveis
@@ -64,29 +92,12 @@ const UPSCALE_FACTOR = 2
 const THRESHOLD_LEVEL = 160
 
 // Recortes tentados, em proporção do canvas (não em pixels fixos, para não
-// depender do tamanho/layout de uma NF específica). O código de barras do
-// DANFE costuma ocupar uma faixa relativamente pequena no topo da página;
-// regiões menores/mais específicas vêm primeiro (mais baratas e com menos
-// ruído de texto ao redor), a página inteira é a última tentativa.
-export const CROP_VARIANTS = [
-  { label: 'topo 25%', region: (width, height) => ({ x: 0, y: 0, width, height: Math.round(height * 0.25) }) },
-  { label: 'topo 35%', region: (width, height) => ({ x: 0, y: 0, width, height: Math.round(height * 0.35) }) },
-  {
-    label: 'topo direito',
-    region: (width, height) => ({
-      x: Math.round(width * 0.35),
-      y: 0,
-      width: Math.round(width * 0.65),
-      height: Math.round(height * 0.35),
-    }),
-  },
-  {
-    label: 'topo esquerdo',
-    region: (width, height) => ({ x: 0, y: 0, width: Math.round(width * 0.65), height: Math.round(height * 0.35) }),
-  },
-  { label: 'metade superior', region: (width, height) => ({ x: 0, y: 0, width, height: Math.round(height * 0.5) }) },
-  { label: 'página inteira', region: null },
-]
+// depender do tamanho/layout de uma NF específica) — geometria compartilhada
+// com o OCR (ver pageRegions.js, para as duas engines concordarem sobre o
+// que é "topo direito" de um DANFE). "topo direito" vem primeiro: é onde o
+// DANFE costuma posicionar o código de barras e a chave impressa; a página
+// inteira continua sendo a última tentativa.
+export const CROP_VARIANTS = BARCODE_CROP_ORDER
 
 /**
  * Hints do ZXing compartilhados por toda leitura de CODE_128 do módulo —
@@ -140,7 +151,10 @@ function tryZxingDecode(reader, canvas, label, onAttempt) {
     return text
   } catch (err) {
     if (err instanceof NotFoundException) {
-      console.debug(`[NFe] CODE_128 não encontrado (${label})`)
+      // Esperado: a maioria das tentativas de recorte/rotação/contraste não
+      // encontra nada. Silenciado de propósito — só o resumo agrupado por
+      // estágio é logado (ver devLogGroup, chamado por readCode128FromCanvas),
+      // nunca uma linha por tentativa individual.
       onAttempt?.(DECODE_OUTCOME.NOT_FOUND, label)
       return null
     }
@@ -151,7 +165,8 @@ function tryZxingDecode(reader, canvas, label, onAttempt) {
 }
 
 function widenIfNarrow(canvas) {
-  return canvas.width < MIN_DECODE_WIDTH ? upscaleCanvas(canvas, UPSCALE_FACTOR) : canvas
+  const factor = computeUpscaleFactor(canvas.width, MIN_DECODE_WIDTH, MAX_UPSCALE_FACTOR)
+  return factor > 1 ? upscaleCanvas(canvas, factor) : canvas
 }
 
 /** Tenta original + contraste num canvas já pronto, nos ângulos dados. Retorna o texto ou `null`. */
@@ -173,7 +188,6 @@ function tryAnglesAndContrast(reader, baseCanvas, label, angles, onAttempt) {
         logUnexpectedError(`rotacionar "${fullLabel}"`, err)
         continue
       }
-      console.debug(`[NFe] Tentando CODE_128 - ${fullLabel}`)
       const text = tryZxingDecode(reader, candidateCanvas, fullLabel, onAttempt)
       if (text) return text
     }
@@ -201,17 +215,30 @@ export async function readCode128FromCanvas(sourceCanvas, { onAttempt } = {}) {
 
   const reader = new BrowserMultiFormatReader(buildCode128Hints())
 
+  // Resumo agrupado por ESTÁGIO nomeado (não por tentativa de rotação) — só
+  // impresso em DEV, via devLogGroup (ver devLog.js para o porquê).
+  const tentativas = []
+  const registrar = (label, sucesso, durationMs) => {
+    tentativas.push(`${label}: ${sucesso ? 'encontrado' : 'falhou'} (${Math.round(durationMs)}ms)`)
+  }
+  const finalizar = () => devLogGroup('Barcode', tentativas)
+
   // --- Estágio 1: fast path (nativo + ZXing na imagem inteira) --------------
+  let inicio = agora()
   try {
     const nativeText = await detectCode128Native(sourceCanvas)
     const outcome = classifyDecodedText(nativeText)
     onAttempt?.(outcome, 'nativo, imagem inteira')
-    if (outcome !== DECODE_OUTCOME.NOT_FOUND) {
+    const sucesso = outcome !== DECODE_OUTCOME.NOT_FOUND
+    registrar('nativo, imagem inteira', sucesso, agora() - inicio)
+    if (sucesso) {
       console.log('[NFe] CODE_128 encontrado (BarcodeDetector nativo, imagem inteira)')
+      finalizar()
       return nativeText
     }
   } catch (err) {
     logUnexpectedError('BarcodeDetector nativo', err)
+    registrar('nativo, imagem inteira', false, agora() - inicio)
   }
 
   let wholeImage = null
@@ -222,9 +249,12 @@ export async function readCode128FromCanvas(sourceCanvas, { onAttempt } = {}) {
   }
 
   if (wholeImage) {
+    inicio = agora()
     const text = tryAnglesAndContrast(reader, wholeImage, 'imagem inteira', ROTATION_ANGLES, onAttempt)
+    registrar('imagem inteira', Boolean(text), agora() - inicio)
     if (text) {
       console.log('[NFe] CODE_128 encontrado (imagem inteira, ZXing)')
+      finalizar()
       return text
     }
   }
@@ -240,9 +270,12 @@ export async function readCode128FromCanvas(sourceCanvas, { onAttempt } = {}) {
       logUnexpectedError(`preparar recorte "${variant.label}"`, err)
       continue
     }
+    inicio = agora()
     const text = tryAnglesAndContrast(reader, baseCanvas, variant.label, ROTATION_ANGLES, onAttempt)
+    registrar(variant.label, Boolean(text), agora() - inicio)
     if (text) {
       console.log(`[NFe] CODE_128 encontrado (${variant.label})`)
+      finalizar()
       return text
     }
   }
@@ -258,21 +291,59 @@ export async function readCode128FromCanvas(sourceCanvas, { onAttempt } = {}) {
   }
 
   if (padded) {
+    inicio = agora()
     const text = tryAnglesAndContrast(reader, padded, 'margem artificial', ROTATION_ANGLES, onAttempt)
+    registrar('margem artificial', Boolean(text), agora() - inicio)
     if (text) {
       console.log('[NFe] CODE_128 encontrado (margem artificial)')
+      finalizar()
       return text
     }
+  }
 
+  // --- Estágio 2c: recortes COM margem branca artificial ---------------------
+  // Lacuna real do pipeline antes deste estágio: o Estágio 2 recorta mas
+  // nunca adiciona margem, e o 2b adiciona margem só na imagem INTEIRA (onde
+  // o código continua sendo uma fração pequena do canvas) — um código
+  // enquadrado rente DENTRO de um recorte específico (sem quiet zone real
+  // nessa região) não era coberto por nenhuma combinação anterior. Mesmas
+  // regiões genéricas de sempre (CROP_VARIANTS, proporcionais ao canvas) —
+  // nenhuma coordenada específica de um arquivo.
+  for (const variant of CROP_VARIANTS) {
+    if (!variant.region) continue
+    let paddedCrop
+    try {
+      const { x, y, width, height } = variant.region(sourceCanvas.width, sourceCanvas.height)
+      const crop = cropCanvas(sourceCanvas, x, y, width, height)
+      paddedCrop = widenIfNarrow(padCanvasWithWhite(crop, PAD_RATIO))
+    } catch (err) {
+      logUnexpectedError(`preparar recorte com margem "${variant.label}"`, err)
+      continue
+    }
+    inicio = agora()
+    const text = tryAnglesAndContrast(reader, paddedCrop, `${variant.label} + margem`, ROTATION_ANGLES, onAttempt)
+    registrar(`${variant.label} + margem`, Boolean(text), agora() - inicio)
+    if (text) {
+      console.log(`[NFe] CODE_128 encontrado (${variant.label} + margem)`)
+      finalizar()
+      return text
+    }
+  }
+
+  if (padded) {
     // --- Estágio 3: pequenas inclinações (deskew), último recurso -----------
+    inicio = agora()
     const deskewText = tryAnglesAndContrast(reader, padded, 'margem artificial + deskew', DESKEW_ANGLES, onAttempt)
+    registrar('margem artificial + deskew', Boolean(deskewText), agora() - inicio)
     if (deskewText) {
       console.log('[NFe] CODE_128 encontrado (deskew)')
+      finalizar()
       return deskewText
     }
   }
 
   console.log('[NFe] CODE_128 não encontrado em nenhum estágio (nativo/recorte/contraste/rotação/margem/deskew).')
+  finalizar()
   return null
 }
 

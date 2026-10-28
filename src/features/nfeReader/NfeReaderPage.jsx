@@ -195,6 +195,8 @@ export default function NfeReaderPage({ pushToast }) {
       result.chaveValida
         ? `Dígito verificador conferido, via ${result.origensChave.join(' e ')}.`
         : 'Não foi possível localizar uma chave válida. Revise e preencha manualmente.',
+      // Sucesso só quando a chave foi de fato localizada e validada; sem ela o usuário precisa agir.
+      result.chaveValida ? 'success' : 'warning',
     )
   }
 
@@ -240,7 +242,7 @@ export default function NfeReaderPage({ pushToast }) {
    */
   const handleFastPathTimeout = () => {
     setScannerOpen(false)
-    pushToast?.('Não foi possível ler automaticamente.', 'Tente fotografar o código de perto, com boa iluminação.')
+    pushToast?.('Não foi possível ler automaticamente.', 'Tente fotografar o código de perto, com boa iluminação.', 'warning')
     setPhotoCaptureOpen(true)
   }
 
@@ -306,11 +308,13 @@ export default function NfeReaderPage({ pushToast }) {
     }
     const prefill = buildReliableReceiptPrefill(analysis, fieldValues)
     setPendingReceiptPrefill(prefill)
+    const hasReliableData = Object.keys(prefill).length > 0
     pushToast?.(
-      'Dados prontos para o recebimento',
-      Object.keys(prefill).length
+      hasReliableData ? 'Dados prontos para o recebimento' : 'Nenhum dado confiável foi extraído',
+      hasReliableData
         ? 'Revise e complete o cadastro antes de salvar ou enviar.'
-        : 'Nenhum dado confiável foi extraído — preencha o recebimento manualmente.',
+        : 'Preencha o recebimento manualmente.',
+      hasReliableData ? 'success' : 'warning',
     )
     navigate(ROUTES.newReceipt)
   }

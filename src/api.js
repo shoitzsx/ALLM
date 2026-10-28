@@ -1,16 +1,40 @@
 const API_BASE = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')
-const USER_KEY = 'alm:api:user:v1'
 
-function currentUserId() {
-  try { return localStorage.getItem(USER_KEY) || 'USR-001' } catch { return 'USR-001' }
+// A identidade de quem chama vem da SESSÃO (cookie HttpOnly validado pelo
+// servidor), nunca de um cabeçalho montado aqui: o frontend não envia
+// `X-User-Id` nem guarda usuário em localStorage. Ver src/features/auth/.
+let unauthorizedHandler = null
+
+/** O Provider de autenticação registra aqui o que fazer quando uma chamada recebe 401. */
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === 'function' ? handler : null
 }
-export function setApiUser(userId) { try { localStorage.setItem(USER_KEY, userId) } catch {} }
+
+// Geração da sessão. Cada logout, expiração ou troca de usuário avança o contador
+// (ver store.js); uma resposta que voltou de uma geração anterior pertence a OUTRA
+// sessão e não pode alterar o que a atual vê: nem dados (quem publica compara a
+// geração antes de gravar) nem o 401 abaixo, que derrubaria a sessão nova.
+let sessionGeneration = 0
+
+export function currentSessionGeneration() {
+  return sessionGeneration
+}
+
+export function advanceSessionGeneration() {
+  sessionGeneration += 1
+  return sessionGeneration
+}
 
 export async function apiRequest(path, options = {}) {
+  const generation = sessionGeneration
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', 'X-User-Id': currentUserId(), ...(options.headers || {}) },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   })
+  // Sessão ausente ou expirada: avisa quem controla a sessão (o erro segue para quem chamou).
+  // Um 401 que volta de uma sessão anterior não diz nada sobre a atual.
+  if (response.status === 401 && generation === sessionGeneration) unauthorizedHandler?.()
   const text = await response.text()
   let payload = {}
   try { payload = text ? JSON.parse(text) : {} } catch { payload = { raw: text } }

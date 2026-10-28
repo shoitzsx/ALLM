@@ -1,20 +1,53 @@
-# ALM
+<div align="center">
 
-## Sistema de Recebimentos de Almoxarifado
+# 📦 ALM
 
-![React](https://img.shields.io/badge/React-18-149eca?logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
-![Google Sheets API](https://img.shields.io/badge/Persist%C3%AAncia-Google%20Sheets-34a853?logo=googlesheets&logoColor=white)
+**Sistema de Recebimentos de Almoxarifado**
+
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Google Sheets](https://img.shields.io/badge/Google_Sheets-34A853?style=for-the-badge&logo=googlesheets&logoColor=white)
+
+[Minha contribuição](#minha-contribuição-front-end-lucas-izaias) • [Visão geral](#visão-geral) • [Funcionalidades](#funcionalidades) • [Leitura de NF-e](#leitura-automática-de-nf-e) • [Arquitetura](#arquitetura) • [Executar localmente](#executando-localmente) • [Testes](#testes)
+
+</div>
 
 Aplicação web para gestão de recebimentos de materiais, acompanhamento operacional, persistência estruturada e leitura automática de NF-e.
 
 ### Equipe
 
-Lucas Izaias
-Marcelo Paidoz
-Goran Henrique
-Matteus Kobner
+- Lucas Izaias
+- Marcelo Paidoz
+- Goran Henrique
+- Matteus Kobner
+
+### Minha contribuição: front-end (Lucas Izaias)
+
+Atuei no front-end do ALM 2.0, sistema interno de gestão de almoxarifado e portaria da Águia Sistemas, usando React, JavaScript e Vite, com apoio do Claude Code no desenvolvimento, nos testes e na revisão de código.
+
+**O que desenvolvi**
+
+- **Leitor de NF-e:** pesquisa e integração das bibliotecas que leem o código de barras e a chave de acesso (por PDF, imagem ou câmera), com validação do dígito verificador (`src/features/nfeReader/`).
+- **Interface e navegação:** organização das áreas de Almoxarifado e Portaria, com telas adaptadas para diferentes dispositivos.
+- **Dashboards:** indicadores, gráficos e visualização de recebimentos e pendências.
+- **Notificações:** o sistema de notificações da interface.
+- **Segurança:** proteção contra injeção de fórmulas na exportação CSV.
+- **Login (N-2.1, em desenvolvimento):** interface de matrícula numérica e PIN, teclado numérico próprio para dispositivos móveis, acessibilidade e preparação visual para autenticação por passkeys (WebAuthn).
+- **Qualidade:** testes automatizados (node:test) para o leitor de NF-e, a navegação, os dashboards, as notificações, a exportação CSV e os estados do login, além da verificação do build.
+
+**Próximas etapas**
+
+- Finalizar e revisar a interface de autenticação.
+- Integrar o login real com a API e a autenticação multifator.
+- Integrar as telas aos dados oficiais do PostgreSQL/Supabase.
+- Concluir os ajustes de integração, permissões e estados de erro.
+- Validar os fluxos completos de Portaria e Almoxarifado com o back-end.
+
+**Status:** desenvolvimento em andamento. A interface tem funcionalidades implementadas e testadas; a autenticação real, a integração completa com o back-end e a homologação final continuam pendentes. A navegação por área, os dashboards, as notificações, a proteção do CSV e o login estão em revisão na branch `feat/lucas-alm2-ui` e entram na `main` depois da aprovação da equipe.
+
+**Observação:** a hospedagem definitiva ainda será definida pela equipe.
 
 ---
 
@@ -301,7 +334,7 @@ Contas de serviço não têm cota de armazenamento própria para criar arquivos 
 
 1. No Google Cloud Console, crie um "OAuth 2.0 Client ID" do tipo **Desktop app** e ative a Google Drive API.
 2. Preencha `GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_CLIENT_SECRET` no `.env`, rode `node scripts/google-drive-oauth-setup.mjs`, abra a URL impressa e autorize com a conta que vai guardar os anexos.
-3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente da Vercel em produção).
+3. Copie o `GOOGLE_OAUTH_REFRESH_TOKEN` impresso para o `.env` (e para as variáveis de ambiente do servidor em produção).
 4. `GOOGLE_DRIVE_FOLDER_ID` é opcional. É recomendado deixá-lo vazio: uma pasta própria chamada "ALM Recebimentos - Anexos" é criada/reaproveitada automaticamente com o escopo mínimo `drive.file`.
 5. O contrato resumível, os limites e os erros de anexo estão em [`docs/attachments-api.md`](docs/attachments-api.md).
 
@@ -347,13 +380,14 @@ Fluxos que dependem de APIs de navegador reais (câmera, Canvas, renderização 
 
 ## Deploy
 
-Frontend e backend são publicados juntos, no mesmo projeto Vercel:
+O ALM 2.0 **não está publicado**. Não há deploy nesta etapa, e nenhum destino de hospedagem foi escolhido nem configurado. A Vercel deixou de ser o destino em 2026-10-26, e a Function `api/v1/[...path].mjs` foi removida. O encerramento da integração antiga e o que ainda depende de ação no painel e nas credenciais estão em [`docs/PUBLICACAO_ALM2.md`](docs/PUBLICACAO_ALM2.md).
 
-- O frontend é construído com Vite (`npm run build`) e servido como estático a partir de `dist/`.
-- O backend roda como uma Vercel Function em `api/v1/[...path].mjs`, que reaproveita o mesmo dispatcher de `backend/app.mjs` usado localmente por `npm run api` — sem lógica duplicada.
-- `src/api.js` chama `/api/v1` (caminho relativo, same-origin); não é necessário configurar `VITE_API_URL` em produção.
-- As variáveis `GOOGLE_*` (Sheets e Drive) devem ser cadastradas em Project Settings → Environment Variables na Vercel, sem prefixo `VITE_` — elas nunca chegam ao bundle do frontend.
-- Node.js recomendado: 24.x (Project Settings → Node.js Version), mesma versão usada em desenvolvimento.
+Restrições que o código já impõe a qualquer publicação futura:
+
+- **Mesma origem HTTPS:** o frontend (`dist/`, gerado por `npm run build`) e a API (`/api/v1`) ficam na mesma origem. Os cookies `__Host-alm_*` (`Secure`, `SameSite=Strict`, sem `Domain`), a validação de `Origin` e o RP ID do WebAuthn dependem disso. `src/api.js` usa caminho relativo e não precisa de CORS.
+- **Backend:** `ALM_BACKEND_MODE=postgres`, como processo Node.js 24 de longa duração (`node backend/server.mjs`) e em uma única instância, porque o limitador de tentativas fica em memória.
+- **Segredos:** só no ambiente do servidor, nunca com prefixo `VITE_`.
+- **PostgreSQL 17:** com TLS `verify-full` e sem porta exposta à internet. As migrations são aplicadas manualmente pelo responsável pelo banco.
 
 ---
 

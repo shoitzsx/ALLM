@@ -61,6 +61,21 @@ export function rotateCanvas(source, degrees) {
   return canvas
 }
 
+/**
+ * Fator de ampliação necessário para uma largura estreita alcançar
+ * `targetWidth`, limitado a `maxFactor` — pura aritmética, sem `document`
+ * (testável fora do navegador, diferente do resto deste arquivo). Nunca
+ * encolhe: devolve 1 (sem ampliar) quando já está larga o bastante. Usado no
+ * lugar de um fator fixo porque um recorte bem mais estreito que o canvas
+ * inteiro (ex. "topo direito", ~65% da largura) ainda ficava abaixo do
+ * mínimo depois de só dobrar — faltava completar a diferença, dentro de um
+ * teto (3×) para não ampliar sem limite um recorte minúsculo.
+ */
+export function computeUpscaleFactor(currentWidth, targetWidth, maxFactor) {
+  if (!currentWidth || currentWidth >= targetWidth) return 1
+  return Math.min(maxFactor, Math.ceil(targetWidth / currentWidth))
+}
+
 /** Amplia um canvas com suavização desligada — suavizar borra barras finas de código de barras e traços de dígitos. */
 export function upscaleCanvas(source, scale) {
   const canvas = document.createElement('canvas')

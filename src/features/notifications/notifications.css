@@ -1,0 +1,427 @@
+/*
+ * Notificações (toasts) — módulo src/features/notifications.
+ *
+ * Posição, largura, raio e tipografia vêm do toast original do ALM, que vivia
+ * em styles.css. O que muda: cada nível tem a sua cor, definida por três
+ * variáveis locais — --toast-border, --toast-surface e --toast-accent. Os tons
+ * de sucesso, informação, atenção e erro são os mesmos dos selos de status
+ * (.status-finalized, .status-review, .status-docs, .status-divergence); o
+ * tema escuro redefine as três variáveis com os valores dos selos escuros.
+ * PROGRESS é neutro (superfície do cartão + azul da marca) para não se
+ * confundir com INFO. Texto e sombra usam os tokens globais, que já mudam com o tema.
+ *
+ * Pilha: .toast-host nunca passa da janela (no celular, pára antes da barra
+ * inferior). Se as notificações não couberem, rola .toast-stack, por dentro. A
+ * ordem dos cartões vem pronta do store (erros primeiro) e vale para a tela, o
+ * DOM e o teclado: nada aqui reordena com CSS. O que passa do limite de cartões
+ * espera numa fila temporária, resumida em .toast-queue (ver notificationStore.js): um botão
+ * abre a lista de quem espera.
+ *
+ * Posição no desktop: canto inferior direito. Medido em 8 telas x 4 janelas x 3 pilhas, o canto
+ * superior direito cobria mais que o inferior (480 x 314 controles, 198 x 62 deles principais): é
+ * ali que ficam os botões de ação do cabeçalho (Divergência, Finalizar recebimento, Nova chegada,
+ * Exportar). No celular nada muda: continua embaixo do cabeçalho, acima da barra inferior.
+ */
+
+.toast-host {
+  /* Folga em volta da pilha para a sombra dos cartões (--shadow-md chega a ~16px acima, ~20px
+     dos lados e ~30px abaixo) não ser recortada pela rolagem de .toast-stack. Medido em pixels:
+     com estes valores o recorte muda a sombra em no máximo 2 de 255 níveis. */
+  --toast-room-top: 12px;
+  --toast-room-x: 20px;
+  --toast-room-bottom: 32px;
+  position: fixed;
+  top: auto;
+  bottom: 24px;
+  right: 22px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 32px));
+  /* A pilha nunca passa da janela: o que não couber rola dentro dela (.toast-stack). O max()
+     garante um mínimo mesmo em janelas muito baixas, onde a conta ficaria negativa. */
+  max-height: max(104px, calc(100vh - 84px - 24px));
+  max-height: max(104px, calc(100dvh - 84px - 24px));
+  /* O contêiner nunca captura clique; só as notificações em si. */
+  pointer-events: none;
+}
+
+.toast-stack {
+  display: grid;
+  gap: 9px;
+  /* Rolagem só na vertical, sem passar o gesto para a página por baixo. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  /* Qualquer overflow recorta o que passa da borda, inclusive a sombra dos cartões. A folga
+     (padding) devolve o espaço da sombra e a margem negativa a cancela: os cartões ficam
+     exatamente onde sempre ficaram. */
+  margin: calc(-1 * var(--toast-room-top)) calc(-1 * var(--toast-room-x)) calc(-1 * var(--toast-room-bottom));
+  padding: var(--toast-room-top) var(--toast-room-x) var(--toast-room-bottom);
+}
+
+/* Quem espera vaga (ver QueueNotice): botão-resumo e, aberta, a lista. Fora da rolagem da pilha,
+   para nunca sair da vista. Só o botão e a lista capturam clique. */
+.toast-queue {
+  display: grid;
+  flex: none;
+  gap: 8px;
+}
+
+/* Com fila, o indicador começa exatamente onde a pilha é recortada, a 12px do último cartão: com a
+   pilha rolando ele nunca cobre um cartão cortado (nem o botão de fechar dele). A sombra do último
+   cartão, abaixo desses 12px, ficaria atrás do próprio indicador. */
+.toast-host-queued .toast-stack {
+  margin-bottom: 0;
+  padding-bottom: 12px;
+}
+
+.toast-queue-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--toast-border, var(--border-default));
+  border-radius: var(--radius-sm);
+  color: var(--toast-accent, var(--ink-700));
+  background: var(--toast-surface, var(--surface-card));
+  box-shadow: var(--shadow-md);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.toast-queue-pill:hover {
+  background: color-mix(in srgb, var(--toast-accent, var(--ink-700)) 8%, var(--toast-surface, var(--surface-card)));
+}
+
+/* O anel global de foco é translúcido demais sobre as superfícies coloridas. */
+.toast-queue-pill:focus-visible,
+.toast-queue-close:focus-visible {
+  outline: 2px solid var(--toast-accent, var(--ink-700));
+  outline-offset: 1px;
+}
+
+/* A lista de quem espera: um cartão só, com rolagem própria (nunca passa da janela) e uma faixa
+   na cor do nível em cada item. */
+.toast-queue-list {
+  max-height: min(280px, 38vh);
+  max-height: min(280px, 38dvh);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  list-style: none;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.toast-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 8px 9px 11px;
+  border-left: 3px solid var(--toast-accent);
+  color: var(--ink-800);
+  background: var(--toast-surface);
+}
+
+.toast-queue-item + .toast-queue-item {
+  border-top: 1px solid var(--border-default);
+}
+
+.toast-queue-text {
+  min-width: 0;
+}
+
+.toast-queue-title {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.toast-queue-message {
+  margin: 2px 0 0;
+  color: var(--ink-600);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.toast-queue-count,
+.toast-count {
+  margin: 4px 0 0;
+  color: var(--toast-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.toast-queue-close {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-500);
+  background: transparent;
+}
+
+.toast-queue-close:hover {
+  color: var(--ink-900);
+  background: color-mix(in srgb, var(--toast-accent) 12%, transparent);
+}
+
+.toast {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--toast-border);
+  border-radius: var(--radius-sm);
+  color: var(--ink-800);
+  background: var(--toast-surface);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.toast-success,
+.toast-queue-item-success {
+  --toast-border: #bfe1d5;
+  --toast-surface: #eaf7f2;
+  --toast-accent: #146b55;
+}
+
+.toast-info,
+.toast-queue-item-info {
+  --toast-border: #ccdef0;
+  --toast-surface: #eef5fb;
+  --toast-accent: #295b8b;
+}
+
+.toast-warning,
+.toast-queue-item-warning {
+  --toast-border: #f0d995;
+  --toast-surface: #fff8e5;
+  --toast-accent: #81570d;
+}
+
+.toast-error,
+.toast-queue-pill-error,
+.toast-queue-item-error {
+  --toast-border: #efc4c1;
+  --toast-surface: #fff5f4;
+  --toast-accent: var(--red-700);
+}
+
+.toast-progress,
+.toast-queue-item-progress {
+  --toast-border: var(--border-default);
+  --toast-surface: var(--surface-card);
+  --toast-accent: var(--brand-600);
+}
+
+html[data-theme="dark"] .toast-success,
+html[data-theme="dark"] .toast-queue-item-success {
+  --toast-border: #315c52;
+  --toast-surface: #17372f;
+  --toast-accent: #aee2d1;
+}
+
+html[data-theme="dark"] .toast-info,
+html[data-theme="dark"] .toast-queue-item-info {
+  --toast-border: #315c7d;
+  --toast-surface: #172f49;
+  --toast-accent: #a9d0ef;
+}
+
+html[data-theme="dark"] .toast-warning,
+html[data-theme="dark"] .toast-queue-item-warning {
+  --toast-border: #6d5724;
+  --toast-surface: #352e1b;
+  --toast-accent: #f0d598;
+}
+
+html[data-theme="dark"] .toast-error,
+html[data-theme="dark"] .toast-queue-pill-error,
+html[data-theme="dark"] .toast-queue-item-error {
+  --toast-border: #784044;
+  --toast-surface: #351f27;
+  --toast-accent: #f0b7b4;
+}
+
+/* Borda e superfície do PROGRESS já vêm de tokens que o tema escuro redefine. */
+html[data-theme="dark"] .toast-progress,
+html[data-theme="dark"] .toast-queue-item-progress {
+  --toast-accent: #8fb0f5;
+}
+
+.toast-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--toast-accent);
+  /* Sem color-mix() (navegador antigo) o ícone fica na cor da superfície, sem o tom; o contraste não muda. */
+  background: var(--toast-surface);
+  background: color-mix(in srgb, var(--toast-accent) 14%, var(--toast-surface));
+}
+
+/* min-width: 0 deixa a coluna do texto encolher; sem isso um texto longo alarga a grade. */
+.toast-body {
+  min-width: 0;
+}
+
+.toast-title {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.toast-message {
+  margin: 4px 0 0;
+  color: var(--ink-600);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* O nível é dito em voz alta antes do título: cor e ícone sozinhos não bastam. */
+.toast-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-500);
+  background: transparent;
+}
+
+.toast-close:hover {
+  color: var(--ink-900);
+  background: color-mix(in srgb, var(--toast-accent) 12%, transparent);
+}
+
+/* O anel global de foco é translúcido demais sobre as superfícies coloridas. */
+.toast-close:focus-visible {
+  outline: 2px solid var(--toast-accent);
+  outline-offset: 1px;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in 180ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress .spin {
+    animation: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .toast-host {
+    top: 70px;
+    bottom: auto;
+    right: 12px;
+    /* Pára antes da barra inferior: a altura dela (--mobile-nav-height, 66px) mais uma folga de 30px,
+       porque os rótulos quebram em telas de 320px e a barra chega a 85px, mais a área segura do aparelho. */
+    max-height: max(104px, calc(100vh - 70px - var(--mobile-nav-height, 66px) - 30px));
+    max-height: max(104px, calc(100dvh - 70px - var(--mobile-nav-height, 66px) - 30px - env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* Com a lista aberta a pilha ainda precisa de espaço: ela é menor em telas baixas. */
+  .toast-queue-list {
+    max-height: min(260px, 34vh);
+    max-height: min(260px, 34dvh);
+  }
+}
+
+/* Novo recebimento: o rodapé do formulário (.wizard-footer, Cancelar/Voltar e Continuar) fica no canto
+   inferior direito da página — o mesmo lugar das notificações. Nessa tela elas vão para o canto superior
+   direito e a pilha não passa de 55% da altura da janela, então nunca chega à região do rodapé, em
+   qualquer resolução (a conta é relativa, sem medidas fixas). No celular o rodapé é fixo acima da barra
+   inferior: só o teto de altura se aplica (e, em telas baixas, o bloco compacto mais abaixo, que não
+   depende de :has()). Sem suporte a :has() (navegadores antigos), vale o padrão no desktop. */
+@media (min-width: 921px) {
+  body:has(.wizard-footer) .toast-host {
+    top: 84px;
+    bottom: auto;
+    max-height: min(55vh, max(104px, calc(100vh - 84px - 24px)));
+    max-height: min(55dvh, max(104px, calc(100dvh - 84px - 24px)));
+  }
+}
+
+@media (max-width: 920px) and (min-height: 701px) {
+  body:has(.wizard-footer) .toast-host {
+    max-height: min(55vh, max(104px, calc(100vh - 70px - var(--mobile-nav-height, 66px) - 30px)));
+    max-height: min(55dvh, max(104px, calc(100dvh - 70px - var(--mobile-nav-height, 66px) - 30px - env(safe-area-inset-bottom, 0px))));
+  }
+}
+
+/* Celular baixo (≤ 700px de altura; o mesmo limite está em NotificationsProvider.jsx): apresentação compacta.
+   O Provider reduz os cartões na tela para 2 e o resto espera na fila (botão-resumo); aqui o conjunto
+   (cartões + botão + lista) não passa de 40% da altura, então fica acima do rodapé do formulário em
+   qualquer tela, com a fila aberta ou fechada. Não depende de :has(). */
+@media (max-width: 920px) and (max-height: 700px) {
+  .toast-host {
+    max-height: min(40vh, max(104px, calc(100vh - 70px - var(--mobile-nav-height, 66px) - 30px)));
+    max-height: min(40dvh, max(104px, calc(100dvh - 70px - var(--mobile-nav-height, 66px) - 30px - env(safe-area-inset-bottom, 0px))));
+  }
+
+  .toast-queue-list {
+    /* o botão-resumo, o intervalo e a folga da pilha também cabem no teto: lista ≤ 40% da altura − 60px (botão de até 40px, intervalo de 8px e a folga de 12px da pilha) */
+    max-height: min(260px, 24vh, calc(40vh - 60px));
+    max-height: min(260px, 24dvh, calc(40dvh - 60px));
+  }
+}
+
+/* Toque precisa de alvo maior que o do mouse. */
+@media (pointer: coarse) {
+  .toast-queue-pill {
+    min-height: 40px;
+  }
+
+  .toast-close,
+  .toast-queue-close {
+    width: 32px;
+    height: 32px;
+  }
+}

@@ -1,5 +1,7 @@
 # Handoff técnico — Vercel, Production, Preview e roteamento da API
 
+> **Histórico (nota de 2026-10-26):** a Vercel deixou de ser o destino do ALM, e a Function `api/v1/[...path].mjs` foi removida do repositório. Este documento descreve o ambiente legado. O ALM não está publicado em nenhum outro lugar. A desativação no painel e as credenciais estão em [`PUBLICACAO_ALM2.md`](./PUBLICACAO_ALM2.md).
+
 Estado da investigação em 30/09/2026
 
 > Este documento **complementa** [`HANDOFF-GORAN-ATTACHMENTS-DEBUG.md`](./HANDOFF-GORAN-ATTACHMENTS-DEBUG.md), que contém o histórico completo de Google Drive, OAuth, CORS, quota do Google Sheets, anexos, `batchGet`, persistência específica de anexos, timeout/retry e debugging local. Não o substitui — aquele continua sendo a referência para tudo relacionado a upload/anexos. Ver também [`attachments-api.md`](./attachments-api.md) para o contrato da API.
