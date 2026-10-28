@@ -350,6 +350,60 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
       authorizationId: row.authorization_id, method: row.finalidade, linkHash: codeHash }
   }
 
+  async function changeInitialPin(req, input, requestId = randomUUID()) {
+    requireOrigin(req)
+    const matricula = normalizeMatricula(input?.matricula)
+    const temporaryPin = input?.temporaryPin
+    const newPin = input?.newPin
+    if (consumeLimiter(limits, `initial-pin:${ipOf(req)}:${matricula || '?'}`)) {
+      throw authFailure(429, 'TOO_MANY_ATTEMPTS', 'Tente novamente em instantes.')
+    }
+    const pinPattern = new RegExp(`^\\d{${pinLength}}$`)
+    let codeHash
+    try { codeHash = hashOpaqueToken(input?.activationCode) } catch { throw uniformFailure() }
+    if (!matricula || typeof temporaryPin !== 'string' || !pinPattern.test(temporaryPin)
+      || typeof newPin !== 'string' || !pinPattern.test(newPin) || newPin === temporaryPin) {
+      throw uniformFailure()
+    }
+    const newHash = await hashPin(newPin, pepper)
+    return withApiTransaction(pool, null, requestId, async (client) => {
+      const { rows: [row] } = await client.query(`SELECT u.id,u.ativo,p.pin_hash,p.algoritmo,
+        p.pepper_versao,p.temporario,p.expira_em,p.bloqueado_em,p.bloqueado_ate
+        FROM alm.usuarios u JOIN alm.credenciais_pin p ON p.usuario_id=u.id
+        JOIN alm.autorizacoes_webauthn a ON a.usuario_id=u.id
+        WHERE u.matricula=$1 AND a.codigo_hash=$2 AND a.finalidade='ATIVACAO'
+          AND a.consumido_em IS NULL AND a.revogado_em IS NULL
+          AND a.expira_em>clock_timestamp()
+        FOR UPDATE OF u,p,a`, [matricula, codeHash])
+      const correct = await verifyPin(temporaryPin, row?.pin_hash || await fakeHash, pepper)
+      const now = new Date()
+      const permitted = Boolean(row?.ativo && correct && row.algoritmo === 'scrypt'
+        && row.pepper_versao === 1 && row.temporario && !row.bloqueado_em
+        && (!row.bloqueado_ate || new Date(row.bloqueado_ate) <= now)
+        && row.expira_em && new Date(row.expira_em) > now)
+      if (!permitted) {
+        if (row?.pin_hash && !correct) {
+          await client.query(`UPDATE alm.credenciais_pin
+            SET falhas_consecutivas=LEAST(falhas_consecutivas+1,32767),ultima_falha_em=clock_timestamp()
+            WHERE usuario_id=$1`, [row.id])
+        }
+        await logEvent(client, { type: 'LOGIN_FALHA', userId: row?.id, matricula,
+          success: false, reason: 'INVALID_INITIAL_PIN', req, requestId })
+        return false
+      }
+      await client.query(`UPDATE alm.credenciais_pin SET pin_hash=$2,algoritmo='scrypt',
+        pepper_versao=1,temporario=false,expira_em=NULL,definido_em=clock_timestamp(),
+        definido_por=NULL,falhas_consecutivas=0,ultima_falha_em=NULL,bloqueado_ate=NULL
+        WHERE usuario_id=$1`, [row.id, newHash])
+      await logEvent(client, { type: 'PIN_TROCADO', userId: row.id, matricula,
+        success: true, req, requestId })
+      return true
+    }).then((changed) => {
+      if (!changed) throw uniformFailure()
+      return { pinChanged: true }
+    })
+  }
+
   async function registrationChallenge(req, input, current, requestId = randomUUID()) {
     const origin = requireOrigin(req)
     const activation = Boolean(input?.activationCode)
@@ -487,6 +541,6 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
     })
   }
 
-  return { requireOrigin, loginChallenge, completeLogin, session, logout,
+  return { requireOrigin, loginChallenge, completeLogin, session, logout, changeInitialPin,
     registrationChallenge, completeRegistration, listAuthenticators, revokeAuthenticator }
 }

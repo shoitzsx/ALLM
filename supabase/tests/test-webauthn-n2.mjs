@@ -1,5 +1,5 @@
 // ALM N-2 integration: SOMENTE PostgreSQL 17 em 127.0.0.1/alm_ci_clean.
-// Pressupoe 11 migrations do PR #2 + N-2 incremental. CRIA FIXTURES.
+// Pressupoe todas as migrations, incluindo N-2 e bootstrap. CRIA FIXTURES.
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'

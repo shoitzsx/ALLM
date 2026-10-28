@@ -143,9 +143,12 @@ um container **PostgreSQL 17 novo**, isolado do Supabase de staging. Ele:
    técnicas preexistentes. O script cria o schema `extensions` e a extensão
    `pgcrypto` para reproduzir as pré-condições do Supabase.
 3. Aplica **todas** as migrations em ordem, preservando fixture v1 entre a
-   base e o delta, e verifica integridade/RLS/membership de extensões.
+   base e o delta, e verifica integridade, RLS, roles e o bootstrap restrito do
+   primeiro administrador.
 4. Executa `run-database.mjs --local` com PostgreSQL real, incluindo
    `SET LOCAL ROLE alm_api` e `alm_job`, RLS e concorrência em duas conexões.
+5. Executa as invariantes N-2 e o fluxo HTTP WebAuthn completo, incluindo troca
+   do PIN temporário, permanência do código até a passkey e consumo atômico.
 
 Esse fluxo **não acessa nem reseta o projeto Supabase**. A instalação
 limpa foi **aprovada em 15/10/2026** em uma instância PostgreSQL 17.11

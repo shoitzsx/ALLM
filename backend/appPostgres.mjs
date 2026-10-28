@@ -116,6 +116,9 @@ export async function createPostgresApp({ pool: injectedPool, environment, authA
         return send(res, 201, { challengeId: result.challengeId, options: result.options },
           { 'Set-Cookie': result.setCookie })
       }
+      if (name === 'auth/initial-pin' && req.method === 'POST') {
+        return send(res, 200, await auth.changeInitialPin(req, await readBody(req), requestId))
+      }
       if (parts[0] === 'auth' && parts[1] === 'login-challenges' && parts[3] === 'complete'
         && parts.length === 4 && req.method === 'POST') {
         const result = await auth.completeLogin(req, parts[2], (await readBody(req)).response, requestId)
