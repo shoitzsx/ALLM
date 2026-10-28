@@ -18,6 +18,8 @@ test('resumo da Portaria usa somente os estados reais do banco', () => {
     [['REGISTRADA', 2], ['VINCULADA', 1], ['CANCELADA', 1]])
   assert.equal(result.porStatus[0].share, 2 / 5)
   assert.deepEqual(Object.keys(STATUS_META), ['REGISTRADA', 'VINCULADA', 'CANCELADA'])
+  assert.deepEqual(result.atencao, [list[0], list[1]],
+    'inclui registradas com ou sem NF, mas não status desconhecido com NF')
 })
 
 test('atenção indica chegada sem REC ou sem NF, sem presumir espera de veículo', () => {
@@ -25,6 +27,15 @@ test('atenção indica chegada sem REC ou sem NF, sem presumir espera de veícul
   assert.equal(needsAttention(arrival('VINCULADA')), false)
   assert.equal(needsAttention(arrival('VINCULADA', '')), true)
   assert.equal(needsAttention(arrival('CANCELADA')), false)
+})
+
+test('resumo não expõe métricas sem base nas chegadas do banco', () => {
+  const result = summarizeArrivals([arrival('REGISTRADA'), arrival('VINCULADA', null)])
+  for (const key of ['espera', 'tempoEspera', 'permanencia', 'tempoPermanencia',
+    'previstas', 'aguardando', 'veiculosAguardando']) {
+    assert.equal(Object.hasOwn(result, key), false, `${key} não pode ser inferido das chegadas`)
+  }
+  assert.deepEqual(result.atencao, [arrival('REGISTRADA'), arrival('VINCULADA', null)])
 })
 
 test('resumo vazio é estável e não altera as chegadas recebidas', () => {

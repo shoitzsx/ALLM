@@ -93,13 +93,6 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function localDateString(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function createId(prefix) {
   const raw = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
   return `${prefix}-${raw}`
@@ -133,16 +126,6 @@ function requireWritePermission(user = state.currentUser) {
 
 function isAdministrator(user = state.currentUser) {
   return (user?.perfil || user?.role) === 'Administrador'
-}
-
-function nextProtocol(recebimentos, dateString) {
-  const year = String(dateString || localDateString()).slice(0, 4)
-  const expression = new RegExp(`^REC-${year}-(\\d+)$`)
-  const maxSequence = recebimentos.reduce((max, entry) => {
-    const match = String(entry.protocolo || entry.id || '').match(expression)
-    return match ? Math.max(max, Number(match[1])) : max
-  }, 0)
-  return `REC-${year}-${String(maxSequence + 1).padStart(4, '0')}`
 }
 
 function normalizeItem(input = {}, index = 0) {
@@ -230,54 +213,9 @@ export function selectRecebimento(id) {
   )
 }
 
-/**
- * Cria um rascunho e preenche data e responsável automaticamente. NF não é
- * exigida nesta etapa e pode ser incluída depois.
- */
 export function createRecebimento(input = {}, options = {}) {
-  const user = options.user || state.currentUser
-  requireWritePermission(user)
-  const timestamp = nowIso()
-  const receivedDate = input.dataRecebimento || input.receivedAt || localDateString()
-  let created
-
-  setState((current) => {
-    const protocol = input.protocolo || nextProtocol(current.recebimentos, receivedDate)
-    const initialStatus = RECEBIMENTO_STATUS.DIGITACAO
-    created = {
-      id: input.id || protocol,
-      protocolo: protocol,
-      pedido: String(input.pedido ?? input.purchaseOrder ?? '').trim(),
-      numeroNf: String(input.numeroNf ?? input.invoiceNumber ?? '').trim() || null,
-      serieNf: String(input.serieNf ?? input.invoiceSeries ?? '').trim() || null,
-      dataRecebimento: receivedDate,
-      fornecedor: String(input.fornecedor ?? input.supplier ?? '').trim(),
-      cnpjFornecedor: String(input.cnpjFornecedor ?? input.supplierTaxId ?? '').trim(),
-      tipo: input.tipo ?? input.receiptType ?? 'Estoque',
-      responsavel: normalizeActor(user),
-      status: initialStatus,
-      observacoes: String(input.observacoes ?? input.notes ?? '').trim(),
-      criadoEm: timestamp,
-      atualizadoEm: timestamp,
-      itens: (input.itens || input.items || []).map(normalizeItem),
-      anexos: [],
-      divergencias: [],
-      historicoStatus: [
-        statusEntry(user, null, initialStatus, 'Registro criado.', timestamp),
-      ],
-      historicoAlteracoes: [
-        auditEntry(user, 'Recebimento criado', `Protocolo ${protocol}.`, timestamp),
-      ],
-      arquivado: false,
-    }
-    return { ...current, recebimentos: [created, ...current.recebimentos] }
-  })
-
-  if (input.anexos?.length || input.attachments?.length) {
-    addAttachments(created.id, input.anexos || input.attachments, { user })
-    created = getRecebimentoById(created.id)
-  }
-  return created
+  requireWritePermission(options.user || state.currentUser)
+  return apiCreate(input)
 }
 
 export const createReceipt = createRecebimento
@@ -836,13 +774,11 @@ function syncMutation(id, promiseFactory, options = {}) {
   return next
 }
 
-async function apiCreate(input, local) {
+async function apiCreate(input) {
   const generation = currentSessionGeneration()
   let created = null
   try {
     created = await api.createRecebimento({
-      id: local.id,
-      protocolo: local.protocolo,
       pedido: input.pedido,
       numeroNf: input.numeroNf,
       serieNf: input.serieNf,
@@ -856,9 +792,7 @@ async function apiCreate(input, local) {
     })
     if (generation !== currentSessionGeneration()) return created
     setState((current) => ({ ...current,
-      recebimentos: current.recebimentos.map((entry) => entry.id === local.id ? created : entry),
-      selectedRecebimentoId: current.selectedRecebimentoId === local.id
-        ? created.id : current.selectedRecebimentoId,
+      recebimentos: [created, ...current.recebimentos],
     }))
     for (const entry of input.anexos || input.attachments || []) {
       const file = entry?.file instanceof File ? entry.file : entry instanceof File ? entry : null
@@ -869,13 +803,6 @@ async function apiCreate(input, local) {
     if (created) {
       await refreshReceiptFromApi(created.id)
       error.createdReceipt = created
-    } else if (generation === currentSessionGeneration()) {
-      setState((current) => ({
-        ...current,
-        recebimentos: current.recebimentos.filter(
-          (entry) => entry.id !== local.id && entry.protocolo !== local.protocolo,
-        ),
-      }))
     }
     throw error
   }
@@ -884,14 +811,8 @@ async function apiCreate(input, local) {
 const apiBackedActions = {
   setCurrentUser,
   selectRecebimento,
-  createRecebimento: (input = {}, options = {}) => {
-    const local = createRecebimento(input, options)
-    return apiCreate(input, local)
-  },
-  createReceipt: (input = {}, options = {}) => {
-    const local = createRecebimento(input, options)
-    return apiCreate(input, local)
-  },
+  createRecebimento,
+  createReceipt,
   updateRecebimento: (id, changes = {}, options = {}) => {
     requireWritePermission(options.user || state.currentUser)
     return syncMutation(id, () => api.updateRecebimento(id, changes), { rethrow: true })
