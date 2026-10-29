@@ -1,4 +1,4 @@
-# Backend PostgreSQL / WebAuthn N-2 — integração em andamento
+# Backend PostgreSQL / WebAuthn N-2
 
 O backend Node local pode iniciar com `ALM_BACKEND_MODE=postgres`. Esse modo usa
 `alm_runtime_api` e `SET LOCAL ROLE alm_api` em transações PostgreSQL; não chama
@@ -35,6 +35,21 @@ O navegador deve enviar cookies (`credentials: 'include'` quando necessário).
 | POST | `/chegadas/:id/iniciar-recebimento` | Conversão atômica CHG→REC; recebe `{pedido,tipo,fornecedor}` |
 | GET/POST | `/recebimentos` | Lista/cria rascunho REC no PostgreSQL |
 | GET | `/recebimentos/:id` | Detalhe principal do REC por UUID ou código |
+| PATCH | `/recebimentos/:id` | Edita dados gerais de um REC não finalizado |
+| GET/POST | `/recebimentos/:id/itens` | Lista/cria itens |
+| PATCH/DELETE | `/recebimentos/:id/itens/:itemId` | Edita/remove logicamente um item |
+| GET/POST | `/recebimentos/:id/divergencias` | Lista/cria divergências |
+| POST | `/recebimentos/:id/divergencias/:divergenciaId/resolver` | Resolve com justificativa |
+| POST | `/recebimentos/:id/divergencias/:divergenciaId/reabrir` | Reabre uma divergência |
+| POST | `/recebimentos/:id/status` | Transição de status validada pelo banco |
+| POST | `/recebimentos/:id/arquivar`, `/recebimentos/:id/restaurar` | Soft delete e restauração administrativos |
+| GET | `/recebimentos/:id/historico/status`, `/recebimentos/:id/historico/auditoria` | Histórico do REC |
+| GET | `/recebimentos/:id/anexos` | Lista anexos confirmados |
+| POST | `/recebimentos/:id/anexos/upload-sessions` | Abre sessão resumível no Drive |
+| POST | `/recebimentos/:id/anexos` | Confirma `fileId` do Drive no PostgreSQL |
+| GET | `/recebimentos/:id/anexos/:anexoId/download` | Download autenticado com verificação de integridade |
+| DELETE | `/recebimentos/:id/anexos/:anexoId` | Remoção lógica no banco e física no Drive |
+| GET | `/visualizacao/:aba`, `/visualizacao/:aba/exportar.csv` | Consulta paginada e exportação CSV do PostgreSQL |
 | GET | `/catalogos`, `/dashboard` | Leituras PostgreSQL protegidas por permissões |
 
 O cookie final é `HttpOnly`, `Secure`, `SameSite=Strict`, host-only; no banco
@@ -49,12 +64,27 @@ Erros relevantes: `401 INVALID_CREDENTIALS` para o primeiro fator inválido,
 `403 ORIGIN_NOT_ALLOWED` para origem recusada e `429 TOO_MANY_ATTEMPTS` para
 limitação local de tentativas.
 
-## Limites atuais
+## Armazenamento de anexos e limites atuais
 
-- O modo PostgreSQL ainda não implementa itens, divergências, anexos Drive,
-  histórico, edição/finalização de REC, usuários administrativos nem migração
-  dos dados existentes no Sheets. As respostas de REC atuais contêm apenas
-  campos principais. Não apontar o frontend completo para este modo ainda.
+- O PostgreSQL é a fonte dos dados operacionais. O Google Drive armazena apenas
+  os bytes dos anexos; o vínculo, a categoria, a auditoria e o checksum ficam
+  em `alm.arquivos`. A sessão resumível envia os bytes diretamente do navegador
+  ao Drive. A confirmação consulta o arquivo, confere pasta, recebimento,
+  categoria, tipo real e tamanho antes de gravar o vínculo. Downloads passam
+  pelo backend autenticado e conferem SHA-256.
+- Configure `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` e
+  `GOOGLE_OAUTH_REFRESH_TOKEN` novos, de um mesmo cliente OAuth, somente no
+  servidor. `GOOGLE_DRIVE_FOLDER_ID` é opcional; sem ele a aplicação cria ou
+  reutiliza a pasta de anexos no Drive. Não reutilize as credenciais antigas
+  revogadas. O fluxo real com Google só pode ser homologado após essa configuração.
+- Se a remoção lógica no PostgreSQL for confirmada e a exclusão no Drive falhar,
+  a API responde `202` com `cleanupPending: true`. A interface informa a
+  pendência; a limpeza física precisará de reconciliação operacional. Não
+  interpretar `202` como exclusão física concluída.
+- A tela de Visualização consulta as tabelas reais por aba, com filtros,
+  ordenação, paginação e CSV. A consulta é somente leitura. Os dados legados
+  do Sheets não são migrados automaticamente; isso exige plano separado.
+- Não há nesta etapa uma interface para gestão administrativa de usuários.
 - O primeiro administrador é criado somente por
   `backend/scripts/provision-first-admin.mjs`, com uma conexão operacional capaz
   de `SET ROLE alm_provisioner`. O comando exige `--approval-reference` e
@@ -75,9 +105,11 @@ limitação local de tentativas.
 - A migration N-2 está versionada na `main`, mas a aplicação em staging é
   responsabilidade do Kobner mediante autorização separada.
 
-Os testes `backend/integration/authPostgres.test.mjs` usam PostgreSQL 17
+Os testes `backend/integration/authPostgres.test.mjs` e
+`backend/postgresOperations.test.mjs` usam PostgreSQL 17
 descartável em `127.0.0.1/alm_ci_clean` e uma role técnica local. Eles verificam
 attestation e assinatura WebAuthn reais, sessão pós-MFA, replay, cookie pré-MFA,
-sessão legada, autorização e escrita CHG/REC. Execute com
+sessão legada, autorização, escrita CHG/REC, itens, divergências, anexos com
+Drive simulado e Visualização. Execute com
 `ALM_DB_TEST_DISPOSABLE=YES` e as variáveis `ALM_DB_*` apontando somente à
 instância descartável.

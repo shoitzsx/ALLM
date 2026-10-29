@@ -1,12 +1,11 @@
 import React, { useMemo } from 'react'
-import { AlertTriangle, CheckCircle2, CircleDashed, ClipboardList, FileQuestion, Hourglass } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ClipboardList, FileQuestion, Hourglass } from 'lucide-react'
 import { KpiItem } from '../../../components/dashboard/KpiStrip.jsx'
 import { BarList } from '../../../components/dashboard/BarList.jsx'
-import { STATUS_META } from '../mockPortariaData.js'
-import { summarizeArrivals } from '../portariaMetrics.js'
+import { STATUS_META, summarizeArrivals } from '../portariaMetrics.js'
 
 function ArrivalStatusChip({ status }) {
-  const meta = STATUS_META[status] || STATUS_META.PENDENTE
+  const meta = STATUS_META[status] || { label: status || 'Desconhecido', tone: 'warning' }
   return <span className={`portaria-chip portaria-chip-${meta.tone}`}>{meta.label}</span>
 }
 
@@ -22,26 +21,15 @@ const PENDING_INTEGRATION = [
   { label: 'Tempo médio de permanência', needs: 'saída real − chegada real, com data e hora' },
 ]
 
-/**
- * Painel do dia — indicadores, situação e atenção calculados da lista de
- * chegadas em memória (simulada nesta fase, inclusive as confirmadas na
- * sessão). Iniciar uma nova chegada continua sendo o botão "Nova chegada" /
- * item "Registrar chegada" (rota /portaria/registrar, ver PortariaPage.jsx).
- */
-export function PortariaDashboard({ arrivals }) {
+export function PortariaDashboard({ arrivals, canStartReceipt = false, onStartReceipt }) {
   const summary = useMemo(() => summarizeArrivals(arrivals), [arrivals])
 
   return (
     <>
-      <p className="portaria-sim-note">
-        <CircleDashed size={13} aria-hidden="true" />
-        <strong>Simulação</strong> Indicadores calculados da lista desta sessão — não são registros oficiais.
-      </p>
-
-      <section className="kpi-strip" aria-label="Indicadores simulados da Portaria">
+      <section className="kpi-strip" aria-label="Indicadores da Portaria">
         <KpiItem icon={ClipboardList} value={summary.total} label="Chegadas na lista" />
-        <KpiItem icon={CheckCircle2} value={summary.registradas} label="Registradas" tone="blue" />
-        <KpiItem icon={Hourglass} value={summary.pendentes} label="Pendentes" tone="amber" />
+        <KpiItem icon={Hourglass} value={summary.registradas} label="Aguardando REC" tone="amber" />
+        <KpiItem icon={CheckCircle2} value={summary.vinculadas} label="Vinculadas" tone="blue" />
         <KpiItem icon={FileQuestion} value={summary.semNf} label="Sem NF identificada" tone="red" />
       </section>
 
@@ -50,8 +38,8 @@ export function PortariaDashboard({ arrivals }) {
           <section className="panel">
             <header className="panel-header">
               <div>
-                <h2>Chegadas de hoje</h2>
-                <p>Registros simulados — nenhuma integração real ainda.</p>
+                <h2>Chegadas recentes</h2>
+                <p>Registros persistidos no ALM.</p>
               </div>
             </header>
             {arrivals.length ? (
@@ -62,13 +50,17 @@ export function PortariaDashboard({ arrivals }) {
                     <span className="portaria-arrival-nf">NF {arrival.numeroNf || '— pendente'}</span>
                     <span className="portaria-arrival-fornecedor">{arrival.fornecedor}</span>
                     {/* criadoEm = hora em que o registro foi iniciado na tela, não a chegada do veículo. */}
-                    <span className="portaria-arrival-hora">Registro {arrival.criadoEm}</span>
+                    <span className="portaria-arrival-hora">Registro {new Date(arrival.criadoEm).toLocaleString('pt-BR')}</span>
                     <ArrivalStatusChip status={arrival.status} />
+                    {canStartReceipt && arrival.status === 'REGISTRADA' ? (
+                      <button type="button" className="btn btn-secondary btn-sm"
+                        onClick={() => onStartReceipt?.(arrival)}>Iniciar recebimento</button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="portaria-empty">Nenhuma chegada na lista desta sessão.</p>
+              <p className="portaria-empty">Nenhuma chegada registrada.</p>
             )}
           </section>
         </div>
@@ -78,10 +70,10 @@ export function PortariaDashboard({ arrivals }) {
             <header className="panel-header">
               <div>
                 <h2>Situação das chegadas</h2>
-                <p>Distribuição da lista simulada por situação</p>
+                <p>Distribuição dos registros carregados por situação</p>
               </div>
             </header>
-            <BarList items={summary.porStatus} label="Chegadas simuladas por situação" toneOf={(item) => BAR_TONE[item.tone]} unit="chegada(s)" />
+            <BarList items={summary.porStatus} label="Chegadas por situação" toneOf={(item) => BAR_TONE[item.tone]} unit="chegada(s)" />
             {summary.statusDesconhecido ? <p className="chart-note">{summary.statusDesconhecido} chegada(s) com situação desconhecida.</p> : null}
           </section>
 
@@ -89,7 +81,7 @@ export function PortariaDashboard({ arrivals }) {
             <header className="panel-header">
               <div>
                 <h2>Requer atenção</h2>
-                <p>Pendentes ou sem NF identificada</p>
+                <p>Sem recebimento ou sem NF identificada</p>
               </div>
             </header>
             {summary.atencao.length ? (
@@ -99,13 +91,13 @@ export function PortariaDashboard({ arrivals }) {
                     <AlertTriangle size={15} aria-hidden="true" />
                     <span>
                       <strong>{arrival.codigo}</strong> · {arrival.fornecedor || 'Fornecedor não informado'}
-                      <small>{[arrival.status === 'PENDENTE' ? 'Pendente' : null, String(arrival.numeroNf ?? '').trim() ? null : 'Sem NF'].filter(Boolean).join(' · ')}</small>
+                      <small>{[arrival.status === 'REGISTRADA' ? 'Aguardando REC' : null, String(arrival.numeroNf ?? '').trim() ? null : 'Sem NF'].filter(Boolean).join(' · ')}</small>
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="portaria-empty">Nenhuma chegada pendente ou sem NF.</p>
+              <p className="portaria-empty">Nenhuma chegada sem recebimento ou NF.</p>
             )}
           </section>
         </div>

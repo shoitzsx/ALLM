@@ -93,19 +93,15 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function localDateString(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function createId(prefix) {
   const raw = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
   return `${prefix}-${raw}`
 }
 
 function normalizeActor(user = state.currentUser) {
+  const role = ({ ADMINISTRADOR: 'Administrador', ALMOXARIFADO: 'Almoxarifado',
+    SUPRIMENTOS: 'Suprimentos', CONSULTA: 'Consulta', PORTARIA: 'Portaria' })[
+    user?.perfil || user?.role] || user?.perfil || user?.role || 'Almoxarifado'
   return {
     id: user?.id || 'USR-LOCAL',
     nome: user?.nome || user?.name || 'Usuário local',
@@ -118,8 +114,8 @@ function normalizeActor(user = state.currentUser) {
         .map((part) => part[0])
         .join('')
         .toUpperCase(),
-    perfil: user?.perfil || user?.role || 'Almoxarifado',
-    role: user?.role || user?.perfil || 'Almoxarifado',
+    perfil: role,
+    role,
   }
 }
 
@@ -130,16 +126,6 @@ function requireWritePermission(user = state.currentUser) {
 
 function isAdministrator(user = state.currentUser) {
   return (user?.perfil || user?.role) === 'Administrador'
-}
-
-function nextProtocol(recebimentos, dateString) {
-  const year = String(dateString || localDateString()).slice(0, 4)
-  const expression = new RegExp(`^REC-${year}-(\\d+)$`)
-  const maxSequence = recebimentos.reduce((max, entry) => {
-    const match = String(entry.protocolo || entry.id || '').match(expression)
-    return match ? Math.max(max, Number(match[1])) : max
-  }, 0)
-  return `REC-${year}-${String(maxSequence + 1).padStart(4, '0')}`
 }
 
 function normalizeItem(input = {}, index = 0) {
@@ -227,54 +213,9 @@ export function selectRecebimento(id) {
   )
 }
 
-/**
- * Cria um rascunho e preenche data e responsável automaticamente. NF não é
- * exigida nesta etapa e pode ser incluída depois.
- */
 export function createRecebimento(input = {}, options = {}) {
-  const user = options.user || state.currentUser
-  requireWritePermission(user)
-  const timestamp = nowIso()
-  const receivedDate = input.dataRecebimento || input.receivedAt || localDateString()
-  let created
-
-  setState((current) => {
-    const protocol = input.protocolo || nextProtocol(current.recebimentos, receivedDate)
-    const initialStatus = RECEBIMENTO_STATUS.DIGITACAO
-    created = {
-      id: input.id || protocol,
-      protocolo: protocol,
-      pedido: String(input.pedido ?? input.purchaseOrder ?? '').trim(),
-      numeroNf: String(input.numeroNf ?? input.invoiceNumber ?? '').trim() || null,
-      serieNf: String(input.serieNf ?? input.invoiceSeries ?? '').trim() || null,
-      dataRecebimento: receivedDate,
-      fornecedor: String(input.fornecedor ?? input.supplier ?? '').trim(),
-      cnpjFornecedor: String(input.cnpjFornecedor ?? input.supplierTaxId ?? '').trim(),
-      tipo: input.tipo ?? input.receiptType ?? 'Estoque',
-      responsavel: normalizeActor(user),
-      status: initialStatus,
-      observacoes: String(input.observacoes ?? input.notes ?? '').trim(),
-      criadoEm: timestamp,
-      atualizadoEm: timestamp,
-      itens: (input.itens || input.items || []).map(normalizeItem),
-      anexos: [],
-      divergencias: [],
-      historicoStatus: [
-        statusEntry(user, null, initialStatus, 'Registro criado.', timestamp),
-      ],
-      historicoAlteracoes: [
-        auditEntry(user, 'Recebimento criado', `Protocolo ${protocol}.`, timestamp),
-      ],
-      arquivado: false,
-    }
-    return { ...current, recebimentos: [created, ...current.recebimentos] }
-  })
-
-  if (input.anexos?.length || input.attachments?.length) {
-    addAttachments(created.id, input.anexos || input.attachments, { user })
-    created = getRecebimentoById(created.id)
-  }
-  return created
+  requireWritePermission(options.user || state.currentUser)
+  return apiCreate(input)
 }
 
 export const createReceipt = createRecebimento
@@ -806,13 +747,23 @@ async function refreshReceiptFromApi(id) {
 const apiMutationQueues = new Map()
 
 function syncMutation(id, promiseFactory, options = {}) {
+  const generation = currentSessionGeneration()
   const previous = apiMutationQueues.get(id) || Promise.resolve()
   const next = previous
     .then(() => (typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory))
-    .then(() => refreshReceiptFromApi(id))
+    .then(async (result) => {
+      if (generation !== currentSessionGeneration()) return result
+      if (result?.id && result?.protocolo) {
+        setState((current) => ({ ...current,
+          recebimentos: current.recebimentos.map((entry) => entry.id === id || entry.protocolo === id ? result : entry),
+        }))
+      }
+      return (result?.arquivado ? null : await refreshReceiptFromApi(id)) || result
+    })
     .catch(async (error) => {
       console.warn('ALM API: operação rejeitada pelo servidor.', error)
-      const remote = await refreshReceiptFromApi(id)
+      const remote = generation === currentSessionGeneration()
+        ? await refreshReceiptFromApi(id) : null
       if (options.rethrow) throw error
       return remote
     })
@@ -823,13 +774,11 @@ function syncMutation(id, promiseFactory, options = {}) {
   return next
 }
 
-async function apiCreate(input, local) {
+async function apiCreate(input) {
   const generation = currentSessionGeneration()
   let created = null
   try {
     created = await api.createRecebimento({
-      id: local.id,
-      protocolo: local.protocolo,
       pedido: input.pedido,
       numeroNf: input.numeroNf,
       serieNf: input.serieNf,
@@ -841,6 +790,10 @@ async function apiCreate(input, local) {
       rascunho: input.rascunho === true,
       itens: (input.itens || input.items || []).map(({ id, ...item }) => item),
     })
+    if (generation !== currentSessionGeneration()) return created
+    setState((current) => ({ ...current,
+      recebimentos: [created, ...current.recebimentos],
+    }))
     for (const entry of input.anexos || input.attachments || []) {
       const file = entry?.file instanceof File ? entry.file : entry instanceof File ? entry : null
       if (file) await uploadAttachment(created.id, file, entry.categoria || entry.category || 'Outro')
@@ -849,13 +802,7 @@ async function apiCreate(input, local) {
   } catch (error) {
     if (created) {
       await refreshReceiptFromApi(created.id)
-    } else if (generation === currentSessionGeneration()) {
-      setState((current) => ({
-        ...current,
-        recebimentos: current.recebimentos.filter(
-          (entry) => entry.id !== local.id && entry.protocolo !== local.protocolo,
-        ),
-      }))
+      error.createdReceipt = created
     }
     throw error
   }
@@ -864,41 +811,33 @@ async function apiCreate(input, local) {
 const apiBackedActions = {
   setCurrentUser,
   selectRecebimento,
-  createRecebimento: (input = {}, options = {}) => {
-    const local = createRecebimento(input, options)
-    return apiCreate(input, local)
-  },
-  createReceipt: (input = {}, options = {}) => {
-    const local = createRecebimento(input, options)
-    return apiCreate(input, local)
-  },
-  // Mutação local otimista continua imediata; o retorno agora é a Promise da
-  // confirmação real do backend (rethrow: true), para quem precisar mesmo
-  // esperar a persistência terminar antes de seguir (ex.: App.jsx serializando
-  // a atualização de NF antes de começar o upload de anexos).
+  createRecebimento,
+  createReceipt,
   updateRecebimento: (id, changes = {}, options = {}) => {
-    updateRecebimento(id, changes, options)
+    requireWritePermission(options.user || state.currentUser)
     return syncMutation(id, () => api.updateRecebimento(id, changes), { rethrow: true })
   },
   updateReceipt: (id, changes = {}, options = {}) => {
-    const local = updateRecebimento(id, changes, options)
-    syncMutation(id, () => api.updateRecebimento(id, changes))
-    return local
+    requireWritePermission(options.user || state.currentUser)
+    return syncMutation(id, () => api.updateRecebimento(id, changes), { rethrow: true })
   },
-  addItem: (id, input = {}, options = {}) => {
-    const local = addItem(id, input, options)
-    syncMutation(id, () => api.addItem(id, input))
-    return local
+  addItem: async (id, input = {}, options = {}) => {
+    requireWritePermission(options.user || state.currentUser)
+    const created = await api.addItem(id, input)
+    await refreshReceiptFromApi(id)
+    return created
   },
-  updateItem: (id, itemId, changes = {}, options = {}) => {
-    const local = updateItem(id, itemId, changes, options)
-    syncMutation(id, () => api.updateItem(id, itemId, changes))
-    return local
+  updateItem: async (id, itemId, changes = {}, options = {}) => {
+    requireWritePermission(options.user || state.currentUser)
+    const updated = await api.updateItem(id, itemId, changes)
+    await refreshReceiptFromApi(id)
+    return updated
   },
-  removeItem: (id, itemId, options = {}) => {
-    const local = removeItem(id, itemId, options)
-    syncMutation(id, () => api.removeItem(id, itemId))
-    return local
+  removeItem: async (id, itemId, options = {}) => {
+    requireWritePermission(options.user || state.currentUser)
+    const removed = await api.removeItem(id, itemId)
+    await refreshReceiptFromApi(id)
+    return removed
   },
   // Async de verdade: só resolve (e só atualiza a UI) depois que o backend
   // confirma o anexo. Se qualquer etapa falhar, rejeita — sem sucesso otimista.
@@ -923,27 +862,25 @@ const apiBackedActions = {
     const user = options.user || state.currentUser
     requireWritePermission(user)
     const generation = currentSessionGeneration()
-    await api.removeAttachment(id, attachmentId, options.reason || options.motivo || '')
+    const result = await api.removeAttachment(id, attachmentId, options.reason || options.motivo || '')
     if (generation !== currentSessionGeneration()) return null
-    return removeAttachment(id, attachmentId, { ...options, user })
+    removeAttachment(id, attachmentId, { ...options, user })
+    return result
   },
   addDivergence: (id, input = {}, options = {}) => {
-    const local = addDivergence(id, input, options)
-    syncMutation(id, () => api.addDivergence(id, input))
-    return local
+    requireWritePermission(options.user || state.currentUser)
+    return syncMutation(id, () => api.addDivergence(id, input), { rethrow: true })
   },
   resolveDivergence: (id, divergenceId, resolution, options = {}) => {
-    const local = resolveDivergence(id, divergenceId, resolution, options)
-    syncMutation(id, () => api.resolveDivergence(id, divergenceId, resolution))
-    return local
+    requireWritePermission(options.user || state.currentUser)
+    return syncMutation(id, () => api.resolveDivergence(id, divergenceId, resolution), { rethrow: true })
   },
   reopenDivergence: (id, divergenceId, reason = '', options = {}) => {
-    const local = reopenDivergence(id, divergenceId, reason, options)
-    syncMutation(id, () => api.reopenDivergence(id, divergenceId, reason))
-    return local
+    requireWritePermission(options.user || state.currentUser)
+    return syncMutation(id, () => api.reopenDivergence(id, divergenceId, reason), { rethrow: true })
   },
   transitionStatus: (id, nextStatus, options = {}) => {
-    transitionStatus(id, nextStatus, options)
+    requireWritePermission(options.user || state.currentUser)
     return syncMutation(
       id,
       () => api.transitionStatus(id, nextStatus, options.note || options.observacao || '', options.force),
@@ -951,14 +888,12 @@ const apiBackedActions = {
     )
   },
   archiveRecebimento: (id, reason = '', options = {}) => {
-    const local = archiveRecebimento(id, reason, options)
-    syncMutation(id, () => api.archive(id, reason))
-    return local
+    if (!isAdministrator(options.user || state.currentUser)) throw new Error('Somente um administrador pode arquivar registros.')
+    return syncMutation(id, () => api.archive(id, reason), { rethrow: true })
   },
   restoreRecebimento: (id, options = {}) => {
-    const local = restoreRecebimento(id, options)
-    syncMutation(id, () => api.restore(id))
-    return local
+    if (!isAdministrator(options.user || state.currentUser)) throw new Error('Somente um administrador pode restaurar registros.')
+    return syncMutation(id, () => api.restore(id), { rethrow: true })
   },
   resetDemoData,
   replaceRecebimentos,

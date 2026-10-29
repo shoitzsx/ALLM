@@ -77,6 +77,22 @@ export const api = {
   confirmAttachment: (id, { fileId, categoria }) => apiRequest(`/recebimentos/${encodeURIComponent(id)}/anexos`, { method: 'POST', body: JSON.stringify({ fileId, categoria }) }),
   removeAttachment: (id, attachmentId, reason) => apiRequest(`/recebimentos/${encodeURIComponent(id)}/anexos/${encodeURIComponent(attachmentId)}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   dashboard: () => apiRequest('/dashboard'),
+  listChegadas: () => apiRequest('/chegadas'),
+  createChegada: (input) => apiRequest('/chegadas', { method: 'POST', body: JSON.stringify(input) }),
+  iniciarRecebimentoDaChegada: (id, input) => apiRequest(`/chegadas/${encodeURIComponent(id)}/iniciar-recebimento`,
+    { method: 'POST', body: JSON.stringify(input) }),
+  visualizacao: (tab, params = {}) => apiRequest(`/visualizacao/${encodeURIComponent(tab)}?${new URLSearchParams(params)}`),
+  exportarVisualizacao: async (tab, params = {}) => {
+    const generation = sessionGeneration
+    const response = await fetch(`${API_BASE}/visualizacao/${encodeURIComponent(tab)}/exportar.csv?${new URLSearchParams(params)}`,
+      { credentials: 'include' })
+    if (response.status === 401 && generation === sessionGeneration) unauthorizedHandler?.()
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}))
+      throw new Error(payload?.error?.message || `Erro HTTP ${response.status}`)
+    }
+    return response.blob()
+  },
 }
 
 // `attachment.url` já vem como caminho pronto do backend (nunca montamos com

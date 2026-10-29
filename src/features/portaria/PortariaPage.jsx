@@ -6,41 +6,52 @@ import { PortariaDashboard } from './components/PortariaDashboard.jsx'
 import { PortariaScanner } from './components/PortariaScanner.jsx'
 import { ArrivalReview } from './components/ArrivalReview.jsx'
 import { ArrivalResult } from './components/ArrivalResult.jsx'
-import {
-  mockTodayArrivals,
-  generateCodigo,
-  nowLabel,
-} from './mockPortariaData.js'
+import { api } from '../../api.js'
+import { retryInitialLoad } from '../../store.js'
+import { RECEIPT_TYPE_OPTIONS } from '../../data.js'
+import { useAuth } from '../auth/AuthProvider.jsx'
 import './portaria.css'
 
+const METHOD = { TEXTO_PDF: 'PDF_TEXTO', CODIGO_BARRAS: 'ZBAR', OCR: 'OCR',
+  MANUAL: 'MANUAL', NAO_IDENTIFICADO: 'MANUAL' }
+const CONFIDENCE = { ALTA: 'ALTA', CONFERIR: 'MEDIA', BAIXA: 'BAIXA', NAO_ENCONTRADO: 'MANUAL' }
+
+export function arrivalRequest(draft) {
+  return { nfeChaveAcesso: draft.nfeChaveAcesso || null, numeroNf: draft.numeroNf || null,
+    serieNf: draft.serieNf || null, cnpjEmitente: draft.cnpjEmitente || null,
+    fornecedor: draft.fornecedor || null, metodoLeitura: METHOD[draft.metodoLeitura] || 'MANUAL',
+    confianca: CONFIDENCE[draft.confianca] || 'MANUAL' }
+}
+
 const STAGE_DESCRIPTION = {
-  dashboard: 'Acompanhe as chegadas de hoje ou registre uma nova.',
+  dashboard: 'Acompanhe as chegadas recentes ou registre uma nova.',
   scanner: 'Identifique a nota fiscal para registrar a chegada.',
   review: 'Revise os dados antes de confirmar a chegada.',
   result: null,
 }
 
-/**
- * Primeira versão visual da Portaria. Tudo aqui é local/simulado — nenhuma
- * chamada a backend, Supabase, Sheets ou Drive, e nenhum dado sai deste
- * componente. Integração real (scanner ao vivo, API, persistência) é
- * trabalho de outra tarefa.
- *
- * Fluxo: dashboard (chegadas de hoje) -> "Nova chegada" -> scanner (único,
- * visualmente igual à Leitura automática de NF-e) -> revisão -> confirmação
- * -> resultado (CHG mock). Cria chegada, nunca RECEBIMENTO — não usa
- * receiptHandoff.js nem navega para "Novo recebimento".
- *
- * Rotas: /portaria é o painel; /portaria/registrar é o registro (scanner ->
- * revisão -> resultado, ainda em estado interno). `registering` vem da rota:
- * entrar em /portaria/registrar abre o scanner, e voltar para /portaria
- * (menu, botão Voltar do navegador) volta ao painel descartando o rascunho.
- */
 export function PortariaPage({ registering = false }) {
+  const auth = useAuth()
   const [stage, setStage] = useState(registering ? 'scanner' : 'dashboard')
   const [draft, setDraft] = useState(null)
   const [confirmed, setConfirmed] = useState(null)
-  const [arrivals, setArrivals] = useState(mockTodayArrivals)
+  const [arrivals, setArrivals] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [selectedArrival, setSelectedArrival] = useState(null)
+  const [receiptForm, setReceiptForm] = useState({ pedido: '', tipo: 'Estoque', fornecedor: '' })
+  const [linking, setLinking] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    api.listChegadas().then((result) => {
+      if (active) { setArrivals(result.data || []); setError('') }
+    }).catch((cause) => {
+      if (active) setError(cause.message || 'Não foi possível carregar as chegadas.')
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (registering) {
@@ -60,13 +71,8 @@ export function PortariaPage({ registering = false }) {
    * horário continuam sendo bookkeeping da própria Portaria.
    */
   function startFromScanner(scannerDraft) {
-    setDraft({
-      id: `arrival-${Date.now()}`,
-      codigo: generateCodigo(),
-      status: 'PENDENTE',
-      criadoEm: nowLabel(),
-      ...scannerDraft,
-    })
+    setDraft(scannerDraft)
+    setError('')
     setStage('review')
   }
 
@@ -74,11 +80,20 @@ export function PortariaPage({ registering = false }) {
     setDraft((current) => ({ ...current, [field]: value }))
   }
 
-  function confirmArrival() {
-    const finalized = { ...draft, status: 'REGISTRADA', criadoEm: draft.criadoEm || nowLabel() }
-    setConfirmed(finalized)
-    setArrivals((current) => [finalized, ...current])
-    setStage('result')
+  async function confirmArrival() {
+    if (saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const created = await api.createChegada(arrivalRequest(draft))
+      setConfirmed(created)
+      setArrivals((current) => [created, ...current])
+      setStage('result')
+    } catch (cause) {
+      setError(cause.message || 'Não foi possível registrar a chegada.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function registerAnother() {
@@ -87,9 +102,23 @@ export function PortariaPage({ registering = false }) {
     setStage('scanner')
   }
 
+  async function startReceipt() {
+    if (!selectedArrival || linking) return
+    setLinking(true)
+    setError('')
+    try {
+      const result = await api.iniciarRecebimentoDaChegada(selectedArrival.id, receiptForm)
+      await retryInitialLoad()
+      navigate(`/recebimentos/${result.recebimentoId}`)
+      setSelectedArrival(null)
+    } catch (cause) {
+      setError(cause.message || 'Não foi possível iniciar o recebimento.')
+    } finally { setLinking(false) }
+  }
+
   return (
     <div className="page">
-      <PageHeader title={registering ? 'Registrar chegada' : 'Painel do dia'} description={STAGE_DESCRIPTION[stage]}>
+      <PageHeader title={registering ? 'Registrar chegada' : 'Painel da Portaria'} description={STAGE_DESCRIPTION[stage]}>
         {stage === 'dashboard' ? (
           <button type="button" className="btn btn-primary" onClick={() => navigate(ROUTES.portariaRegistrar)}>
             <Plus size={16} /> Nova chegada
@@ -97,7 +126,41 @@ export function PortariaPage({ registering = false }) {
         ) : null}
       </PageHeader>
 
-      {stage === 'dashboard' ? <PortariaDashboard arrivals={arrivals} /> : null}
+      {error ? <div role="alert" className="info-strip warning">{error}</div> : null}
+      {loading && stage === 'dashboard' ? <p>Carregando chegadas...</p> : null}
+
+      {stage === 'dashboard' && !loading ? <PortariaDashboard arrivals={arrivals}
+        canStartReceipt={auth.can('recebimentos.create')}
+        onStartReceipt={(arrival) => {
+          setSelectedArrival(arrival)
+          setReceiptForm({ pedido: '', tipo: 'Estoque', fornecedor: arrival.fornecedor || '' })
+        }} /> : null}
+
+      {stage === 'dashboard' && selectedArrival ? (
+        <section className="form-card" aria-label="Iniciar recebimento da chegada">
+          <header className="form-card-header"><div><h2>Iniciar recebimento de {selectedArrival.codigo}</h2>
+            <p>O vínculo com a chegada será criado em uma única transação no banco.</p></div></header>
+          <div className="form-card-body form-grid">
+            <div className="field"><label htmlFor="portaria-pedido">Pedido</label>
+              <input id="portaria-pedido" value={receiptForm.pedido} disabled={linking}
+                onChange={(event) => setReceiptForm((value) => ({ ...value, pedido: event.target.value }))} /></div>
+            <div className="field"><label htmlFor="portaria-tipo">Tipo</label>
+              <select id="portaria-tipo" value={receiptForm.tipo} disabled={linking}
+                onChange={(event) => setReceiptForm((value) => ({ ...value, tipo: event.target.value }))}>
+                {RECEIPT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select></div>
+            <div className="field field-full"><label htmlFor="portaria-fornecedor-rec">Fornecedor</label>
+              <input id="portaria-fornecedor-rec" value={receiptForm.fornecedor}
+                disabled={linking || Boolean(selectedArrival.fornecedor)}
+                onChange={(event) => setReceiptForm((value) => ({ ...value, fornecedor: event.target.value }))} /></div>
+          </div>
+          <footer className="portaria-form-footer">
+            <button type="button" className="btn btn-secondary" disabled={linking} onClick={() => setSelectedArrival(null)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" disabled={linking || !receiptForm.pedido.trim() || !receiptForm.fornecedor.trim()}
+              onClick={startReceipt}>{linking ? 'Iniciando...' : 'Criar recebimento'}</button>
+          </footer>
+        </section>
+      ) : null}
 
       {stage === 'scanner' ? <PortariaScanner onFileAnalyzed={startFromScanner} /> : null}
 
@@ -107,6 +170,7 @@ export function PortariaPage({ registering = false }) {
           onChange={updateDraftField}
           onBack={() => setStage('scanner')}
           onConfirm={confirmArrival}
+          saving={saving}
         />
       ) : null}
 
