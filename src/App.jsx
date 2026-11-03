@@ -282,7 +282,7 @@ function AppShell({ area, route, pendingCount, currentUser, access, children, on
           ) : (
             <div className="topbar-context">
               <strong>{AREA_CONFIG[area].label}</strong>
-              <span>Operação de chegadas · registros simulados, sem integração real</span>
+              <span>Operação de chegadas · registros salvos no ALM</span>
             </div>
           )}
           <div className="topbar-actions">
@@ -722,8 +722,9 @@ function NewReceiptPage({ store, pushToast }) {
       return
     }
     setSaving(true)
+    let receipt = null
     try {
-      let receipt = await store.createRecebimento({
+      receipt = await store.createRecebimento({
         ...form,
         rascunho: !sendToFlow,
         itens: form.itens.map(({ id, ...item }) => item),
@@ -742,7 +743,14 @@ function NewReceiptPage({ store, pushToast }) {
       )
       navigate(`/recebimentos/${receipt.id}`)
     } catch (error) {
-      pushToast('Não foi possível salvar', error.message, 'error')
+      const persisted = error.createdReceipt || receipt
+      if (persisted?.id) {
+        pushToast('Recebimento criado com pendência',
+          `${persisted.protocolo} foi salvo. ${error.message} Confira os anexos e o status no detalhe.`, 'error')
+        navigate(`/recebimentos/${persisted.id}`)
+      } else {
+        pushToast('Não foi possível salvar', error.message, 'error')
+      }
     } finally {
       setSaving(false)
     }
@@ -978,7 +986,13 @@ function NewReceiptPage({ store, pushToast }) {
 }
 
 function DetailPage({ store, receiptId, pushToast }) {
+  const auth = useAuth()
   const receipt = store.receipts.find((item) => item.id === receiptId || item.protocolo === receiptId)
+  const [itemModal, setItemModal] = useState(false)
+  const [itemTarget, setItemTarget] = useState(null)
+  const [itemForm, setItemForm] = useState({ numero: '10', codigo: '', descricao: '',
+    quantidadeSolicitada: '', quantidadeRecebida: '', unidade: 'UN' })
+  const [itemSaving, setItemSaving] = useState(false)
   const [documentModal, setDocumentModal] = useState(false)
   const [divergenceModal, setDivergenceModal] = useState(false)
   const [resolveTarget, setResolveTarget] = useState(null)
@@ -1001,6 +1015,8 @@ function DetailPage({ store, receiptId, pushToast }) {
   }
 
   const visibleAttachments = (receipt.anexos || []).filter((file) => !file.removido)
+  const canEdit = auth.can('recebimentos.update') && receipt.status !== RECEBIMENTO_STATUS.FINALIZADO
+  const canEditAttachments = auth.can('anexos.write') && receipt.status !== RECEBIMENTO_STATUS.FINALIZADO
   const photos = visibleAttachments.filter((file) => (file.categoria || file.tipo) === 'Foto')
   const docs = visibleAttachments.filter((file) => (file.categoria || file.tipo) !== 'Foto')
   const openDivergences = (receipt.divergencias || []).filter((item) => !item.resolvida)
@@ -1022,9 +1038,9 @@ function DetailPage({ store, receiptId, pushToast }) {
       return { label: nfPending ? 'Enviar com pendência' : 'Enviar para conferência', icon: ArrowRight, onClick: () => tryTransition(target, 'Registro encaminhado pelo Almoxarifado.') }
     }
     if (receipt.status === RECEBIMENTO_STATUS.AGUARDANDO_DOCUMENTACAO) {
-      return nfPending
+      return nfPending && canEditAttachments
         ? { label: 'Adicionar Nota Fiscal', icon: FilePlus2, onClick: () => { setDocumentForm((current) => ({ ...current, category: 'Nota Fiscal', numeroNf: receipt.numeroNf || '' })); setDocumentModal(true) } }
-        : { label: 'Iniciar conferência', icon: ClipboardCheck, onClick: () => tryTransition(RECEBIMENTO_STATUS.CONFERENCIA, 'Documentação recebida; conferência iniciada.') }
+        : nfPending ? null : { label: 'Iniciar conferência', icon: ClipboardCheck, onClick: () => tryTransition(RECEBIMENTO_STATUS.CONFERENCIA, 'Documentação recebida; conferência iniciada.') }
     }
     if (receipt.status === RECEBIMENTO_STATUS.CONFERENCIA) {
       return { label: 'Finalizar recebimento', icon: CheckCircle2, onClick: () => tryTransition(RECEBIMENTO_STATUS.FINALIZADO, 'Conferência física e documental concluída.') }
@@ -1035,7 +1051,7 @@ function DetailPage({ store, receiptId, pushToast }) {
     return null
   }
 
-  const primaryAction = contextualAction()
+  const primaryAction = canEdit ? contextualAction() : null
 
   // Async de verdade: nada de "sucesso" antes do 201 do backend. Cada arquivo
   // tem seu próprio status (pending/uploading/success/error) — uma retentativa
@@ -1111,9 +1127,12 @@ function DetailPage({ store, receiptId, pushToast }) {
     if (!removeTarget || removing) return
     setRemoving(true)
     try {
-      await store.removeAttachment(receipt.id, removeTarget.id, { reason: removeReason.trim() })
+      const result = await store.removeAttachment(receipt.id, removeTarget.id, { reason: removeReason.trim() })
       if (!mountedRef.current) return
-      pushToast('Arquivo removido', `${removeTarget.nome} foi removido do recebimento.`)
+      pushToast(result?.cleanupPending ? 'Remoção registrada' : 'Arquivo removido',
+        result?.cleanupPending
+          ? `${removeTarget.nome} saiu do recebimento, mas a limpeza no Drive ainda está pendente.`
+          : `${removeTarget.nome} foi removido do recebimento.`)
       setRemoveTarget(null)
       setRemoveReason('')
     } catch (error) {
@@ -1124,9 +1143,9 @@ function DetailPage({ store, receiptId, pushToast }) {
     }
   }
 
-  const saveDivergence = () => {
+  const saveDivergence = async () => {
     try {
-      store.addDivergence(receipt.id, divergenceForm)
+      await store.addDivergence(receipt.id, divergenceForm)
       setDivergenceModal(false)
       setDivergenceForm({ tipo: 'Quantidade incorreta', itemId: '', descricao: '' })
       pushToast('Divergência registrada', 'O recebimento foi encaminhado para tratamento.')
@@ -1135,15 +1154,51 @@ function DetailPage({ store, receiptId, pushToast }) {
     }
   }
 
-  const saveResolution = () => {
+  const saveResolution = async () => {
     try {
-      store.resolveDivergence(receipt.id, resolveTarget.id, resolution)
+      await store.resolveDivergence(receipt.id, resolveTarget.id, resolution)
       setResolveTarget(null)
       setResolution('')
       pushToast('Divergência resolvida', 'A solução ficou registrada na auditoria.')
     } catch (error) {
       pushToast('Não foi possível resolver', error.message, 'error')
     }
+  }
+
+  const openItemEditor = (item = null) => {
+    const nextNumber = Math.max(0, ...(receipt.itens || []).map((entry) => Number(entry.numero) || 0)) + 10
+    setItemTarget(item)
+    setItemForm(item ? { numero: item.numero, codigo: item.codigo || '', descricao: item.descricao,
+      quantidadeSolicitada: item.quantidadeSolicitada ?? '',
+      quantidadeRecebida: item.quantidadeRecebida, unidade: item.unidade } :
+      { numero: String(nextNumber), codigo: '', descricao: '', quantidadeSolicitada: '',
+        quantidadeRecebida: '', unidade: 'UN' })
+    setItemModal(true)
+  }
+
+  const saveItem = async () => {
+    if (itemSaving) return
+    setItemSaving(true)
+    try {
+      if (itemTarget) await store.updateItem(receipt.id, itemTarget.id, itemForm)
+      else await store.addItem(receipt.id, itemForm)
+      setItemModal(false)
+      pushToast(itemTarget ? 'Item atualizado' : 'Item incluído', 'Alteração registrada no recebimento.')
+    } catch (error) {
+      pushToast('Não foi possível salvar o item', error.message, 'error')
+    } finally { setItemSaving(false) }
+  }
+
+  const deleteItem = async () => {
+    if (!itemTarget || itemSaving) return
+    setItemSaving(true)
+    try {
+      await store.removeItem(receipt.id, itemTarget.id)
+      setItemModal(false)
+      pushToast('Item removido', 'A exclusão lógica ficou registrada na auditoria.')
+    } catch (error) {
+      pushToast('Não foi possível remover o item', error.message, 'error')
+    } finally { setItemSaving(false) }
   }
 
   const history = [
@@ -1166,13 +1221,13 @@ function DetailPage({ store, receiptId, pushToast }) {
           </div>
         </div>
         <div className="page-actions detail-hero-actions">
-          <button className="btn btn-secondary" type="button" onClick={() => setDocumentModal(true)}><Paperclip size={15} /> Anexar</button>
-          {receipt.status !== RECEBIMENTO_STATUS.FINALIZADO ? <button className="btn btn-secondary" type="button" onClick={() => setDivergenceModal(true)}><AlertTriangle size={15} /> Divergência</button> : null}
+          {canEditAttachments ? <button className="btn btn-secondary" type="button" onClick={() => setDocumentModal(true)}><Paperclip size={15} /> Anexar</button> : null}
+          {canEdit ? <button className="btn btn-secondary" type="button" onClick={() => setDivergenceModal(true)}><AlertTriangle size={15} /> Divergência</button> : null}
           {primaryAction ? <button className="btn btn-primary" type="button" onClick={primaryAction.onClick}><primaryAction.icon size={16} /> {primaryAction.label}</button> : null}
         </div>
       </section>
 
-      {nfPending ? <div className="info-strip warning detail-warning"><FileClock size={16} /><span><strong>Documentação pendente:</strong> informe o número e anexe a Nota Fiscal antes de finalizar este recebimento.</span><button className="panel-link" type="button" onClick={() => setDocumentModal(true)}>Anexar agora</button></div> : null}
+      {nfPending ? <div className="info-strip warning detail-warning"><FileClock size={16} /><span><strong>Documentação pendente:</strong> informe o número e anexe a Nota Fiscal antes de finalizar este recebimento.</span>{canEditAttachments ? <button className="panel-link" type="button" onClick={() => setDocumentModal(true)}>Anexar agora</button> : null}</div> : null}
       {receipt.status === RECEBIMENTO_STATUS.FINALIZADO ? <div className="info-strip"><ShieldCheck size={16} /><span>Registro finalizado e protegido. Alterações excepcionais exigem perfil Administrador e permanecem auditadas.</span></div> : null}
 
       <section className="detail-layout detail-layout-spaced">
@@ -1191,7 +1246,9 @@ function DetailPage({ store, receiptId, pushToast }) {
           </article>
 
           <article className="panel">
-            <header className="panel-header"><div><h2>Itens recebidos</h2><p>{receipt.itens?.length || 0} item(ns) vinculado(s) a este pedido</p></div><span className="table-items-count">{receipt.itens?.length || 0}</span></header>
+            <header className="panel-header"><div><h2>Itens recebidos</h2><p>{receipt.itens?.length || 0} item(ns) vinculado(s) a este pedido</p></div>
+              {canEdit ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => openItemEditor()}><Plus size={14} /> Adicionar item</button> : null}
+              <span className="table-items-count">{receipt.itens?.length || 0}</span></header>
             <div className="detail-items">
               {(receipt.itens || []).map((item, index) => {
                 const mismatch = item.quantidadeSolicitada != null && Number(item.quantidadeSolicitada) !== Number(item.quantidadeRecebida)
@@ -1202,6 +1259,7 @@ function DetailPage({ store, receiptId, pushToast }) {
                     <div className="item-quantity ordered-quantity"><span>Solicitada</span><strong>{item.quantidadeSolicitada ?? '—'} {item.unidade}</strong></div>
                     <div className="item-quantity"><span>Recebida</span><strong className={mismatch ? 'quantity-alert' : ''}>{item.quantidadeRecebida} {item.unidade}</strong></div>
                     <span>{mismatch ? <AlertTriangle size={16} className="icon-danger" /> : <CheckCircle2 size={16} className="icon-brand" />}</span>
+                    {canEdit ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => openItemEditor(item)}>Editar</button> : null}
                   </div>
                 )
               })}
@@ -1209,7 +1267,7 @@ function DetailPage({ store, receiptId, pushToast }) {
           </article>
 
           <article className="panel">
-            <header className="panel-header"><div><h2>Documentos</h2><p>Arquivos vinculados permanentemente ao protocolo</p></div><button className="btn btn-secondary btn-sm" type="button" onClick={() => setDocumentModal(true)}><Plus size={14} /> Adicionar</button></header>
+            <header className="panel-header"><div><h2>Documentos</h2><p>Arquivos vinculados ao protocolo</p></div>{canEditAttachments ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => setDocumentModal(true)}><Plus size={14} /> Adicionar</button> : null}</header>
             <div className="detail-section-body">
               <div className="documents-grid">
                 {docs.map((file) => (
@@ -1217,10 +1275,10 @@ function DetailPage({ store, receiptId, pushToast }) {
                     <span className="document-icon"><FileText size={16} /></span>
                     <span className="document-copy"><strong>{file.nome}</strong><span>{file.categoria || file.tipo} · {formatFileSize(file.tamanho)}</span></span>
                     <a className="icon-button" href={attachmentDownloadHref(file)} target="_blank" rel="noopener noreferrer" aria-label="Visualizar ou baixar arquivo"><Eye size={15} /></a>
-                    <button className="icon-button" type="button" onClick={() => setRemoveTarget(file)} aria-label="Remover arquivo"><Trash2 size={15} /></button>
+                    {canEditAttachments ? <button className="icon-button" type="button" onClick={() => setRemoveTarget(file)} aria-label="Remover arquivo"><Trash2 size={15} /></button> : null}
                   </div>
                 ))}
-                {!docs.some((file) => (file.categoria || file.tipo) === 'Nota Fiscal') ? (
+                {canEditAttachments && !docs.some((file) => (file.categoria || file.tipo) === 'Nota Fiscal') ? (
                   <button className="document-card pending" type="button" onClick={() => { setDocumentForm((current) => ({ ...current, category: 'Nota Fiscal' })); setDocumentModal(true) }}>
                     <span className="document-icon"><FileClock size={16} /></span><span className="document-copy"><strong>Nota Fiscal pendente</strong><span>Clique para anexar</span></span><Plus size={15} className="icon-warning" />
                   </button>
@@ -1232,7 +1290,7 @@ function DetailPage({ store, receiptId, pushToast }) {
 
           {photos.length ? (
             <article className="panel">
-              <header className="panel-header"><div><h2>Fotos do recebimento</h2><p>Volumes, etiquetas e condições registradas</p></div><button className="btn btn-secondary btn-sm" type="button" onClick={() => { setDocumentForm((current) => ({ ...current, category: 'Foto' })); setDocumentModal(true) }}><Camera size={14} /> Mais fotos</button></header>
+              <header className="panel-header"><div><h2>Fotos do recebimento</h2><p>Volumes, etiquetas e condições registradas</p></div>{canEditAttachments ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => { setDocumentForm((current) => ({ ...current, category: 'Foto' })); setDocumentModal(true) }}><Camera size={14} /> Mais fotos</button> : null}</header>
               <div className="detail-section-body photo-grid">
                 {photos.map((photo) => <div className="photo-card" key={photo.id}>{photo.url ? <img src={photo.url} alt={photo.nome} /> : <div className="photo-placeholder"><ImageIcon size={24} /></div>}<span className="photo-label">{photo.nome}</span></div>)}
               </div>
@@ -1242,7 +1300,7 @@ function DetailPage({ store, receiptId, pushToast }) {
 
         <aside className="detail-side">
           <article className="panel">
-            <header className="panel-header"><div><h2>Divergências</h2><p>{openDivergences.length} aberta(s)</p></div>{receipt.status !== RECEBIMENTO_STATUS.FINALIZADO ? <button className="icon-button" type="button" onClick={() => setDivergenceModal(true)} aria-label="Registrar divergência"><Plus size={16} /></button> : null}</header>
+            <header className="panel-header"><div><h2>Divergências</h2><p>{openDivergences.length} aberta(s)</p></div>{canEdit ? <button className="icon-button" type="button" onClick={() => setDivergenceModal(true)} aria-label="Registrar divergência"><Plus size={16} /></button> : null}</header>
             {(receipt.divergencias || []).length ? (
               <div className="divergence-list">
                 {receipt.divergencias.map((divergence) => (
@@ -1250,12 +1308,12 @@ function DetailPage({ store, receiptId, pushToast }) {
                     <div className="divergence-head"><strong>{DIVERGENCE_LABELS[divergence.tipo] || divergence.tipo}</strong><span className={`divergence-status ${divergence.resolvida ? 'resolved' : ''}`}>{divergence.resolvida ? 'Resolvida' : 'Aberta'}</span></div>
                     <p>{divergence.descricao}</p>
                     {divergence.resolucao ? <p><strong>Solução:</strong> {divergence.resolucao}</p> : null}
-                    <div className="divergence-meta"><span>{formatDateTime(divergence.criadaEm)} · {getActorName(divergence.criadaPor)}</span>{!divergence.resolvida ? <button className="panel-link" type="button" onClick={() => setResolveTarget(divergence)}>Resolver</button> : <CheckCircle2 size={13} />}</div>
+                    <div className="divergence-meta"><span>{formatDateTime(divergence.criadaEm)} · {getActorName(divergence.criadaPor)}</span>{!divergence.resolvida && canEdit ? <button className="panel-link" type="button" onClick={() => setResolveTarget(divergence)}>Resolver</button> : divergence.resolvida ? <CheckCircle2 size={13} /> : null}</div>
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState icon={CheckCircle2} title="Sem divergências" description="Nenhuma ocorrência foi registrada neste recebimento." action={receipt.status !== RECEBIMENTO_STATUS.FINALIZADO ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => setDivergenceModal(true)}>Registrar divergência</button> : null} />
+              <EmptyState icon={CheckCircle2} title="Sem divergências" description="Nenhuma ocorrência foi registrada neste recebimento." action={canEdit ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => setDivergenceModal(true)}>Registrar divergência</button> : null} />
             )}
           </article>
 
@@ -1377,6 +1435,35 @@ function DetailPage({ store, receiptId, pushToast }) {
       </Modal>
 
       <Modal
+        open={itemModal}
+        title={itemTarget ? 'Editar item' : 'Adicionar item'}
+        description="Os dados serão gravados no recebimento e registrados na auditoria."
+        onClose={() => { if (!itemSaving) setItemModal(false) }}
+        footer={<>
+          {itemTarget ? <button className="btn btn-danger-soft" type="button" disabled={itemSaving} onClick={deleteItem}>Remover item</button> : null}
+          <button className="btn btn-secondary" type="button" disabled={itemSaving} onClick={() => setItemModal(false)}>Cancelar</button>
+          <button className="btn btn-primary" type="button" disabled={itemSaving || !itemForm.descricao.trim() || !(Number(itemForm.quantidadeRecebida) > 0)} onClick={saveItem}>
+            {itemSaving ? 'Salvando...' : 'Salvar item'}</button>
+        </>}
+      >
+        <div className="form-grid">
+          <div className="field"><label htmlFor="detail-item-numero">Número</label><input id="detail-item-numero" type="number" min="1" value={itemForm.numero} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, numero: event.target.value }))} /></div>
+          <div className="field"><label htmlFor="detail-item-codigo">Código</label><input id="detail-item-codigo" value={itemForm.codigo} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, codigo: event.target.value }))} /></div>
+          <div className="field field-full"><label htmlFor="detail-item-descricao">Descrição</label><input id="detail-item-descricao" value={itemForm.descricao} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, descricao: event.target.value }))} /></div>
+          <div className="field"><label htmlFor="detail-item-solicitada">Quantidade solicitada</label><input id="detail-item-solicitada" type="number" min="0" step="any" value={itemForm.quantidadeSolicitada} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, quantidadeSolicitada: event.target.value }))} /></div>
+          <div className="field"><label htmlFor="detail-item-recebida">Quantidade recebida</label><input id="detail-item-recebida" type="number" min="0" step="any" value={itemForm.quantidadeRecebida} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, quantidadeRecebida: event.target.value }))} /></div>
+          <div className="field"><label htmlFor="detail-item-unidade">Unidade</label><select id="detail-item-unidade" value={itemForm.unidade} disabled={itemSaving}
+            onChange={(event) => setItemForm((value) => ({ ...value, unidade: event.target.value }))}>
+            {UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+        </div>
+      </Modal>
+
+      <Modal
         open={Boolean(resolveTarget)}
         title="Resolver divergência"
         description={resolveTarget?.descricao}
@@ -1395,14 +1482,14 @@ function DetailPage({ store, receiptId, pushToast }) {
         size="sm"
         footer={<>
           <button className="btn btn-secondary" type="button" disabled={removing} onClick={() => { setRemoveTarget(null); setRemoveReason('') }}>Cancelar</button>
-          <button className="btn btn-danger-soft" type="button" disabled={removing} onClick={confirmRemoveAttachment}>
+          <button className="btn btn-danger-soft" type="button" disabled={removing || !removeReason.trim()} onClick={confirmRemoveAttachment}>
             {removing ? <RefreshCw className="spin" size={15} /> : <Trash2 size={15} />} {removing ? 'Removendo…' : 'Remover'}
           </button>
         </>}
       >
         <p>Remover <strong>{removeTarget?.nome}</strong> deste recebimento?</p>
         <div className="field field-full">
-          <label>Motivo <span className="optional">Opcional</span></label>
+          <label>Motivo <span className="required-hint">Obrigatório</span></label>
           <input value={removeReason} disabled={removing} onChange={(event) => setRemoveReason(event.target.value)} placeholder="Ex.: Documento substituído" />
         </div>
       </Modal>

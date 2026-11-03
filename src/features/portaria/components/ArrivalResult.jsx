@@ -1,6 +1,6 @@
 import React from 'react'
 import { CheckCircle2, RotateCcw, Home } from 'lucide-react'
-import { STATUS_META } from '../mockPortariaData.js'
+import { STATUS_META } from '../portariaMetrics.js'
 
 export function ArrivalResult({ arrival, onRegisterAnother, onBackToStart }) {
   const statusMeta = STATUS_META[arrival.status] || STATUS_META.REGISTRADA
@@ -12,7 +12,7 @@ export function ArrivalResult({ arrival, onRegisterAnother, onBackToStart }) {
           <CheckCircle2 size={32} />
         </span>
         <h2>Chegada registrada</h2>
-        <p>Este registro é simulado — ainda não foi enviado a nenhum backend.</p>
+        <p>Registro salvo no ALM.</p>
       </div>
 
       <div className="definition-grid portaria-definition-grid">
@@ -30,7 +30,7 @@ export function ArrivalResult({ arrival, onRegisterAnother, onBackToStart }) {
         </div>
         <div className="definition-item">
           <span>Horário</span>
-          <strong>{arrival.criadoEm}</strong>
+          <strong>{arrival.criadoEm ? new Date(arrival.criadoEm).toLocaleString('pt-BR') : '—'}</strong>
         </div>
         <div className="definition-item">
           <span>Status</span>

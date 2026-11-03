@@ -7,7 +7,7 @@ function formatChave(chave) {
   return chave.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
-export function ArrivalReview({ arrival, onChange, onBack, onConfirm }) {
+export function ArrivalReview({ arrival, onChange, onBack, onConfirm, saving = false }) {
   const confiancaMeta = CONFIANCA_META[arrival.confianca] || CONFIANCA_META.BAIXA
   const canConfirm = Boolean(arrival.numeroNf?.trim() && arrival.fornecedor?.trim())
 
@@ -16,7 +16,7 @@ export function ArrivalReview({ arrival, onChange, onBack, onConfirm }) {
       <header className="form-card-header">
         <div>
           <h2>Revisão da chegada</h2>
-          <p>Confirme os dados antes de registrar. Nada é salvo em backend nesta etapa.</p>
+          <p>Confirme os dados antes de registrar a chegada.</p>
         </div>
         <span className="step-pill">Etapa 2 de 3</span>
       </header>
@@ -94,8 +94,8 @@ export function ArrivalReview({ arrival, onChange, onBack, onConfirm }) {
         <button type="button" className="btn btn-secondary" onClick={onBack}>
           <ArrowLeft size={16} /> Voltar
         </button>
-        <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={!canConfirm}>
-          <CheckCircle2 size={16} /> Confirmar chegada
+        <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={!canConfirm || saving}>
+          <CheckCircle2 size={16} /> {saving ? 'Registrando...' : 'Confirmar chegada'}
         </button>
       </footer>
     </article>

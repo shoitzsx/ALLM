@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createPostgresPool } from './config/postgres.mjs'
 import { readPostgresEnvironment } from './config/postgresEnv.mjs'
 import { createWebAuthnAdapter } from './auth/webauthn.mjs'
@@ -6,6 +6,18 @@ import { SESSION_COOKIE_NAME, clearOpaqueCookie } from './auth/webauthnSecurity.
 import { authFailure, createPostgresAuth, requireCapability, withApiTransaction } from './auth/postgresAuth.mjs'
 import { normalizeChegadaInput } from './services/chegadasService.mjs'
 import { iniciarRecebimentoDaChegada } from './services/iniciarRecebimentoDaChegada.mjs'
+import { createGoogleDriveClient } from './integrations/googleDrive.mjs'
+import { isInlinePreviewMimeType } from './attachments.mjs'
+import {
+  startAttachmentUpload, confirmAttachment, listAttachments,
+  attachmentForDownload, archiveAttachment,
+} from './services/postgresAttachments.mjs'
+import { exportVisualization, listVisualization, visualizationTab } from './services/postgresVisualization.mjs'
+import {
+  createReceipt, listReceipts, findReceipt, receiptResponse, updateReceipt,
+  createItem, updateItem, removeItem, createDivergence, changeDivergence,
+  transitionReceipt, archiveReceipt, restoreReceipt,
+} from './services/postgresReceipts.mjs'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -16,8 +28,8 @@ function send(res, status, payload, headers = {}) {
   res.end(JSON.stringify(payload))
 }
 
-function failure(res, status, code, message) {
-  send(res, status, { error: { code, message } })
+function failure(res, status, code, message, details) {
+  send(res, status, { error: { code, message, ...(details ? { details } : {}) } })
 }
 
 async function readBody(req) {
@@ -44,18 +56,6 @@ function requestParts(req) {
   return { url, parts: url.pathname.slice('/api/v1/'.length).split('/').filter(Boolean) }
 }
 
-function receiptRow(row) {
-  return {
-    id: row.id, codigo: row.codigo, codigoLegado: row.codigo_legado,
-    pedido: row.pedido_compra, numeroNf: row.numero_nf, serieNf: row.serie_nf,
-    nfeChaveAcesso: row.nfe_chave_acesso?.trim() || null,
-    fornecedorId: row.fornecedor_id, fornecedor: row.fornecedor_nome_snapshot,
-    tipoCodigo: row.tipo_codigo, status: row.status, qualidadeDados: row.qualidade_dados,
-    recebidoEm: row.recebido_em, criadoEm: row.criado_em, alteradoEm: row.alterado_em,
-    responsavelId: row.responsavel_id, observacoes: row.observacoes,
-  }
-}
-
 function arrivalRow(row) {
   return {
     id: row.id, codigo: row.codigo, status: row.status,
@@ -68,9 +68,10 @@ function arrivalRow(row) {
   }
 }
 
-export async function createPostgresApp({ pool: injectedPool, environment, authAdapter } = {}) {
+export async function createPostgresApp({ pool: injectedPool, environment, authAdapter, driveClient } = {}) {
   const env = environment || readPostgresEnvironment()
   const pool = injectedPool || createPostgresPool()
+  const drive = driveClient || createGoogleDriveClient(env.drive || {})
   const adapter = authAdapter || createWebAuthnAdapter({ rpName: env.rpName,
     rpId: env.rpId, origins: env.origins })
   const auth = createPostgresAuth({ pool, adapter, pepper: env.pepper,
@@ -97,7 +98,7 @@ export async function createPostgresApp({ pool: injectedPool, environment, authA
   async function handle(req, res) {
     const route = requestParts(req)
     if (!route) return failure(res, 404, 'NOT_FOUND', 'Rota não encontrada.')
-    const { parts } = route
+    const { parts, url } = route
     const requestId = randomUUID()
     try {
       if (req.method === 'OPTIONS') {
@@ -214,64 +215,162 @@ export async function createPostgresApp({ pool: injectedPool, environment, authA
       if (name === 'recebimentos' && req.method === 'POST') {
         requireCapability(current, 'recebimentos.create')
         const input = await readBody(req)
-        if ((input.tipoCodigo && !/^[A-Z_]{2,40}$/.test(input.tipoCodigo))
-          || (input.fornecedorId && !UUID.test(input.fornecedorId))
-          || (input.nfeChaveAcesso && !/^\d{44}$/.test(input.nfeChaveAcesso))) {
-          throw authFailure(422, 'VALIDATION_ERROR', 'Dados do recebimento inválidos.')
-        }
-        const row = await withApiTransaction(pool, current.id, requestId, async (client) => {
-          let typeId = null
-          if (input.tipoCodigo) {
-            const { rows: [type] } = await client.query(`SELECT id FROM alm.tipos_recebimento
-              WHERE codigo=$1 AND ativo=true`, [input.tipoCodigo])
-            if (!type) throw authFailure(422, 'RECEIPT_TYPE_NOT_FOUND', 'Tipo de recebimento indisponível.')
-            typeId = type.id
-          }
-          if (input.fornecedorId) {
-            const { rows: [supplier] } = await client.query(`SELECT id FROM alm.fornecedores
-              WHERE id=$1 AND ativo=true`, [input.fornecedorId])
-            if (!supplier) throw authFailure(422, 'SUPPLIER_NOT_FOUND', 'Fornecedor indisponível.')
-          }
-          const { rows: [created] } = await client.query(`INSERT INTO alm.recebimentos
-            (qualidade_dados,pedido_compra,numero_nf,serie_nf,nfe_chave_acesso,
-             fornecedor_id,tipo_recebimento_id,status,observacoes,criado_por,alterado_por,
-             responsavel_id)
-            VALUES('PENDENTE_CONFERENCIA',$1,$2,$3,$4,$5,$6,'EM_DIGITACAO',$7,$8,$8,$8)
-            RETURNING id,codigo,codigo_legado,pedido_compra,numero_nf,serie_nf,
-              nfe_chave_acesso,fornecedor_id,fornecedor_nome_snapshot,status,
-              qualidade_dados,recebido_em,criado_em,alterado_em,responsavel_id,observacoes`,
-          [input.pedido || null, input.numeroNf || null, input.serieNf || null,
-            input.nfeChaveAcesso || null, input.fornecedorId || null, typeId,
-            input.observacoes || null, current.id])
-          return { ...created, tipo_codigo: input.tipoCodigo || null }
-        })
-        return send(res, 201, receiptRow(row))
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => createReceipt(client, input, current.id))
+        return send(res, 201, result)
       }
       if (name === 'recebimentos' && req.method === 'GET') {
         requireCapability(current, 'recebimentos.read')
-        const rows = await withApiTransaction(pool, current.id, requestId, async (client) => {
-          const { rows: found } = await client.query(`SELECT r.id,r.codigo,r.codigo_legado,
-            r.pedido_compra,r.numero_nf,r.serie_nf,r.nfe_chave_acesso,r.fornecedor_id,
-            r.fornecedor_nome_snapshot,r.status,r.qualidade_dados,r.recebido_em,
-            r.criado_em,r.alterado_em,r.responsavel_id,r.observacoes,t.codigo AS tipo_codigo
-            FROM alm.recebimentos r LEFT JOIN alm.tipos_recebimento t ON t.id=r.tipo_recebimento_id
-            WHERE r.excluido_em IS NULL ORDER BY r.criado_em DESC LIMIT 100`)
-          return found
-        })
-        return send(res, 200, { data: rows.map(receiptRow) })
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => listReceipts(client, url.searchParams))
+        return send(res, 200, result)
       }
       if (parts[0] === 'recebimentos' && parts.length === 2 && req.method === 'GET') {
         requireCapability(current, 'recebimentos.read')
-        const row = await withApiTransaction(pool, current.id, requestId, async (client) => {
-          const { rows: [found] } = await client.query(`SELECT r.id,r.codigo,r.codigo_legado,
-            r.pedido_compra,r.numero_nf,r.serie_nf,r.nfe_chave_acesso,r.fornecedor_id,
-            r.fornecedor_nome_snapshot,r.status,r.qualidade_dados,r.recebido_em,
-            r.criado_em,r.alterado_em,r.responsavel_id,r.observacoes,t.codigo AS tipo_codigo
-            FROM alm.recebimentos r LEFT JOIN alm.tipos_recebimento t ON t.id=r.tipo_recebimento_id
-            WHERE (r.id::text=$1 OR r.codigo=$1) AND r.excluido_em IS NULL`, [parts[1]])
-          return found
-        })
-        return row ? send(res, 200, receiptRow(row)) : failure(res, 404, 'RECEIPT_NOT_FOUND', 'Recebimento não encontrado.')
+        const row = await withApiTransaction(pool, current.id, requestId,
+          async (client) => receiptResponse(await findReceipt(client, parts[1])))
+        return send(res, 200, row)
+      }
+      if (parts[0] === 'recebimentos' && parts.length === 2 && req.method === 'PATCH') {
+        requireCapability(current, 'recebimentos.update')
+        const input = await readBody(req)
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => updateReceipt(client, parts[1], input, current.id))
+        return send(res, 200, result)
+      }
+      if (parts[0] === 'recebimentos' && parts[2] === 'itens') {
+        if (parts.length === 3 && req.method === 'GET') {
+          requireCapability(current, 'recebimentos.read')
+          const row = await withApiTransaction(pool, current.id, requestId,
+            async (client) => receiptResponse(await findReceipt(client, parts[1])))
+          return send(res, 200, { data: row.itens })
+        }
+        requireCapability(current, 'recebimentos.update')
+        if (parts.length === 3 && req.method === 'POST') {
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => createItem(client, parts[1], input, current.id))
+          return send(res, 201, result)
+        }
+        if (parts.length === 4 && req.method === 'PATCH') {
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => updateItem(client, parts[1], parts[3], input, current.id))
+          return send(res, 200, result)
+        }
+        if (parts.length === 4 && req.method === 'DELETE') {
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => removeItem(client, parts[1], parts[3], current.id))
+          return send(res, 200, result)
+        }
+      }
+      if (parts[0] === 'recebimentos' && parts[2] === 'divergencias') {
+        if (parts.length === 3 && req.method === 'GET') {
+          requireCapability(current, 'recebimentos.read')
+          const row = await withApiTransaction(pool, current.id, requestId,
+            async (client) => receiptResponse(await findReceipt(client, parts[1])))
+          return send(res, 200, { data: row.divergencias })
+        }
+        requireCapability(current, 'recebimentos.update')
+        if (parts.length === 3 && req.method === 'POST') {
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => createDivergence(client, parts[1], input, current.id))
+          return send(res, 201, result)
+        }
+        if (parts.length === 5 && req.method === 'POST'
+          && ['resolver', 'reabrir'].includes(parts[4])) {
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => changeDivergence(client, parts[1], parts[3], parts[4], input, current.id))
+          return send(res, 200, result)
+        }
+      }
+      if (parts[0] === 'recebimentos' && parts.length === 3 && parts[2] === 'status'
+        && req.method === 'POST') {
+        requireCapability(current, 'recebimentos.update')
+        const input = await readBody(req)
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => transitionReceipt(client, parts[1], input, current.id, current.perfil))
+        return send(res, 200, result)
+      }
+      if (parts[0] === 'recebimentos' && parts.length === 3 && parts[2] === 'arquivar'
+        && req.method === 'POST') {
+        if (current.perfil !== 'ADMINISTRADOR') requireCapability(current, 'recebimentos.archive')
+        const input = await readBody(req)
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => archiveReceipt(client, parts[1], input.reason, current.id))
+        return send(res, 200, result)
+      }
+      if (parts[0] === 'recebimentos' && parts.length === 3 && parts[2] === 'restaurar'
+        && req.method === 'POST') {
+        if (current.perfil !== 'ADMINISTRADOR') requireCapability(current, 'recebimentos.archive')
+        const result = await withApiTransaction(pool, current.id, requestId,
+          (client) => restoreReceipt(client, parts[1], current.id))
+        return send(res, 200, result)
+      }
+      if (parts[0] === 'recebimentos' && parts.length === 4 && parts[2] === 'historico'
+        && req.method === 'GET') {
+        requireCapability(current, 'recebimentos.read')
+        const row = await withApiTransaction(pool, current.id, requestId,
+          async (client) => receiptResponse(await findReceipt(client, parts[1])))
+        if (parts[3] === 'status') return send(res, 200, { data: row.historicoStatus })
+        if (parts[3] === 'auditoria') return send(res, 200, { data: row.historicoAlteracoes })
+      }
+      if (parts[0] === 'recebimentos' && parts[2] === 'anexos') {
+        if (parts.length === 3 && req.method === 'GET') {
+          requireCapability(current, 'anexos.read')
+          const data = await withApiTransaction(pool, current.id, requestId,
+            (client) => listAttachments(client, parts[1]))
+          return send(res, 200, { data })
+        }
+        if (parts.length === 5 && parts[4] === 'download' && req.method === 'GET') {
+          requireCapability(current, 'anexos.read')
+          const attachment = await withApiTransaction(pool, current.id, requestId,
+            (client) => attachmentForDownload(client, parts[1], parts[3]))
+          const downloaded = await drive.downloadFile(attachment.storage_object_id)
+          const sha256 = createHash('sha256').update(downloaded.buffer).digest('hex')
+          if (sha256 !== attachment.checksum_sha256.trim()) {
+            throw authFailure(502, 'FILE_INTEGRITY_FAILED', 'Integridade do anexo não pôde ser confirmada.')
+          }
+          const safeName = encodeURIComponent(attachment.nome_original.replace(/[\r\n]/g, ''))
+          const disposition = isInlinePreviewMimeType(attachment.mime_type_detectado)
+            ? 'inline' : 'attachment'
+          res.writeHead(200, { 'Content-Type': attachment.mime_type_detectado,
+            'Content-Length': downloaded.buffer.length,
+            'Content-Disposition': `${disposition}; filename*=UTF-8''${safeName}`,
+            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+          return res.end(downloaded.buffer)
+        }
+        if (parts.length === 4 && parts[3] === 'upload-sessions' && req.method === 'POST') {
+          requireCapability(current, 'anexos.write')
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => startAttachmentUpload(client, drive, parts[1], input, current.id, req.headers.origin))
+          return send(res, 201, result)
+        }
+        if (parts.length === 3 && req.method === 'POST') {
+          requireCapability(current, 'anexos.write')
+          const input = await readBody(req)
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => confirmAttachment(client, drive, parts[1], input, current.id))
+          return send(res, 201, result)
+        }
+        if (parts.length === 4 && req.method === 'DELETE') {
+          requireCapability(current, 'anexos.write')
+          const input = await readBody(req)
+          const row = await withApiTransaction(pool, current.id, requestId,
+            (client) => archiveAttachment(client, parts[1], parts[3], input.reason, current.id))
+          let cleanupPending = false
+          try { await drive.deleteFile(row.storage_object_id) }
+          catch (error) {
+            cleanupPending = true
+            console.error('ALM Drive cleanup pending', { requestId, attachmentId: row.id,
+              code: error.code || 'DRIVE_OPERATION_FAILED' })
+          }
+          return send(res, cleanupPending ? 202 : 200,
+            { id: row.id, removido: true, cleanupPending })
+        }
       }
       if (name === 'dashboard' && req.method === 'GET') {
         requireCapability(current, 'dashboard.read')
@@ -283,13 +382,34 @@ export async function createPostgresApp({ pool: injectedPool, environment, authA
         })
         return send(res, 200, result)
       }
+      if (parts[0] === 'visualizacao' && parts.length >= 2 && req.method === 'GET') {
+        const tab = visualizationTab(parts[1])
+        requireCapability(current, tab.permission)
+        if (parts.length === 2) {
+          const result = await withApiTransaction(pool, current.id, requestId,
+            (client) => listVisualization(client, parts[1], url.searchParams))
+          return send(res, 200, result)
+        }
+        if (parts.length === 3 && parts[2] === 'exportar.csv') {
+          const csv = await withApiTransaction(pool, current.id, requestId,
+            (client) => exportVisualization(client, parts[1], url.searchParams))
+          res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="alm-${parts[1]}.csv"`,
+            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+          return res.end(csv)
+        }
+      }
       return failure(res, 404, 'NOT_FOUND', 'Endpoint não encontrado.')
     } catch (error) {
-      if (error.status) return failure(res, error.status, error.code, error.message)
+      if (error.status) return failure(res, error.status, error.code, error.message, error.details)
       if (['23502', '23503', '23514', '22P02'].includes(error.code)) {
         return failure(res, 422, 'VALIDATION_ERROR', 'Dados não atendem às regras do banco.')
       }
       if (error.code === '23505') return failure(res, 409, 'CONFLICT', 'Registro já existente.')
+      if (error.code === 'P0001') {
+        return failure(res, 409, 'BUSINESS_RULE_CONFLICT',
+          'A operação não atende às regras do recebimento. Confira o status, os itens e as divergências.')
+      }
       console.error('ALM PostgreSQL request failed', { code: error.code || 'UNKNOWN', requestId })
       return failure(res, 503, 'DATABASE_UNAVAILABLE', 'Operação indisponível no momento.')
     }

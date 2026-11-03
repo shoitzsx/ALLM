@@ -134,6 +134,46 @@ test('PostgreSQL N-2 HTTP flow signs WebAuthn, protects routes and rejects legac
       assert.equal((await request(`/recebimentos/${created.id}`, {
         headers: { Cookie: sessionCookie },
       })).status, 200)
+      const updatedResponse = await request(`/recebimentos/${created.id}`, { method: 'PATCH',
+        headers: { Cookie: sessionCookie },
+        body: JSON.stringify({ fornecedor: 'Fornecedor E2E', numeroNf: '123' }) })
+      assert.equal(updatedResponse.status, 200, await updatedResponse.text())
+      const itemResponse = await request(`/recebimentos/${created.id}/itens`, { method: 'POST',
+        headers: { Cookie: sessionCookie },
+        body: JSON.stringify({ numero: 10, descricao: 'Item E2E', quantidadeRecebida: 2,
+          quantidadeSolicitada: 2, unidade: 'UN' }) })
+      const item = await itemResponse.json()
+      assert.equal(itemResponse.status, 201, JSON.stringify(item))
+      const divergenceResponse = await request(`/recebimentos/${created.id}/divergencias`, {
+        method: 'POST', headers: { Cookie: sessionCookie },
+        body: JSON.stringify({ tipo: 'Material avariado', descricao: 'Embalagem danificada', itemId: item.id }),
+      })
+      const divergence = await divergenceResponse.json()
+      assert.equal(divergenceResponse.status, 201, JSON.stringify(divergence))
+      const resolvedResponse = await request(`/recebimentos/${created.id}/divergencias/${divergence.id}/resolver`, {
+        method: 'POST', headers: { Cookie: sessionCookie },
+        body: JSON.stringify({ resolucao: 'Material inspecionado' }),
+      })
+      assert.equal(resolvedResponse.status, 200, await resolvedResponse.text())
+      const detailResponse = await request(`/recebimentos/${created.id}`, { headers: { Cookie: sessionCookie } })
+      const detail = await detailResponse.json()
+      assert.equal(detail.itens.length, 1)
+      assert.equal(detail.divergencias[0].resolvida, true)
+      assert.equal((await request('/visualizacao/recebimentos', {
+        headers: { Cookie: sessionCookie },
+      })).status, 200)
+      assert.equal((await request('/visualizacao/usuarios', {
+        headers: { Cookie: sessionCookie },
+      })).status, 403)
+      assert.equal((await request('/visualizacao/recebimentos/exportar.csv', {
+        headers: { Cookie: sessionCookie },
+      })).status, 200)
+      const uploadUnavailable = await request(`/recebimentos/${created.id}/anexos/upload-sessions`, {
+        method: 'POST', headers: { Cookie: sessionCookie },
+        body: JSON.stringify({ name: 'nota.png', mimeType: 'image/png', size: 24, categoria: 'Nota Fiscal' }),
+      })
+      assert.equal(uploadUnavailable.status, 503)
+      assert.equal((await uploadUnavailable.json()).error.code, 'DRIVE_NOT_CONFIGURED')
       assert.equal((await request('/chegadas', { method: 'POST',
         headers: { Cookie: sessionCookie }, body: JSON.stringify({}),
       })).status, 403)

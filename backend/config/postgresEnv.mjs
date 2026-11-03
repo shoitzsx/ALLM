@@ -21,5 +21,12 @@ export function readPostgresEnvironment() {
     origins,
     pepper: required('ALM_PIN_PEPPER_V1'),
     pinLength,
+    drive: {
+      clientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null,
+      clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || null,
+      refreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim() || null,
+      folderId: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || null,
+      allowedUploadOrigins: origins,
+    },
   }
 }

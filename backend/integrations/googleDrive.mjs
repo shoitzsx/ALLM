@@ -84,6 +84,34 @@ export function createGoogleDriveClient(config) {
     return folderIdPromise
   }
 
+  async function ensureChildFolder(parentId, name) {
+    requireConfigured()
+    const safeName = safeStorageFileName(name)
+    try {
+      const escaped = safeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const existing = await drive.files.list({
+        q: `name='${escaped}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id)', spaces: 'drive',
+      })
+      if (existing.data.files?.[0]) return existing.data.files[0].id
+      const created = await drive.files.create({ requestBody: {
+        name: safeName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId],
+      }, fields: 'id' })
+      return created.data.id
+    } catch (exception) { throw driveError(exception, 'DRIVE_FOLDER_UNAVAILABLE') }
+  }
+
+  async function ensureCategoryFolder(receiptCode, categoryCode) {
+    const root = await ensureFolder()
+    const year = String(receiptCode).match(/^REC-(\d{4})-/)?.[1] || String(new Date().getFullYear())
+    const month = String(new Date().getMonth() + 1).padStart(2, '0')
+    const yearId = await ensureChildFolder(root, year)
+    const monthId = await ensureChildFolder(yearId, month)
+    const receiptId = await ensureChildFolder(monthId, receiptCode)
+    const categoryId = await ensureChildFolder(receiptId, categoryCode)
+    return { root, year, month, yearId, monthId, receiptId, categoryId }
+  }
+
   async function uploadFile({ name, storageName, mimeType, buffer, receiptId }) {
     const parents = [await ensureFolder()]
     try {
@@ -98,9 +126,10 @@ export function createGoogleDriveClient(config) {
     }
   }
 
-  async function createResumableUpload({ name, storageName, mimeType, size, receiptId, origin }) {
+  async function createResumableUpload({ name, storageName, mimeType, size, receiptId, origin,
+    folderId, categoryCode }) {
     requireConfigured()
-    const parents = [await ensureFolder()]
+    const parents = [folderId || await ensureFolder()]
     try {
       const tokenResponse = await auth.getAccessToken()
       const accessToken = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse?.token
@@ -108,7 +137,8 @@ export function createGoogleDriveClient(config) {
       const response = await fetch(RESUMABLE_UPLOAD_URL, {
         method: 'POST',
         headers: buildResumableUploadHeaders({ accessToken, mimeType, size, origin }),
-        body: JSON.stringify({ name: safeStorageFileName(storageName || name), description: name, mimeType, parents, appProperties: { almReceiptId: receiptId } }),
+        body: JSON.stringify({ name: safeStorageFileName(storageName || name), description: name, mimeType, parents,
+          appProperties: { almReceiptId: receiptId, ...(categoryCode ? { almCategory: categoryCode } : {}) } }),
       })
       const sessionUrl = response.headers.get('location')
       if (!response.ok || !sessionUrl) {
@@ -123,19 +153,20 @@ export function createGoogleDriveClient(config) {
     }
   }
 
-  async function getUploadedFile(fileId, receiptId) {
+  async function getUploadedFile(fileId, receiptId, { folderId, categoryCode } = {}) {
     requireConfigured()
     try {
       const response = await drive.files.get({ fileId, fields: 'id,name,description,mimeType,size,parents,appProperties,trashed' })
       const file = response.data
-      const folderId = await ensureFolder()
+      const expectedFolderId = folderId || await ensureFolder()
       if (file.trashed) {
         const error = new Error('Arquivo não encontrado.')
         error.status = 404
         error.code = 'FILE_NOT_FOUND'
         throw error
       }
-      if (!file.parents?.includes(folderId) || file.appProperties?.almReceiptId !== receiptId) {
+      if (!file.parents?.includes(expectedFolderId) || file.appProperties?.almReceiptId !== receiptId
+        || (categoryCode && file.appProperties?.almCategory !== categoryCode)) {
         const error = new Error('Arquivo não pertence a este recebimento.')
         error.status = 422
         error.code = 'INVALID_UPLOAD_FILE'
@@ -182,5 +213,6 @@ export function createGoogleDriveClient(config) {
     }
   }
 
-  return { uploadFile, createResumableUpload, getUploadedFile, downloadFile, deleteFile }
+  return { uploadFile, createResumableUpload, getUploadedFile, downloadFile, deleteFile,
+    ensureCategoryFolder }
 }

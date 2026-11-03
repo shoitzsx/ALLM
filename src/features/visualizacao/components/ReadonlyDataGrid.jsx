@@ -63,7 +63,7 @@ export function ReadonlyDataGrid({ state, columns, rows, sort, onSortChange, sho
   }
 
   if (state === 'loading') {
-    return <EmptyState icon={RefreshCw} iconClassName="spin" title="Carregando dados…" description="Buscando os dados mock desta aba." />
+    return <EmptyState icon={RefreshCw} iconClassName="spin" title="Carregando dados…" description="Consultando os registros do ALM." />
   }
 
   if (state === 'error') {
@@ -71,7 +71,7 @@ export function ReadonlyDataGrid({ state, columns, rows, sort, onSortChange, sho
       <EmptyState
         icon={AlertTriangle}
         title="Não foi possível carregar os dados"
-        description="Isto é uma simulação local de erro, só para validar o estado visual. Tente atualizar novamente."
+        description="Não foi possível consultar o banco. Tente atualizar novamente."
         action={
           <button className="btn btn-secondary" type="button" onClick={onRetry}>
             Tentar novamente

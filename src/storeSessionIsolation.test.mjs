@@ -70,6 +70,52 @@ test.beforeEach(async () => {
   await tick()
 })
 
+test('criação publica apenas o REC confirmado pelo servidor, sem inventar ID, protocolo ou status', async () => {
+  setCurrentUser(USER_A)
+  const input = { pedido: 'PED-123', fornecedor: 'Fornecedor', tipo: 'Estoque', rascunho: true }
+  const saving = storeActions.createRecebimento(input)
+  const post = await request(/\/recebimentos$/)
+  assert.equal(post.init.method, 'POST')
+  const body = JSON.parse(post.init.body)
+  assert.equal(body.pedido, input.pedido)
+  assert.equal(body.rascunho, true)
+  assert.equal(Object.hasOwn(body, 'id'), false)
+  assert.equal(Object.hasOwn(body, 'protocolo'), false)
+  assert.deepEqual(ids(), [], 'nenhum REC aparece antes da confirmação')
+
+  const confirmed = { id: 'server-id', protocolo: 'REC-SERVIDOR', status: 'Em digitação', pedido: input.pedido }
+  post.respond(201, confirmed)
+  const refresh = await request(/\/recebimentos\/server-id$/)
+  assert.deepEqual(getStoreSnapshot().recebimentos, [confirmed])
+  refresh.respond(200, confirmed)
+  assert.deepEqual(await saving, confirmed)
+  assert.deepEqual(getStoreSnapshot().recebimentos, [confirmed])
+})
+
+test('criação rejeitada não publica REC e conserva o erro da API', async () => {
+  setCurrentUser(USER_A)
+  const saving = storeActions.createRecebimento({ pedido: 'PED-123' })
+  const post = await request(/\/recebimentos$/)
+  assert.deepEqual(ids(), [])
+  post.respond(422, { error: { code: 'INVALID_INPUT', message: 'Dados inválidos' } })
+  await assert.rejects(saving, (error) => {
+    assert.equal(error.message, 'Dados inválidos')
+    assert.equal(error.code, 'INVALID_INPUT')
+    assert.equal(error.createdReceipt, undefined)
+    return true
+  })
+  assert.deepEqual(ids(), [])
+  assert.equal(pending.length, 0, 'sem releitura de um REC que não foi criado')
+})
+
+test('criação continua bloqueada para o perfil Consulta antes de chamar a API', () => {
+  setCurrentUser({ ...USER_A, perfil: 'Consulta' })
+  assert.throws(() => storeActions.createRecebimento({ pedido: 'PED-123' }),
+    /O perfil Consulta não pode alterar recebimentos/)
+  assert.deepEqual(ids(), [])
+  assert.equal(pending.length, 0)
+})
+
 test('hidratação normal: o usuário atual recebe a própria lista (várias páginas)', async () => {
   setCurrentUser(USER_A)
   const loading = retryInitialLoad()
