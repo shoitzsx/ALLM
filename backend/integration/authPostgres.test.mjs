@@ -265,6 +265,7 @@ test('PostgreSQL N-2 HTTP flow signs WebAuthn, protects routes and rejects legac
 test('approved activation registers a passkey with real attestation and consumes authorization',
   { skip: !disposable }, async () => {
     const pepper = 'local-integration-pepper-with-at-least-32-characters'
+    const pepperV2 = 'local-integration-pepper-v2-with-at-least-32-characters'
     const pool = new pg.Pool({ host: '127.0.0.1', port: Number(process.env.ALM_DB_PORT),
       database: 'alm_ci_clean', user: 'alm_runtime_api',
       password: process.env.ALM_DB_API_PASSWORD, ssl: false, max: 3 })
@@ -279,7 +280,7 @@ test('approved activation registers a passkey with real attestation and consumes
     const temporaryPin = '87654321'
     const pin = '12348765'
     const activationCode = createOpaqueToken()
-    const pinHash = await hashPin(temporaryPin, pepper)
+    const pinHash = await hashPin(temporaryPin, pepperV2)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
     let userId
     await withApiTransaction(pool, null, randomUUID(), async (client) => {
@@ -288,7 +289,7 @@ test('approved activation registers a passkey with real attestation and consumes
       userId = user.id
       await client.query(`INSERT INTO alm.credenciais_pin
         (usuario_id,pin_hash,algoritmo,pepper_versao,temporario,expira_em)
-         VALUES($1,$2,'scrypt',1,true,$3)`, [userId, pinHash, expiresAt])
+         VALUES($1,$2,'scrypt',2,true,$3)`, [userId, pinHash, expiresAt])
       await client.query(`INSERT INTO alm.autorizacoes_webauthn
         (usuario_id,finalidade,codigo_hash,autorizacao_externa,expira_em)
          VALUES($1,'ATIVACAO',$2,'local-approved-test',$3)`,
@@ -296,7 +297,7 @@ test('approved activation registers a passkey with real attestation and consumes
     })
     const app = await createPostgresApp({ pool,
       environment: { host: '127.0.0.1', port: 0, rpName: 'ALM', rpId: 'localhost',
-        origins: ['http://localhost:5173'], pepper, pinLength: 8 } })
+        origins: ['http://localhost:5173'], pepper, pepperV2, pinLength: 8 } })
     const server = http.createServer(app.handle)
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     const base = `http://127.0.0.1:${server.address().port}/api/v1`
@@ -313,12 +314,13 @@ test('approved activation registers a passkey with real attestation and consumes
       })
       assert.equal(changed.status, 200, await changed.text())
       const afterPin = await withApiTransaction(pool, null, randomUUID(), async (client) => {
-        const { rows: [row] } = await client.query(`SELECT p.temporario,a.consumido_em
+        const { rows: [row] } = await client.query(`SELECT p.temporario,p.pepper_versao,a.consumido_em
           FROM alm.credenciais_pin p JOIN alm.autorizacoes_webauthn a ON a.usuario_id=p.usuario_id
           WHERE p.usuario_id=$1`, [userId])
         return row
       })
       assert.equal(afterPin.temporario, false)
+      assert.equal(afterPin.pepper_versao, 2)
       assert.equal(afterPin.consumido_em, null)
 
       const begin = await post('/auth/authenticators/registration-challenges',

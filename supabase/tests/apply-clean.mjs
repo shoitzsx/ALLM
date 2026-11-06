@@ -37,7 +37,8 @@ const requiredMigrations = [
   '20261015024500_alm_extensions_role_usage.sql',
   '20261015030000_alm_seguranca_auth.sql',
   '20261019180000_alm_n2_webauthn.sql',
-  '20261021120000_alm_primeiro_administrador.sql'
+  '20261021120000_alm_primeiro_administrador.sql',
+  '20261106120000_alm_recuperacao_primeiro_administrador.sql'
 ]
 for (const required of requiredMigrations) {
   if (!migrationNames.includes(required)) throw new Error('Migration obrigatoria ausente: ' + required)
@@ -93,15 +94,17 @@ try {
         WHERE schemaname='alm' AND tablename IN (
           'autorizacoes_webauthn', 'credenciais_webauthn',
           'desafios_webauthn', 'fluxos_auth_parcial')) AS tabelas_webauthn,
+      to_regclass('alm.recuperacoes_primeiro_administrador') IS NOT NULL AS recovery_table,
       has_schema_privilege('alm_api','extensions','USAGE') AS api_extensions,
       has_schema_privilege('alm_job','extensions','USAGE') AS job_extensions
   `)
-  assert.equal(status.tabelas, 32)
+  assert.equal(status.tabelas, 33)
   assert.equal(status.tabelas_rls, status.tabelas)
   assert.equal(status.tabelas_webauthn, 4)
+  assert.equal(status.recovery_table, true)
   assert.equal(status.api_extensions, true)
   assert.equal(status.job_extensions, true)
-  console.log('INSTALACAO LIMPA: 32 tabelas, RLS em 32, roles e legado v1 OK')
+  console.log('INSTALACAO LIMPA: 33 tabelas, RLS em 33, roles e legado v1 OK')
   console.log('Proxima etapa: node supabase/tests/run-database.mjs --local')
 } catch (err) {
   console.error('FALHA INSTALACAO LIMPA:', err.message)
