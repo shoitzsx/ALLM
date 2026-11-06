@@ -1,6 +1,6 @@
 # Recuperação excepcional do primeiro administrador
 
-Procedimento para o **mesmo UUID** de `MKADM001`, depois da exposição do PIN temporário, do código de ativação e de parte do pepper antigo. **Não** executa o bootstrap nem cria outro administrador. Esta alteração está apenas versionada; não foi aplicada no Supabase remoto e o backend não foi publicado.
+Procedimento para o **mesmo UUID** de `MKADM001`, depois da exposição do PIN temporário, do código de ativação e de parte do pepper antigo. **Não** executa o bootstrap nem cria outro administrador. Esta alteração está apenas versionada; não foi aplicada no Supabase remoto e o backend não foi publicado. A aplicação controlada da migration está descrita em [APLICACAO-MIGRATION-RECUPERACAO.md](APLICACAO-MIGRATION-RECUPERACAO.md).
 
 ## Preparação e autorização
 
