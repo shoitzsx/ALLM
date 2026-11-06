@@ -323,7 +323,8 @@ BEGIN
     PERFORM pg_temp.rejeita('OIDC somente issuer', 'INSERT INTO alm.usuarios (nome,perfil,matricula,oidc_issuer) VALUES (''OIDC'',''CONSULTA'',''OIDC1'',''issuer'')', '23514');
     PERFORM pg_temp.rejeita('OIDC somente subject', 'INSERT INTO alm.usuarios (nome,perfil,matricula,oidc_subject) VALUES (''OIDC'',''CONSULTA'',''OIDC2'',''subject'')', '23514');
     PERFORM pg_temp.ok('RLS em todas tabelas', NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='alm' AND c.relkind='r' AND NOT c.relrowsecurity));
-    PERFORM pg_temp.ok('policy tecnica em todas tabelas', NOT EXISTS(SELECT 1 FROM pg_tables t WHERE schemaname='alm' AND NOT EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname=t.schemaname AND p.tablename=t.tablename AND p.policyname='p_tecnico')));
+    PERFORM pg_temp.ok('policy tecnica em tabelas operacionais', NOT EXISTS(SELECT 1 FROM pg_tables t WHERE schemaname='alm' AND tablename <> 'recuperacoes_primeiro_administrador' AND NOT EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname=t.schemaname AND p.tablename=t.tablename AND p.policyname='p_tecnico')));
+    PERFORM pg_temp.ok('recuperacao restrita sem policy tecnica', NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='alm' AND tablename='recuperacoes_primeiro_administrador') AND NOT has_table_privilege('alm_api','alm.recuperacoes_primeiro_administrador','SELECT') AND NOT has_table_privilege('alm_provisioner','alm.recuperacoes_primeiro_administrador','SELECT'));
     FOR t IN SELECT unnest(ARRAY['alm_api','alm_job']) LOOP
         PERFORM pg_temp.ok(t || ' sem numerador', NOT has_table_privilege(t,'alm.recebimento_numeradores','SELECT,INSERT,UPDATE,DELETE'));
         PERFORM pg_temp.ok(t || ' executa gerador', has_function_privilege(t,'alm.proximo_codigo_recebimento(smallint)','EXECUTE'));

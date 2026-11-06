@@ -19,7 +19,8 @@ export function readPostgresEnvironment() {
     rpName: process.env.ALM_WEBAUTHN_RP_NAME?.trim() || 'ALM 2.0',
     rpId: required('ALM_WEBAUTHN_RP_ID'),
     origins,
-    pepper: required('ALM_PIN_PEPPER_V1'),
+    pepper: process.env.ALM_PIN_PEPPER_V1?.trim() || null,
+    pepperV2: process.env.ALM_PIN_PEPPER_V2?.trim() || null,
     pinLength,
     drive: {
       clientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null,

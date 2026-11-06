@@ -111,15 +111,21 @@ async function findRoles(client, userId) {
   return rows.map((row) => row.papel_codigo)
 }
 
-export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinLength = 8 }) {
-  if (!pool || !adapter || typeof pepper !== 'string' || pepper.length < 32) {
-    throw new Error('PostgreSQL, WebAuthn e ALM_PIN_PEPPER_V1 são obrigatórios no modo PostgreSQL.')
+export function createPostgresAuth({ pool, adapter, pepper, pepperV2, allowedOrigins, pinLength = 8 }) {
+  if (!pool || !adapter || (!pepper && !pepperV2)
+    || (pepper && (typeof pepper !== 'string' || pepper.length < 32))
+    || (pepperV2 && (typeof pepperV2 !== 'string' || pepperV2.length < 32))) {
+    throw new Error('PostgreSQL, WebAuthn e um pepper de PIN valido sao obrigatorios.')
   }
   if (!Array.isArray(allowedOrigins) || !allowedOrigins.length || !Number.isInteger(pinLength)
     || pinLength < 6 || pinLength > 12) throw new Error('Origens e política de PIN inválidas.')
   const origins = new Set(allowedOrigins)
   const limits = new Map()
-  const fakeHash = hashPin('00000000', pepper)
+  const activePepperVersion = pepperV2 ? 2 : 1
+  const activePepper = pepperV2 || pepper
+  const pepperForVersion = (version) => Number(version) === 2 ? pepperV2
+    : Number(version) === 1 ? pepper : null
+  const fakeHash = hashPin('00000000', activePepper)
 
   function requireOrigin(req) {
     const origin = req.headers?.origin
@@ -145,10 +151,12 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
         p.falhas_consecutivas,p.bloqueado_ate,p.bloqueado_em
         FROM alm.usuarios u LEFT JOIN alm.credenciais_pin p ON p.usuario_id=u.id
         WHERE u.matricula=$1 FOR UPDATE OF u`, [matricula])
-      const correct = await verifyPin(pin, entry?.pin_hash || await fakeHash, pepper)
+      const entryPepper = pepperForVersion(entry?.pepper_versao)
+      const correct = await verifyPin(pin, entryPepper ? entry?.pin_hash : await fakeHash,
+        entryPepper || activePepper)
       const now = Date.now()
       const permitted = Boolean(entry?.ativo && entry.algoritmo === 'scrypt'
-        && entry.pepper_versao === 1 && !entry.temporario
+        && entryPepper && !entry.temporario
         && (!entry.expira_em || new Date(entry.expira_em).getTime() > now)
         && !entry.bloqueado_em
         && (!entry.bloqueado_ate || new Date(entry.bloqueado_ate).getTime() <= now))
@@ -341,8 +349,10 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
       WHERE u.matricula=$1 AND a.codigo_hash=$2 AND a.consumido_em IS NULL
         AND a.revogado_em IS NULL AND a.expira_em>clock_timestamp()
       FOR UPDATE OF a`, [matricula, codeHash])
-    const correct = await verifyPin(pin, row?.pin_hash || await fakeHash, pepper)
-    if (!row?.ativo || !correct || row.algoritmo !== 'scrypt' || row.pepper_versao !== 1
+    const rowPepper = pepperForVersion(row?.pepper_versao)
+    const correct = await verifyPin(pin, rowPepper ? row?.pin_hash : await fakeHash,
+      rowPepper || activePepper)
+    if (!row?.ativo || !correct || row.algoritmo !== 'scrypt' || !rowPepper
       || row.temporario || row.bloqueado_em
       || (row.bloqueado_ate && new Date(row.bloqueado_ate) > new Date())
       || (row.expira_em && new Date(row.expira_em) <= new Date())) throw uniformFailure()
@@ -365,7 +375,7 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
       || typeof newPin !== 'string' || !pinPattern.test(newPin) || newPin === temporaryPin) {
       throw uniformFailure()
     }
-    const newHash = await hashPin(newPin, pepper)
+    const newHash = await hashPin(newPin, activePepper)
     return withApiTransaction(pool, null, requestId, async (client) => {
       const { rows: [row] } = await client.query(`SELECT u.id,u.ativo,p.pin_hash,p.algoritmo,
         p.pepper_versao,p.temporario,p.expira_em,p.bloqueado_em,p.bloqueado_ate
@@ -375,10 +385,12 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
           AND a.consumido_em IS NULL AND a.revogado_em IS NULL
           AND a.expira_em>clock_timestamp()
         FOR UPDATE OF u,p,a`, [matricula, codeHash])
-      const correct = await verifyPin(temporaryPin, row?.pin_hash || await fakeHash, pepper)
+      const rowPepper = pepperForVersion(row?.pepper_versao)
+      const correct = await verifyPin(temporaryPin, rowPepper ? row?.pin_hash : await fakeHash,
+        rowPepper || activePepper)
       const now = new Date()
       const permitted = Boolean(row?.ativo && correct && row.algoritmo === 'scrypt'
-        && row.pepper_versao === 1 && row.temporario && !row.bloqueado_em
+        && rowPepper && row.temporario && !row.bloqueado_em
         && (!row.bloqueado_ate || new Date(row.bloqueado_ate) <= now)
         && row.expira_em && new Date(row.expira_em) > now)
       if (!permitted) {
@@ -392,9 +404,9 @@ export function createPostgresAuth({ pool, adapter, pepper, allowedOrigins, pinL
         return false
       }
       await client.query(`UPDATE alm.credenciais_pin SET pin_hash=$2,algoritmo='scrypt',
-        pepper_versao=1,temporario=false,expira_em=NULL,definido_em=clock_timestamp(),
+        pepper_versao=$3,temporario=false,expira_em=NULL,definido_em=clock_timestamp(),
         definido_por=NULL,falhas_consecutivas=0,ultima_falha_em=NULL,bloqueado_ate=NULL
-        WHERE usuario_id=$1`, [row.id, newHash])
+        WHERE usuario_id=$1`, [row.id, newHash, activePepperVersion])
       await logEvent(client, { type: 'PIN_TROCADO', userId: row.id, matricula,
         success: true, req, requestId })
       return true

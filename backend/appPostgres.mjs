@@ -74,7 +74,7 @@ export async function createPostgresApp({ pool: injectedPool, environment, authA
   const drive = driveClient || createGoogleDriveClient(env.drive || {})
   const adapter = authAdapter || createWebAuthnAdapter({ rpName: env.rpName,
     rpId: env.rpId, origins: env.origins })
-  const auth = createPostgresAuth({ pool, adapter, pepper: env.pepper,
+  const auth = createPostgresAuth({ pool, adapter, pepper: env.pepper, pepperV2: env.pepperV2,
     allowedOrigins: env.origins, pinLength: env.pinLength })
   const ready = await withApiTransaction(pool, null, randomUUID(), async (client) => {
     const { rows: [row] } = await client.query(`SELECT
